@@ -146,7 +146,7 @@ public:
 	void newAs(void);
 	void report(void);
 	void report2(void);
-	void refreshBeacon(void);
+	void refreshBeacon(void) const;
 	gateAs* getAs(void) { return as_rules; }
 	casEventMask select_mask;
 	casEventMask alh_mask;

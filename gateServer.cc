@@ -444,7 +444,7 @@ gateServer::~gateServer(void)
 	SEVCHK(ca_task_exit(),"CA task exit");
 }
 
-void gateServer::refreshBeacon(void)
+void gateServer::refreshBeacon(void) const
 {
 	gateDebug0(1,"gateServer::refreshBeacon()\n");
 	caServer::refreshBeacon();

@@ -19,6 +19,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.13  2000/06/15 12:51:04  lange
+ * Patch for using regex.h with the HP aCC Compiler.
+ *
  * Revision 1.12  2000/05/03 17:08:30  lange
  * Minor Bugfix, enhanced report functions.
  *
@@ -32,15 +35,22 @@
 #include <string.h>
 #include <stdlib.h>
 
-// Patch for regex.h not testing __cplusplus, only __STDC__
-#ifndef __STDC__
-#define __STDC__ 1
-#endif
 
 extern "C" {
 #include "asLib.h"
 #include "gpHash.h"
-#include "regex.h"
+                    // Patch for regex.h not testing __cplusplus, only __STDC__
+#ifndef __STDC__
+#    define __STDC__
+#    include "regex.h"
+#    undef __STDC__
+#else
+#    if ! __STDC__
+#        undef __STDC__
+#        define __STDC__ 1
+#    endif
+#    include "regex.h"
+#endif
 }
 
 #include "tsSLList.h"
@@ -187,8 +197,7 @@ public:
 		{ user_arg=uarg; user_func=ufunc; }
 
 private:
-	static void client_callback(ASCLIENTPVT,asClientStatus);
-
+    static void client_callback(ASCLIENTPVT,asClientStatus);
 	ASCLIENTPVT asc;
 	gateAsEntry* entry;
 	void* user_arg;
