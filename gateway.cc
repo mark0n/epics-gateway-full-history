@@ -38,6 +38,7 @@
 # include <sys/resource.h>
 #endif
 
+#include <envDefs.h>
 #include "epicsVersion.h"
 #include "gateResources.h"
 
@@ -142,15 +143,15 @@ void operator delete(void* x)
 #define GATE_LOG         "gateway.log"
 #define GATE_COMMAND     "gateway.command"
 
-static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
-static char* server_ip_addr=NULL;
-static char* server_ignore_ip_addr=NULL;
-static char* client_ip_addr=NULL;
+static char *gate_ca_auto_list=NULL;
+static char *server_ip_addr=NULL;
+static char *server_ignore_ip_addr=NULL;
+static char *client_ip_addr=NULL;
 static int server_port=0;
 static int client_port=0;
 static int make_server=0;
-static char* home_directory;
-static const char* log_file=NULL;
+static char *home_directory;
+static const char *log_file=NULL;
 #ifndef WIN32
 static pid_t parent_pid;
 #endif
@@ -299,8 +300,6 @@ static int startEverything(char *prefix)
 	char *gate_cas_ignore_addr=NULL;
 	char *gate_ca_list=NULL;
 	char *gate_ca_port=NULL;
-	const char *var=NULL;
-	const char *val=NULL;
 	int sid;
 #ifndef WIN32
 	FILE* fd;
@@ -316,38 +315,35 @@ static int startEverything(char *prefix)
 		// EPICS_CA_ADDR_LIST is specified instead of -cip, then
 		// EPICS_CA_AUTO_ADDR_LIST=NO must be set also as this branch
 		// will not be taken.
-		status=putenv(gate_ca_auto_list);
-		if(status) {
-			fprintf(stderr,"putenv failed for:\n  %s\n",gate_ca_auto_list);
-		}
+		status=setEnv("EPICS_CA_AUTO_ADDR_LIST","NO",&gate_ca_auto_list)
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_auto_list);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_list);
 	}
 
 	if(server_ip_addr)
 	{
-		int status=setEnv("EPICS_CAS_INTF_ADDR_LIST",server_ip_addr,
+		setEnv("EPICS_CAS_INTF_ADDR_LIST",server_ip_addr,
 		  &gate_cas_addr);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_addr);
 	}
 
 	if(server_ignore_ip_addr)
 	{
-		int status=setEnv("EPICS_CAS_IGNORE_ADDR_LIST",server_ignore_ip_addr,
+		setEnv("EPICS_CAS_IGNORE_ADDR_LIST",server_ignore_ip_addr,
 		  &gate_cas_ignore_addr);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_ignore_addr);
 	}
 
 	if(client_port)
 	{
-		int status=setEnv("EPICS_CA_SERVER_PORT",client_port,
+		setEnv("EPICS_CA_SERVER_PORT",client_port,
 		  &gate_ca_port);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_port);
 	}
 
 	if(server_port)
 	{
-		int status=setEnv("EPICS_CAS_SERVER_PORT",server_port,
+		setEnv("EPICS_CAS_SERVER_PORT",server_port,
 		  &gate_cas_port);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_port);
 	}
@@ -599,7 +595,7 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							sscanf(argv[i],"%d",&uid);
+							sscanf(argv[i],"%d",(int *)&uid);
 							setuid(uid);
 							not_done=0;
 						}
@@ -614,7 +610,7 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							sscanf(argv[i],"%d",&gid);
+							sscanf(argv[i],"%d",(int *)&gid);
 							setgid(gid);
 							not_done=0;
 						}
@@ -1160,10 +1156,15 @@ static int setEnv(const char *var, const char *val, char **envString)
 		return 1;
 	}
 	sprintf(*envString,"%s=%s",var,val);
+#if 0
+	// There is no putenv on Linux
 	int status=putenv(*envString);
 	if(status) {
 		fprintf(stderr,"putenv failed for:\n  %s\n",*envString);
 	}
+#else
+	epicsEnvSet(var,val);
+#endif
 	return 0;
 }
 
@@ -1178,10 +1179,20 @@ static int setEnv(const char *var, int ival, char **envString)
 		return 1;
 	}
 	sprintf(*envString,"%s=%d",var,ival);
+#if 0
+	// There is no putenv on Linux
 	int status=putenv(*envString);
 	if(status) {
 		fprintf(stderr,"putenv failed for:\n  %s\n",*envString);
 	}
+#else
+	char *pVal=strchr(*envString,'=');
+	if(!pVal || !(pVal+1)) {
+		epicsEnvSet(var,"");
+	} else {
+		epicsEnvSet(var,pVal+1);
+	}
+#endif
 	return 0;
 }
 

@@ -8,7 +8,6 @@
 * This file is distributed subject to a Software License Agreement found
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
-static char RcsId[] = "@(#)$Id$";
 
 /*+*********************************************************************
  *
@@ -30,6 +29,15 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.36  2002/10/01 18:30:45  evans
+ * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
+ * instead.)  Added -signore command-line option to set
+ * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
+ * command-line strings in fixed-length variables.  Changed refreshBeacon
+ * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
+ * been fixed.  It appears to work but the performance is less than the
+ * old Gateway.
+ *
  * Revision 1.35  2002/08/16 16:23:26  evans
  * Initial files for Gateway 2.0 being developed to work with Base 3.14.
  *
@@ -863,7 +871,7 @@ caStatus gateVcData::putCB(int putStatus)
 	else
 		// KE:  There is no S_casApp code for failure, return -1 for now
 		//   (J.Hill suggestion)
-		pending_write->postIOCompletion(-1);
+		pending_write->postIOCompletion((unsigned long)-1);
 
 	// Set the pending_write pointer to NULL indicating the pending
 	// write is finished. (The gatePendingWrite instantiation will be

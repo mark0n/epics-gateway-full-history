@@ -8,7 +8,6 @@
 * This file is distributed subject to a Software License Agreement found
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
-static char RcsId[] = "@(#)$Id$";
 
 /*+*********************************************************************
  *
@@ -26,6 +25,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.2  2002/07/29 16:06:01  jba
+ * Added license information.
+ *
  * Revision 1.1  2000/04/05 15:59:32  lange
  * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
  *

@@ -39,11 +39,15 @@ PURIFY_FLAGS = -first-only -chain-length=26 -max_threads=256
 
 # Quantify
 #QUANTIFY=YES
-QUANTIFY_FLAGS = -collection-granularity=function -max_threads=160 -use-machine=UltraSparc:168MHz
-# Quantify -collection-granularity=function runs faster than default=line
-# Quantify -use-machine=sparcstation_5:85MHz sets timing for old Nike
-# Quantify -use-machine=UltraSparc:168MHz timing for Nike
-# CCC = quantify -collection-granularity=function -use-machine=sparcstation_5:85MHz CC 
+QUANTIFY_FLAGS = -measure-timed-calls=user+system -record-system-calls=no -collection-granularity=function -max_threads=160 -use-machine=UltraSparc:168MHz
+# QUANTIFY_FLAGS = -collection-granularity=function -max_threads=160 -use-machine=UltraSparc:168MHz
+# -measure-timed-calls=elapsed-time (default) gives wall clock time
+#   for system calls
+# -measure-timed-calls=user+system gives user+system time
+# -record-system-calls=no gives 0 time for system calls
+# -collection-granularity=function runs faster than default=line
+# -use-machine=sparcstation_5:85MHz sets timing for old Nike
+# -use-machine=UltraSparc:168MHz timing for Nike
 
 # Turn on debug mode
 # USR_CXXFLAGS += -DDEBUG_MODE

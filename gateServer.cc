@@ -9,8 +9,6 @@
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
 
-static char RcsId[] = "@(#)$Id$";
-
 /*+*********************************************************************
  *
  * File:       gateServer.cc
@@ -30,6 +28,15 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.46  2002/10/01 18:30:43  evans
+ * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
+ * instead.)  Added -signore command-line option to set
+ * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
+ * command-line strings in fixed-length variables.  Changed refreshBeacon
+ * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
+ * been fixed.  It appears to work but the performance is less than the
+ * old Gateway.
+ *
  * Revision 1.45  2002/08/23 16:45:05  evans
  * Still not working.  Thread deadlock problem appears to be solved.
  * Enums are not working right.  Signals are not working right.
@@ -186,14 +193,11 @@ void gateServer::mainLoop(void)
 	// so delay must be less than 100 ms to insure ca_poll gets called
 	// if delay = 0.0 select will not block)
 	double delay=.010; // (10 ms)
-#ifndef WIN32
-	SigFunc old;
-#endif
 
 	printf("Statistics PV prefix is %s\n",stat_prefix);
 
 #if DEBUG_TIMES
-	epicsTime zero, begin, end, lastPrintTime;
+	epicsTime begin, end, lastPrintTime;
 	double fdTime, pendTime, cleanTime;
 	unsigned long nLoops=0;
 
@@ -215,9 +219,13 @@ void gateServer::mainLoop(void)
 #ifndef WIN32
 	save_usr1=signal(SIGUSR1,sig_usr1);
 	save_usr2=signal(SIGUSR2,sig_usr2);
-	// this is horrible, CA server has sigpipe problem for now
-	old=signal(SIGPIPE,sig_pipe);
+#if 0
+	// KE: This should be handled in both CA and CAS now using
+	// osiSigPipeIgnore. There is no sigignore on Linux, so use
+	// osiSigPipeIgnore if it has to be implemented here.
+	SigFunc old=signal(SIGPIPE,sig_pipe);
 	sigignore(SIGPIPE);
+#endif
 #endif
 	time(&start_time);
 
@@ -280,7 +288,7 @@ void gateServer::mainLoop(void)
 		cleanTime+=(end-begin);
 		if((end-lastPrintTime) > GATE_TIME_STAT_INTERVAL) {
 #ifdef STAT_PVS
-			printf("%s gateServer::mainLoop: [%d|%d|%d,%d|%d,%d,%d] "
+			printf("%s gateServer::mainLoop: [%lu|%lu|%lu,%lu|%lu,%lu,%lu] "
 			  "loops: %lu process: %.3f pend: %.3f clean: %.3f\n",
 			  timeStamp(),
 			  total_vc,total_pv,total_active,total_inactive,
@@ -663,7 +671,7 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 	fprintf(stderr,"%s gateServer::exCB: Channel Access Exception:\n"
 	  "  Channel Name: %s\n"
 	  "  Native Type: %s\n"
-	  "  Native Count: %hu\n"
+	  "  Native Count: %lu\n"
 	  "  Access: %s%s\n"
 	  "  IOC: %s\n"
 	  "  Message: %s\n"
@@ -753,7 +761,7 @@ void gateServer::connectCleanup(void)
 			  "cleaning up PV %s\n",pv->name());
 			// clean from connecting list
 #if DEBUG_PV_CON_LIST
-			printf("  Removing node (0x%x) %ld of %ld [%d|%d|%d,%d|%d,%d,%d]: name=%s\n"
+			printf("  Removing node (0x%x) %ld of %ld [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s\n"
 			  "  timeConnecting=%ld totalElements=%d getStateName=%s\n",
 			  pNode,pos,total,
 			  total_vc,total_pv,total_active,total_inactive,
@@ -842,7 +850,7 @@ void gateServer::inactiveDeadCleanup(void)
 			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
-			printf("%s gateServer::inactiveDeadCleanup(dead): [%d|%d|%d,%d|%d,%d,%d]: "
+			printf("%s gateServer::inactiveDeadCleanup(dead): [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: "
 			  "name=%s time=%ld count=%d state=%s\n",
 			  timeStampStr,
 			  total_vc,total_pv,total_active,total_inactive,
@@ -865,7 +873,7 @@ void gateServer::inactiveDeadCleanup(void)
 			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
-			printf("%s gateServer::inactiveDeadCleanup(inactive): [%d|%d|%d,%d|%d,%d,%d]: "
+			printf("%s gateServer::inactiveDeadCleanup(inactive): [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: "
 			  "name=%s time=%ld count=%d state=%s\n",
 			  timeStampStr,
 			  total_vc,total_pv,total_active,total_inactive,

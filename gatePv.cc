@@ -8,7 +8,6 @@
 * This file is distributed subject to a Software License Agreement found
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
-static char RcsId[] = "@(#)$Id$";
 
 /*+*********************************************************************
  *
@@ -30,6 +29,15 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.35  2002/10/01 18:30:42  evans
+ * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
+ * instead.)  Added -signore command-line option to set
+ * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
+ * command-line strings in fixed-length variables.  Changed refreshBeacon
+ * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
+ * been fixed.  It appears to work but the performance is less than the
+ * old Gateway.
+ *
  * Revision 1.34  2002/08/16 16:23:24  evans
  * Initial files for Gateway 2.0 being developed to work with Base 3.14.
  *
@@ -310,7 +318,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		char timeStampStr[20];  // 16 should be enough
 		strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		
-		printf("%s gatePvData::init: [%d|%d|%d,%d|%d,%d,%d]: name=%s\n",
+		printf("%s gatePvData::init: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s\n",
 		  timeStampStr,
 		  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
 		  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
@@ -459,7 +467,7 @@ int gatePvData::life(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::life: [%d|%d|%d,%d|%d,%d,%d]: name=%s "
+		    printf("%s gatePvData::life: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s "
 				   "state=gatePvConnect->%s\n",
 		      timeStampStr,
 			  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
@@ -560,7 +568,7 @@ int gatePvData::death(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::death: [%d|%d|%d,%d|%d,%d,%d]: name=%s state=%s\n",
+		    printf("%s gatePvData::death: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s state=%s\n",
 		      timeStampStr,
 			  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
 			  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
@@ -846,12 +854,12 @@ double gatePvData::eventRate(void)
 // This routine, called from life() or death(), flushes the queue.
 void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 {
-	gateDebug1(10,"gateVcData::flushAsyncETQueue() name=%s\n",name());
+	gateDebug1(10,"gatePvData::flushAsyncETQueue() name=%s\n",name());
 	gateAsyncE* asynce;
 	pvExistReturn* pPver;
 
 	while((asynce=eio.first()))	{
-		gateDebug1(1,"gateVcData::flushAsyncETQueue() posting %p\n",
+		gateDebug1(1,"gatePvData::flushAsyncETQueue() posting %p\n",
 				   asynce);
 		asynce->removeFromQueue();
 		
