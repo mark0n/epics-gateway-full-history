@@ -149,11 +149,11 @@ public:
 
 // ------------------------- pv data methods ------------------------
 
-gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
+gatePvData::gatePvData(gateServer* m,gateAsEntry* pase,const char* name)
 {
-	gateDebug2(5,"gatePvData(gateServer=%p,name=%s)\n",m,name);
+	gateDebug2(5,"gatePvData(gateServer=%p,name=%s)\n",(void *)m,name);
 	initClear();
-	init(m,e,name);
+	init(m,pase,name);
 #ifdef STAT_PVS
 	mrg->setStat(statPvTotal,++mrg->total_pv);
 #endif
@@ -229,12 +229,12 @@ void gatePvData::initClear(void)
 	markAddRemoveNotNeeded();
 }
 
-void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
+void gatePvData::init(gateServer* m,gateAsEntry* pase, const char* name)
 {
-	gateDebug2(5,"gatePvData::init(gateServer=%p,name=%s)\n",m,name);
-	gateDebug1(5,"gatePvData::init entry pattern=%s)\n",n->pattern);
+	gateDebug2(5,"gatePvData::init(gateServer=%p,name=%s)\n",(void *)m,name);
+	gateDebug1(5,"gatePvData::init entry pattern=%s)\n",pase->pattern);
 	mrg=m;
-	asentry=n;
+	asentry=pase;
 	setTimes();
 	status=0;
 	pv_name=strDup(name);
@@ -282,14 +282,8 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		if(status) printf("Put into connecting list failed for %s\n",pv_name);
 
 #if DEBUG_PV_CON_LIST
-		long now;
-		time(&now);
-		struct tm *tblock=localtime(&now);
-		char timeStampStr[20];  // 16 should be enough
-		strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-		
 		printf("%s gatePvData::init: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s\n",
-		  timeStampStr,
+		  timeStamp(),
 		  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
 		  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
 #endif
@@ -310,7 +304,7 @@ aitEnum gatePvData::nativeType(void) const
 int gatePvData::activate(gateVcData* vcd)
 {
 	gateDebug2(5,"gatePvData::activate(gateVcData=%p) name=%s\n",
-	  vcd,name());
+	  (void *)vcd,name());
 	
 	int rc=-1;
 	
@@ -445,17 +439,12 @@ int gatePvData::life(void)
 
 #if DEBUG_PV_LIST
 		{
-		    long now;
-		    time(&now);
-		    struct tm *tblock=localtime(&now);
-		    char timeStampStr[20];  // 16 should be enough
-		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-		    
 		    printf("%s gatePvData::life: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s "
-				   "state=gatePvConnect->%s\n",
-		      timeStampStr,
+				   "state=%s\n",
+		      timeStamp(),
 			  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
 			  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
+			  name,getStateName());
 		}
 #endif
 		break;
@@ -552,18 +541,11 @@ int gatePvData::death(void)
 #endif
 
 #if DEBUG_PV_LIST
-		{
-		    long now;
-		    time(&now);
-		    struct tm *tblock=localtime(&now);
-		    char timeStampStr[20];  // 16 should be enough
-		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-		    
-		    printf("%s gatePvData::death: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s state=%s\n",
-		      timeStampStr,
-			  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
-			  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
-		}
+		printf("%s gatePvData::death: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s state=%s\n",
+		  timeStamp(),
+		  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
+		  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
+		  name,getStateName());
 #endif
 		break;
 	default:
@@ -731,7 +713,7 @@ int gatePvData::get(void)
 // unfortunately no S_casApp return code defined for failure.
 int gatePvData::put(const gdd* dd, int docallback)
 {
-	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",dd,name());
+	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",(void *)dd,name());
 	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	chtype cht;
 	gatePvCallbackId *cbid;
@@ -862,7 +844,7 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 #endif
 	while((asynce=eio.first()))	{
 		gateDebug1(1,"gatePvData::flushAsyncETQueue() posting %p\n",
-				   asynce);
+				   (void *)asynce);
 		asynce->removeFromQueue();
 		asynce->postIOCompletion(pvExistReturn(er));
 	}
@@ -887,11 +869,12 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 
-	gateDebug1(5,"gatePvData::connectCB(gatePvData=%p)\n",pv);
+	gateDebug1(5,"gatePvData::connectCB(gatePvData=%p)\n",(void *)pv);
 	gateDebug0(9,"conCB: -------------------------------\n");
 	gateDebug1(9,"conCB: name=%s\n",ca_name(args.chid));
 	gateDebug1(9,"conCB: type=%d\n",ca_field_type(args.chid));
-	gateDebug1(9,"conCB: number of elements=%d\n",ca_element_count(args.chid));
+	gateDebug1(9,"conCB: number of elements=%ld\n",
+	  (long)ca_element_count(args.chid));
 	gateDebug1(9,"conCB: host name=%s\n",ca_host_name(args.chid));
 	gateDebug1(9,"conCB: read access=%d\n",ca_read_access(args.chid));
 	gateDebug1(9,"conCB: write access=%d\n",ca_write_access(args.chid));
@@ -1050,7 +1033,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 	gateDebug2(5,"gatePvData::eventCB(gatePvData=%p) type=%d\n",
-		pv, (unsigned int)args.type);
+	  (void *)pv, (unsigned int)args.type);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -1109,7 +1092,7 @@ void gatePvData::alhCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 	gateDebug2(5,"gatePvData::alhCB(gatePvData=%p) type=%d\n",
-		pv, (unsigned int)args.type);
+	  (void *)pv, (unsigned int)args.type);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -1153,7 +1136,7 @@ void gatePvData::alhCB(EVENT_ARGS args)
 void gatePvData::getCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
-	gateDebug1(5,"gatePvData::getCB(gatePvData=%p)\n",pv);
+	gateDebug1(5,"gatePvData::getCB(gatePvData=%p)\n",(void *)pv);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -1217,7 +1200,8 @@ void gatePvData::accessCB(ACCESS_ARGS args)
 	gateDebug0(9,"accCB: -------------------------------\n");
 	gateDebug1(9,"accCB: name=%s\n",ca_name(args.chid));
 	gateDebug1(9,"accCB: type=%d\n",ca_field_type(args.chid));
-	gateDebug1(9,"accCB: number of elements=%d\n",ca_element_count(args.chid));
+	gateDebug1(9,"accCB: number of elements=%ld\n",
+	  (long)ca_element_count(args.chid));
 	gateDebug1(9,"accCB: host name=%s\n",ca_host_name(args.chid));
 	gateDebug1(9,"accCB: read access=%d\n",ca_read_access(args.chid));
 	gateDebug1(9,"accCB: write access=%d\n",ca_write_access(args.chid));

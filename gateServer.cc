@@ -32,18 +32,15 @@
 #define DEBUG_EXIST 0
 #define DEBUG_DELAY 0
 
-// KE: Leave this in for now.  It causes traces to be printed when
-// exceptions occur.  It requires Base 3.15.
-#define DEBUG_EXCEPTION  1
 // KE: Leave this in permanently for now.  DEBUG_TIMES prints a
 // message every minute, that helps determine when things happen.
 #define DEBUG_TIMES 1
 // This is the interval used with DEBUG_TIMES
 #define GATE_TIME_STAT_INTERVAL 60 /* sec */
 
-// This causes the GATE_DEBUG_VERSION to be printed in the mainLoop
-#define DEBUG_ 0
-#define GATE_DEBUG_VERSION "2-17-99"
+// This causes traces to be printed when exceptions occur.  It
+// requires Base 3.15.
+#define DEBUG_EXCEPTION 0
 
 // Interval for rate statistics in seconds
 #define RATE_STATS_INTERVAL 10u
@@ -138,6 +135,7 @@ volatile unsigned long gateServer::report2_flag = 0;
 volatile unsigned long gateServer::report3_flag = 0;
 volatile unsigned long gateServer::newAs_flag = 0;
 volatile unsigned long gateServer::quit_flag = 0;
+volatile unsigned long gateServer::quitserver_flag = 0;
 
 void gatewayServer(char *prefix)
 {
@@ -167,10 +165,6 @@ void gateServer::mainLoop(void)
 
 	printf("%s gateServer::mainLoop: Starting and printing statistics every %d seconds\n",
 	  timeStamp(),GATE_TIME_STAT_INTERVAL);
-#endif
-#if DEBUG_
-	printf("gateServer::mainLoop: Version %s\n",
-	  GATE_DEBUG_VERSION);
 #endif
 #if DEBUG_EXCEPTION
 	epicsThrowTraceEnable = true;
@@ -312,64 +306,87 @@ void gateServer::mainLoop(void)
 			setStat(statNewAsFlag,0ul);
 		}
 		if(quit_flag) {
-			printf("%s All Done\n",timeStamp());
+			printf("%s Stopping (quitFlag was set to 1)\n",timeStamp());
+			fflush(stderr); fflush(stdout);
 			quit_flag=0;
 			setStat(statQuitFlag,0ul);
 			exit(0);
+		}
+		if(quitserver_flag) {
+			printf("%s Stopping server (quitServerFlag was set to 1)\n",
+			  timeStamp());
+			quitserver_flag=0;
+			setStat(statQuitServerFlag,0ul);
+			if(global_resources->getServerMode()) {
+				// Has a server
+#ifndef WIN32
+				pid_t parentPid=getppid();
+				if(parentPid >= 0) {
+					kill(parentPid,SIGTERM);
+				} else {
+					exit(0);
+				}
+#endif				
+			} else {
+				// Doesn't have a server, just quit
+				exit(0);
+			}
 		}
 	}
 }
 
 void gateServer::gateCommands(const char* cfile)
 {
-	FILE* fd;
+	FILE* fp;
 	char inbuf[200];
 	char *cmd,*ptr;
 	time_t t;
 
-	if(cfile)
-	{
+	if(cfile) {
 		errno=0;
-		if((fd=fopen(cfile,"r"))==NULL)
-		{
+#ifdef RESERVE_FOPEN_FD
+		fp=global_resources->fopen(cfile,"r");
+#else
+		fp=fopen(cfile,"r");
+#endif
+		if(fp == NULL)	{
 			fprintf(stderr,"Failed to open command file: %s\n",cfile);
 			fflush(stderr);
 			perror("Reason");
 			fflush(stderr);
 			return;
 		}
-	}
-	else
-	{
+	} else {
 		return;
 	}
 
-	while(fgets(inbuf,sizeof(inbuf),fd))
-	{
+	while(fgets(inbuf,sizeof(inbuf),fp)) {
 		if((ptr=strchr(inbuf,'#'))) *ptr='\0';
-
-                cmd=strtok(inbuf," \t\n");
-		while(cmd)
-               {
-			if(strcmp(cmd,"R1")==0)
+		cmd=strtok(inbuf," \t\n");
+		while(cmd) {
+			if(strcmp(cmd,"R1")==0) {
 				report1();
-			else if(strcmp(cmd,"R2")==0)
-					report2();
-			else if(strcmp(cmd,"R3")==0)
-					as->report(stdout);
-			else if(strcmp(cmd,"AS")==0)
-			{
+			} else if(strcmp(cmd,"R2")==0) {
+				report2();
+			} else if(strcmp(cmd,"R3")==0) {
+				as->report(stdout);
+			} else if(strcmp(cmd,"AS")==0) {
 				time(&t);
 				printf("Reading access security file: %s\n",ctime(&t));
 				newAs();
+			} else {
+				printf("Invalid command %s\n",cmd);
 			}
-			else printf("Invalid command %s\n",cmd);
-                        cmd=strtok(NULL," \t\n");
+			cmd=strtok(NULL," \t\n");
 		}
 	}
-	fclose(fd);
+#ifdef RESERVE_FOPEN_FD
+	global_resources->fclose(fp);
+#else
+	fclose(fp);
+#endif
 	fflush(stdout);
-
+	
 	return;
 }
 
@@ -865,7 +882,6 @@ void gateServer::inactiveDeadCleanup(void)
 
 #if DEBUG_PV_LIST
 	int ifirst=1;
-	char timeStampStr[16];
 #endif
 
 	tsDLIter<gatePvNode> iter=pv_list.firstIter();
@@ -893,12 +909,11 @@ void gateServer::inactiveDeadCleanup(void)
 			int status=pv_list.remove(pv->name(),pNode);
 #if DEBUG_PV_LIST
 			if(ifirst) {
-			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
 			printf("%s gateServer::inactiveDeadCleanup(dead): [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: "
 			  "name=%s time=%ld count=%d state=%s\n",
-			  timeStampStr,
+			  timeStamp(),
 			  total_vc,total_pv,total_active,total_inactive,
 			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeDead(),pv->totalElements(),pv->getStateName());
@@ -916,12 +931,11 @@ void gateServer::inactiveDeadCleanup(void)
 			int status=pv_list.remove(pv->name(),pNode);
 #if DEBUG_PV_LIST
 			if(ifirst) {
-			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
 			printf("%s gateServer::inactiveDeadCleanup(inactive): [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: "
 			  "name=%s time=%ld count=%d state=%s\n",
-			  timeStampStr,
+			  timeStamp(),
 			  total_vc,total_pv,total_active,total_inactive,
 			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeInactive(),pv->totalElements(),pv->getStateName());
@@ -946,7 +960,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr&,
 
 pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 {
-	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&ctx,pvname);
+	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",(void *)&ctx,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
 	gateAsEntry* pNode;
@@ -985,7 +999,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		}
 	}
 #else
-	// See if requested name is allowed and check for aliases
+	// See if requested name is allowed and check for aliases.  Uses
+	// information in .pvlist, not .access.
 	if ( !(pNode = getAs()->findEntry(pvname)) )
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
@@ -1006,10 +1021,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
 #if statCount
 	// Check internal PVs
-	if(!strncmp(stat_prefix,pvname,stat_prefix_len)) {
+	if(!strncmp(stat_prefix,real_name,stat_prefix_len)) {
 		for(int i=0;i<statCount;i++)
 		{
-			if(strcmp(pvname,stat_table[i].pvname)==0)
+			if(strcmp(real_name,stat_table[i].pvname)==0)
 			{
 				return pverExistsHere;
 			}
@@ -1116,8 +1131,19 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
     gateAsEntry* pe;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
 
+	// See if requested name is allowed and check for aliases.  Uses
+	// information in .pvlist, not .access.
+    if ( !(pe = getAs()->findEntry(pvname)) )
+    {
+        gateDebug1(2,"gateServer::createPV() called for denied PV %s "
+		  " - this should not happen!\n", pvname);
+        return pvCreateReturn(S_casApp_pvNotFound);
+    }
+
+    pe->getRealName(pvname, real_name, sizeof(real_name));
+
 #if statCount
-	// trap (and create if needed) server stats PVs
+	// Trap (and create if needed) server stats PVs
 	if(!strncmp(stat_prefix,pvname,stat_prefix_len)) {
 		for(int i=0;i<statCount;i++)
 		{
@@ -1139,17 +1165,10 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	}
 #endif
 	
-    if ( !(pe = getAs()->findEntry(pvname)) )
-    {
-        gateDebug1(2,"gateServer::createPV() called for denied PV %s "
-		  " - this should not happen!\n", pvname);
-        return pvCreateReturn(S_casApp_pvNotFound);
-    }
-
-    pe->getRealName(pvname, real_name, sizeof(real_name));
-
+	// See if we have a gateVcData
 	if(vcFind(real_name,rc) < 0)
 	{
+		// We don't have it, create a new one
 		rc=new gateVcData(this,real_name);
 
 		if(rc->getStatus())
@@ -1204,6 +1223,9 @@ caStatus gateServer::processStat(int type, double val)
 		break;
     case statQuitFlag:
 		if(val > 0.0) quit_flag=1;
+		break;
+    case statQuitServerFlag:
+		if(val > 0.0) quitserver_flag=1;
 		break;
 	default:
 		retVal=S_casApp_noSupport;
@@ -1408,6 +1430,12 @@ void gateServer::initStats(char *prefix)
 		case statQuitFlag:
 			stat_table[i].name="quitFlag";
 			stat_table[i].init_value=&quit_flag;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
+			break;
+		case statQuitServerFlag:
+			stat_table[i].name="quitServerFlag";
+			stat_table[i].init_value=&quitserver_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;

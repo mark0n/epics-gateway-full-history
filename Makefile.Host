@@ -63,14 +63,14 @@ USR_CXXFLAGS += -DCONTROL_PVS
 USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Install exception handler and print exceptions to log file
 USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
+# Reserve file descriptor for fopen to avoid fd limit of 256 on Solaris
+USR_CXXFLAGS_solaris += -DRESERVE_FOPEN_FD
 
 # USR_INCLUDES += -I$(GNU_REGEX_INC)
 
 WIN32_RUNTIME=MD
 USR_CXXFLAGS_WIN32 += /DWIN32 /D_WINDOWS
 USR_LDFLAGS_WIN32 += /SUBSYSTEM:CONSOLE
-
-# USR_CXXFLAGS_solaris += -mt
 
 ifeq ($(OS_CLASS),WIN32)
 # Use Obj for object libraries and no Obj for import libraries

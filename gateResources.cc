@@ -40,11 +40,14 @@
 #include "gddAppTable.h"
 #include "dbMapper.h"
 
+// Global variables
+gateResources* global_resources;
+
 // ---------------------------- utilities ------------------------------------
 char *timeStamp(void)
-  // Gets current time and puts it in a static array
-  // The calling program should copy it to a safe place
-  //   e.g. strcpy(savetime,timestamp());
+	// Gets current time and puts it in a static array
+	// The calling program should copy it to a safe place
+	//   e.g. strcpy(savetime,timestamp());
 {
 	static char timeStampStr[16];
 	long now;
@@ -57,45 +60,45 @@ char *timeStamp(void)
 	return timeStampStr;
 }
 
-gateResources* global_resources;
-
 gateResources::gateResources(void)
 {
-	if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
-		access_file=strDup(GATE_PV_ACCESS_FILE);
-	else
-		access_file=NULL;
+    if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
+      access_file=strDup(GATE_PV_ACCESS_FILE);
+    else
+      access_file=NULL;
+    
+    if(access(GATE_PV_LIST_FILE,F_OK)==0)
+      pvlist_file=strDup(GATE_PV_LIST_FILE);
+    else
+      pvlist_file=NULL;
+    
+    if(access(GATE_COMMAND_FILE,F_OK)==0)
+      command_file=strDup(GATE_COMMAND_FILE);
+    else
+      command_file=NULL;
+    
+    if(access(GATE_PUTLOG_FILE,F_OK)==0)
+      putlog_file=strDup(GATE_PUTLOG_FILE);
+    else
+      putlog_file=NULL;
+    putlogFp=NULL;
+    
+    debug_level=0;
+    ro=0;
+    setEventMask(DBE_VALUE | DBE_ALARM);
 
-	if(access(GATE_PV_LIST_FILE,F_OK)==0)
-		pvlist_file=strDup(GATE_PV_LIST_FILE);
-	else
-		pvlist_file=NULL;
-
-	if(access(GATE_COMMAND_FILE,F_OK)==0)
-		command_file=strDup(GATE_COMMAND_FILE);
-	else
-		command_file=NULL;
-
-	if(access(GATE_PUTLOG_FILE,F_OK)==0)
-		putlog_file=strDup(GATE_PUTLOG_FILE);
-	else
-		putlog_file=NULL;
-	putlogFp=NULL;
-
-	debug_level=0;
-	ro=0;
-	setEventMask(DBE_VALUE | DBE_ALARM);
-
-	setConnectTimeout(GATE_CONNECT_TIMEOUT);
-	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
-	setDeadTimeout(GATE_DEAD_TIMEOUT);
-	setDisconnectTimeout(GATE_DISCONNECT_TIMEOUT);
-	setReconnectInhibit(GATE_RECONNECT_INHIBIT);
-
-	gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
-
+	serverMode=false;
+    
+    setConnectTimeout(GATE_CONNECT_TIMEOUT);
+    setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
+    setDeadTimeout(GATE_DEAD_TIMEOUT);
+    setDisconnectTimeout(GATE_DISCONNECT_TIMEOUT);
+    setReconnectInhibit(GATE_RECONNECT_INHIBIT);
+    
+    gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
+    
 	gddMakeMapDBR(tt);
-
+	
 	appValue=tt.getApplicationType("value");
 	appUnits=tt.getApplicationType("units");
 	appEnum=tt.getApplicationType("enums");
@@ -105,6 +108,10 @@ gateResources::gateResources(void)
 	appMenuitem=tt.getApplicationType("menuitem");
 	// RL: Should this rather be included in the type table?
 	appSTSAckString=gddDbrToAit[DBR_STSACK_STRING].app;
+	
+#ifdef RESERVE_FOPEN_FD
+	reserveFp = NULL;
+#endif
 }
 
 gateResources::~gateResources(void)
@@ -164,8 +171,56 @@ int gateResources::setUpAccessSecurity(void)
 	return 0;
 }
 
+#ifdef RESERVE_FOPEN_FD
+// Functions to try to reserve a file descriptor to use for fopen.  On
+// Solaris, at least, fopen is limited to FDs < 256.  These could all
+// be used by CA and CAS sockets if there are connections to enough
+// IOCs  These functions try to reserve a FD < 256.
+FILE *gateResources::fopen(const char *filename, const char *mode)
+{
+	// Close the dummy file holding the FD open
+    if(reserveFp) ::fclose(reserveFp);
+    reserveFp=NULL;
+	
+	// Open the file.  It should use the lowest available FD, that is,
+	// the one we just made available.
+    FILE *fp=::fopen(filename,mode);
+    if(!fp) {
+		// Try to get the reserved one back
+		reserveFp=::fopen(GATE_RESERVE_FILE,"w");
+    }
+	
+    return fp;
+}
+
+int gateResources::fclose(FILE *stream)
+{
+	// Close the file
+    int ret=::fclose(stream);
+	
+	// Open the dummy file to reserve the FD just made available
+    reserveFp=::fopen(GATE_RESERVE_FILE,"w");
+	
+    return ret;
+}
+
+FILE *gateResources::openReserveFile(void)
+{
+    reserveFp=::fopen(GATE_RESERVE_FILE,"w");
+    return reserveFp;
+}
+#endif
+
 gateAs* gateResources::getAs(void)
 {
 	if(as==NULL) setUpAccessSecurity();
 	return as;
 }
+
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

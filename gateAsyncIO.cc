@@ -38,7 +38,7 @@ gateAsyncE::~gateAsyncE(void)
 
 gateAsyncR::~gateAsyncR(void)
 {
-	gateDebug1(10,"~gateAsyncR() (dd at %p)\n",&dd);
+	gateDebug1(10,"~gateAsyncR() (dd at %p)\n",(void *)&dd);
 	// If it is in the rio queue, take it out
 	removeFromQueue();
 	// Unreference the dd
@@ -49,7 +49,7 @@ gateAsyncR::~gateAsyncR(void)
 
 gateAsyncW::~gateAsyncW(void)
 {
-	gateDebug1(10,"~gateAsyncW() (dd at %p)\n",&dd);
+	gateDebug1(10,"~gateAsyncW() (dd at %p)\n",(void *)&dd);
 	// If it is in the wio queue, take it out
 	removeFromQueue();
 	// Unreference the dd

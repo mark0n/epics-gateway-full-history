@@ -130,6 +130,10 @@ void gateAsCa(void)
 	time(&start_time);
 	
 	// CA must be initialized by this time - hackery
+	if(!pasbase) {
+		fprintf(stderr,"gateAsCa: Invalid access security\n");
+		return;
+	}
 	pasg=(ASG*)ellFirst(&pasbase->asgList);
 	while(pasg)
 	{
@@ -208,6 +212,10 @@ void gateAsCaClear(void)
 	ASGINP	*pasginp;
 	CAPVT	*pcapvt;
 	
+	if(!pasbase) {
+		fprintf(stderr,"gateAsCaClear: Invalid access security\n");
+		return;
+	}
 	pasg=(ASG*)ellFirst(&pasbase->asgList);
 	while(pasg)
 	{

@@ -60,31 +60,46 @@ class gateAsEntry;
 
 // ----------------------- vc channel stuff -------------------------------
 
-class gateChan : public casChannel, public tsDLNode<gateChan>
+class gateChan : public casChannel
 {
 public:
-	gateChan(const casCtx &ctx, gateVcData *v, gateAsClient *n);
+	gateChan(const casCtx &ctx, casPV *pvIn, gateAsEntry *asentryIn,
+	  const char * const user, const char * const host);
 	~gateChan(void);
 
-	virtual bool readAccess(void) const;
-	virtual bool writeAccess(void) const;
 #if 0
 	// KE: Unused
-	virtual void setOwner(const char * const user,const char * const host);
+	virtual void setOwner(const char * const user, const char * const host);
 #endif
-    virtual caStatus write(const casCtx &ctx, const gdd &value);
-	
-	const char *getUser(void);
-	const char *getHost(void);
-	void setVC(gateVcData *vcIn) { vc=vcIn; }
-	gateAsClient *getAsClient(void) const { return asclient; }
 	void report(void);
 
+	const char *getUser(void);
+	const char *getHost(void);
+	casPV *getCasPv(void) const { return casPv; }
+
+	gateAsClient *getAsClient(void) const { return asclient; }
+	
+	void setCasPv(casPV *casPvIn) { casPv=casPvIn; }
+
 	static void post_rights(void *);
-private:
-	gateVcData *vc;
+
+protected:	
+	casPV *casPv;
 	gateAsClient *asclient; // Must be deleted when done using it
 };
+
+class gateVcChan : public gateChan, public tsDLNode<gateVcChan>
+{
+public:
+	gateVcChan(const casCtx &ctx, casPV *pvIn, gateAsEntry *asentryIn,
+	  const char * const user, const char * const host);
+	~gateVcChan(void);
+
+    virtual caStatus write(const casCtx &ctx, const gdd &value);
+	virtual bool readAccess(void) const;
+	virtual bool writeAccess(void) const;
+};
+
 
 // ----------------------- vc data stuff -------------------------------
 
@@ -123,8 +138,8 @@ public:
     gdd* attribute(int) const { return NULL; } // not done
     aitIndex maximumElements(void) const;
     gateAsEntry* getEntry(void) const { return asentry; }
-    void addChan(gateChan*);
-    void removeChan(gateChan*);
+    void addChan(gateVcChan*);
+    void removeChan(gateVcChan*);
 
 	void postAccessRights(void);
 	void setReadAccess(aitBool b);
@@ -190,7 +205,7 @@ private:
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;
-	tsDLList<gateChan> chan_list;
+	tsDLList<gateVcChan> chan_list;
 	tsDLList<gateAsyncR> rio;	 // Queue for read's received when not ready
 	tsDLList<gateAsyncW> wio;	 // Queue for write's received when not ready
 	tsDLList<gateAsyncR> alhRio; // Queue for alh read's received when not ready
@@ -218,9 +233,9 @@ inline void gateVcData::setAlhTransTime(void) { time(&time_last_alh_trans); }
 inline time_t gateVcData::timeLastAlhTrans(void) const
 	{ return time(NULL)-time_last_alh_trans; }
 
-inline void gateVcData::addChan(gateChan* c) { chan_list.add(*c); }
-inline void gateVcData::removeChan(gateChan* c) {
-	chan_list.remove(*c); c->setVC(NULL); }
+inline void gateVcData::addChan(gateVcChan* c) { chan_list.add(*c); }
+inline void gateVcData::removeChan(gateVcChan* c) {
+	chan_list.remove(*c); c->setCasPv(NULL); }
 
 #endif
 

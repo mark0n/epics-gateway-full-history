@@ -176,9 +176,8 @@ private:
 class gateAsClient
 {
 public:
-	gateAsClient(gateVcData *vc);
-	gateAsClient::gateAsClient(gateVcData *vcd, gateAsEntry* e, const char* user,
-	  const char* host);
+	gateAsClient(void);
+	gateAsClient(gateAsEntry *pase, const char *user, const char *host);
 	~gateAsClient(void);
 	
 	aitBool readAccess(void)  const
@@ -200,14 +199,12 @@ public:
 	
 	void setUserFunction(void (*ufunc)(void*),void* uarg)
 	  { user_arg=uarg; user_func=ufunc; }
-	gateVcData *getVC(void) const { return vc; }
 	
 private:
 	ASCLIENTPVT asclientpvt;
 	gateAsEntry* asentry;
 	void* user_arg;
 	void (*user_func)(void*);
-	gateVcData *vc;
 	
 public:
 	static void clientCallback(ASCLIENTPVT p, asClientStatus s);
@@ -237,6 +234,7 @@ public:
 	gateAs(const char* pvlist_file);
 	~gateAs(void);
 
+#if 0
 	// user must delete the gateAsClient that the following function returns
 #if 0
 	// KE: Not used
@@ -245,7 +243,8 @@ public:
 #endif
 	gateAsClient* getInfo(gateVcData *vc, gateAsEntry* e, const char* user,
 	  const char* host);
-
+#endif
+	
 #ifdef USE_DENYFROM
 	inline gateAsEntry* findEntry(const char* pv, const char* host = 0);
 	bool isDenyFromListUsed(void) const { return denyFromListUsed; }

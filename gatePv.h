@@ -158,7 +158,7 @@ public:
 	void markAlhNoGetPending(void) { alh_get_state=0; }
 	
 protected:
-	void init(gateServer*,gateAsEntry*,const char* name);
+	void init(gateServer*,gateAsEntry *pase, const char* name);
 	void initClear(void);
 
 	void setInactiveTime(void);

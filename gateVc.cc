@@ -94,22 +94,66 @@ void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 
 // ------------------------gateChan
 
-// vc is set in the constructor to the incoming vc.  The constructor
-// adds it to the chan_list.  The vc is set to NULL when the
-// gateVcData removes it from the chan_list in the gateVcData
-// destructor.  This prevents it from calling removeChan when the
-// gateVcData is gone.
-gateChan::gateChan(const casCtx &ctx,gateVcData *v, gateAsClient *n)
-	:casChannel(ctx),vc(v),asclient(n)
+// gateChan has the common part of a casChannel, primarily access
+// security.  gateVcChan is derived for specific use with gateVcData
+// and gateStatChan is derived for specific use with gateStat.
+
+// casPv is set in the constructor to the incoming casPv.  The
+// derived-class constructor adds the derived gateChan to the
+// chan_list in the casPv.  casPv is set to NULL when the casPv
+// removes it from its chan_list in the casPv destructor.  This
+// prevents anyone, inclusing the server, from calling removeChan when
+// the casPv is gone.
+gateChan::gateChan(const casCtx &ctx, casPV *casPvIn, gateAsEntry *asentry,
+  const char * const user, const char * const host) :
+	casChannel(ctx),
+	casPv(casPvIn)
 {
-	if(vc) vc->addChan(this);
-	n->setUserFunction(post_rights,this);
+	
+	asclient=new gateAsClient(asentry,user,host);
+	if(asclient) asclient->setUserFunction(post_rights,this);
 }
 
 gateChan::~gateChan(void)
 {
-	if(vc) vc->removeChan(this);
 	delete asclient;
+}
+
+#if 0
+// KE: Unused
+void gateChan::setOwner(const char* const u, const char* const h)
+	{ asclient->changeInfo(u,h); }
+#endif
+
+const char* gateChan::getUser(void) { return asclient->user(); }
+const char* gateChan::getHost(void) { return asclient->host(); }
+
+void gateChan::post_rights(void* v)
+{
+	gateChan *p = (gateChan *)v;
+	p->postAccessRightsEvent();
+}
+
+void gateChan::report(void)
+{
+	printf("  %s@%s (%s access)\n",getUser(),getHost(),
+	  readAccess()?(writeAccess()?"read/write":"read only"):"no");
+}
+
+// ------------------------gateVcChan
+
+gateVcChan::gateVcChan(const casCtx &ctx, casPV *casPvIn, gateAsEntry *asentry,
+  const char * const user, const char * const host) :
+	gateChan(ctx,casPvIn,asentry,user,host)
+{
+	gateVcData *vc=(gateVcData *)casPv;
+	if(vc) vc->addChan(this);
+}
+
+gateVcChan::~gateVcChan(void)
+{
+	gateVcData *vc=(gateVcData *)casPv;
+	if(vc) vc->removeChan(this);
 }
 
 // This is a new virtual write in CAS that knows the casChannel.  The
@@ -117,8 +161,10 @@ gateChan::~gateChan(void)
 // write calls a new, overloaded gateVcData::write() that has the
 // gateChan as an argument to do what used to be done in the virtual
 // gateVcData::write().
-caStatus gateChan::write(const casCtx &ctx, const gdd &value)
+caStatus gateVcChan::write(const casCtx &ctx, const gdd &value)
 {
+	gateVcData *vc=(gateVcData *)casPv;
+
 	// Trap writes
 	if(asclient && asclient->clientPvt()->trapMask) {
 		FILE *fp=global_resources->getPutlogFp();
@@ -127,8 +173,7 @@ caStatus gateChan::write(const casCtx &ctx, const gdd &value)
 			  timeStamp(),
 			  asclient->user()?asclient->user():"Unknown",
 			  asclient->host()?asclient->host():"Unknown",
-			  asclient->getVC() && asclient->getVC()->getName()?
-			  asclient->getVC()->getName():"Unknown");
+			  vc && vc->getName()?vc->getName():"Unknown");
 			fflush(fp);
 		}
 	}
@@ -138,31 +183,18 @@ caStatus gateChan::write(const casCtx &ctx, const gdd &value)
 	else return S_casApp_noSupport;
 }
 
-#if 0
-// KE: Unused
-void gateChan::setOwner(const char* const u, const char* const h)
-	{ asclient->changeInfo(u,h); }
-#endif
-
-bool gateChan::readAccess(void) const
-	{ return (asclient->readAccess()&&vc&&vc->readAccess())?true:false; }
-
-bool gateChan::writeAccess(void) const
-	{ return (asclient->writeAccess()&&vc&&vc->writeAccess())?true:false; }
-
-const char* gateChan::getUser(void) { return asclient->user(); }
-const char* gateChan::getHost(void) { return asclient->host(); }
-
-void gateChan::report(void)
+bool gateVcChan::readAccess(void) const
 {
-	printf("  %s@%s (%s access)\n",getUser(),getHost(),
-		   readAccess()?(writeAccess()?"read/write":"read only"):"no");
+	gateVcData *vc=(gateVcData *)casPv;
+
+	return (asclient->readAccess() && vc && vc->readAccess())?true:false;
 }
 
-void gateChan::post_rights(void* v)
+bool gateVcChan::writeAccess(void) const
 {
-	gateChan *p = (gateChan *)v;
-	p->postAccessRightsEvent();
+	gateVcData *vc=(gateVcData *)casPv;
+
+	return (asclient->writeAccess() && vc && vc->writeAccess())?true:false;
 }
 
 // ------------------------gateVcData
@@ -189,7 +221,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	pv_data(NULL),
 	event_data(NULL)
 {
-	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
+	gateDebug2(5,"gateVcData(gateServer=%p,name=%s)\n",(void *)m,name);
 
 	select_mask|=(mrg->alarmEventMask()|
 	  mrg->valueEventMask()|
@@ -257,7 +289,7 @@ gateVcData::~gateVcData(void)
 	// gateVcData to remove them after the gateVcData is
 	// gone. removeChan also sets the pChan->vc to NULL, the only
 	// really necessary thing to do.
-	gateChan *pChan;
+	gateVcChan *pChan;
 	while((pChan=chan_list.first()))	{
 		
 		removeChan(pChan);
@@ -302,19 +334,18 @@ void gateVcData::destroy(void)
 }
 
 casChannel* gateVcData::createChannel(const casCtx &ctx,
-		const char * const u, const char * const h)
+  const char * const user, const char * const host)
 {
 	gateDebug0(5,"gateVcData::createChannel()\n");
-	gateChan* c =  new gateChan(ctx,this,
-	  mrg->getAs()->getInfo(this,asentry,u,h));
-	return c;
+	gateVcChan* chan =  new gateVcChan(ctx,this,asentry,user,host);
+	return chan;
 }
 
 void gateVcData::report(void)
 {
 	printf("%-30s event rate = %5.2f\n",pv_name,pv->eventRate());
 
-	tsDLIter<gateChan> iter=chan_list.firstIter();
+	tsDLIter<gateVcChan> iter=chan_list.firstIter();
 	while(iter.valid()) {
 		iter->report();
 		iter++;
@@ -386,7 +417,7 @@ void gateVcData::setEventData(gdd* dd)
 	gddApplicationTypeTable& app_table=gddApplicationTypeTable::AppTable();
 	gdd* ndd=event_data;
 
-	gateDebug2(10,"gateVcData::setEventData(dd=%p) name=%s\n",dd,name());
+	gateDebug2(10,"gateVcData::setEventData(dd=%p) name=%s\n",(void *)dd,name());
 
 #if DEBUG_GDD
 	heading("gateVcData::setEventData",name());
@@ -469,7 +500,7 @@ void gateVcData::setAlhData(gdd* dd)
 	gdd* ndd=event_data;
 	int ackt_acks_changed=1;
 
-	gateDebug2(10,"gateVcData::setAlhData(dd=%p) name=%s\n",dd,name());
+	gateDebug2(10,"gateVcData::setAlhData(dd=%p) name=%s\n",(void *)dd,name());
 
 #if DEBUG_GDD
 	heading("gateVcData::setAlhData",name());
@@ -560,7 +591,7 @@ void gateVcData::setPvData(gdd* dd)
 	// always accept the data transaction - no matter what state
 	// this is the PV atttributes, which come in during the connect state
 	// currently
-	gateDebug2(2,"gateVcData::setPvData(gdd=%8.8x) name=%s\n",(int)dd,name());
+	gateDebug2(2,"gateVcData::setPvData(gdd=%p) name=%s\n",(void *)dd,name());
 
 	if(pv_data) pv_data->unreference();
 	pv_data=dd;
@@ -686,7 +717,7 @@ void gateVcData::flushAsyncReadQueue(void)
 
 	while((asyncr=rio.first()))	{
 		gateDebug2(5,"gateVcData::flushAsyncReadQueue() posting asyncr %p (DD at %p)\n",
-				   asyncr,&asyncr->DD());
+		  (void *)asyncr,(void *)&asyncr->DD());
 		asyncr->removeFromQueue();
 		
 #if DEBUG_GDD
@@ -716,7 +747,7 @@ void gateVcData::flushAsyncAlhReadQueue(void)
 
 	while((asyncr=alhRio.first()))	{
 		gateDebug2(5,"gateVcData::flushAsyncAlhReadQueue() posting asyncr %p (DD at %p)\n",
-				   asyncr,&asyncr->DD());
+		  (void *)asyncr,(void *)&asyncr->DD());
 		asyncr->removeFromQueue();
 		
 #if DEBUG_GDD
@@ -754,7 +785,7 @@ void gateVcData::vcPostEvent(void)
 	if(needPosting())
 	{
 		gateDebug1(2,"gateVcData::vcPostEvent() posting event (event_data at %p)\n",
-				     event_data);
+		  (void *)event_data);
 		if(event_data->isAtomic())
 		{
 			//t=timeLastTrans();
@@ -1141,7 +1172,7 @@ void gateVcData::postAccessRights(void)
 {
 	gateDebug0(5,"gateVcData::postAccessRights() posting access rights\n");
 
-	tsDLIter<gateChan> iter=chan_list.firstIter();
+	tsDLIter<gateVcChan> iter=chan_list.firstIter();
 	while(iter.valid()) {
 		iter->postAccessRightsEvent();
 		iter++;

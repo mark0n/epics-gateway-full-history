@@ -139,7 +139,8 @@ private:
 # define statReport3Flag            NEXT_CONTROL_PV+3
 # define statNewAsFlag              NEXT_CONTROL_PV+4
 # define statQuitFlag               NEXT_CONTROL_PV+5
-# define NEXT_CAS_STAT              NEXT_CONTROL_PV+6
+# define statQuitServerFlag         NEXT_CONTROL_PV+6
+# define NEXT_CAS_STAT              NEXT_CONTROL_PV+7
 #else
 # define NEXT_CAS_STAT              NEXT_CONTROL_PV
 #endif
@@ -304,6 +305,7 @@ private:
 	static volatile unsigned long report3_flag;
 	static volatile unsigned long newAs_flag;
 	static volatile unsigned long quit_flag;
+	static volatile unsigned long quitserver_flag;
 	static void sig_usr1(int);
 	static void sig_usr2(int);
 
