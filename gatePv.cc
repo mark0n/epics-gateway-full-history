@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.8  1996/12/07 16:42:18  jbk
+// many bug fixes, array support added
+//
 // Revision 1.7  1996/10/22 16:06:40  jbk
 // changed list operators head to first
 //
@@ -885,15 +888,17 @@ gdd* gatePvData::eventLongCB(void* dbr)
 	dbr_time_long* ts = (dbr_time_long*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitInt32* d;
+	aitInt32 *d,*nd;
 
 	// DBR_TIME_LONG response
 	// set up the value
 	if(count>1)
 	{
-		value=new gddAtomic(GR->appValue,aitEnumInt32,1,&count);
+		nd=new aitInt32[count];
 		d=(aitInt32*)&ts->value;
-		value->putRef(d);
+		memcpy(nd,d,count*sizeof(aitInt32));
+		value=new gddAtomic(GR->appValue,aitEnumInt32,1,&count);
+		value->putRef(nd,new gddDestructor);
 	}
 	else
 	{
@@ -911,15 +916,17 @@ gdd* gatePvData::eventCharCB(void* dbr)
 	dbr_time_char* ts = (dbr_time_char*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitInt8* d;
+	aitInt8 *d,*nd;
 
 	// DBR_TIME_CHAR response
 	// set up the value
 	if(count>1)
 	{
-		value = new gddAtomic(GR->appValue,aitEnumInt8,1,&count);
+		nd=new aitInt8[count];
 		d=(aitInt8*)&(ts->value);
-		value->putRef(d);
+		memcpy(nd,d,count*sizeof(aitInt8));
+		value = new gddAtomic(GR->appValue,aitEnumInt8,1,&count);
+		value->putRef(nd,new gddDestructor);
 	}
 	else
 	{
@@ -937,15 +944,17 @@ gdd* gatePvData::eventFloatCB(void* dbr)
 	dbr_time_float* ts = (dbr_time_float*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitFloat32* d;
+	aitFloat32 *d,*nd;
 
 	// DBR_TIME_FLOAT response
 	// set up the value
 	if(count>1)
 	{
-		value= new gddAtomic(GR->appValue,aitEnumFloat32,1,&count);
+		nd=new aitFloat32[count];
 		d=(aitFloat32*)&(ts->value);
-		value->putRef(d);
+		memcpy(nd,d,count*sizeof(aitFloat32));
+		value= new gddAtomic(GR->appValue,aitEnumFloat32,1,&count);
+		value->putRef(nd,new gddDestructor);
 	}
 	else
 	{
@@ -963,15 +972,17 @@ gdd* gatePvData::eventDoubleCB(void* dbr)
 	dbr_time_double* ts = (dbr_time_double*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitFloat64* d;
+	aitFloat64 *d,*nd;
 
 	// DBR_TIME_FLOAT response
 	// set up the value
 	if(count>1)
 	{
-		value= new gddAtomic(GR->appValue,aitEnumFloat64,1,&count);
+		nd=new aitFloat64[count];
 		d=(aitFloat64*)&(ts->value);
-		value->putRef(d);
+		memcpy(nd,d,count*sizeof(aitFloat64));
+		value= new gddAtomic(GR->appValue,aitEnumFloat64,1,&count);
+		value->putRef(nd,new gddDestructor);
 	}
 	else
 	{
@@ -989,15 +1000,17 @@ gdd* gatePvData::eventShortCB(void* dbr)
 	dbr_time_short* ts = (dbr_time_short*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitInt16* d;
+	aitInt16 *d,*nd;
 
 	// DBR_TIME_FLOAT response
 	// set up the value
 	if(count>1)
 	{
-		value=new gddAtomic(GR->appValue,aitEnumInt16,1,&count);
+		nd=new aitInt16[count];
 		d=(aitInt16*)&(ts->value);
-		value->putRef(d);
+		memcpy(nd,d,count*sizeof(aitInt16));
+		value=new gddAtomic(GR->appValue,aitEnumInt16,1,&count);
+		value->putRef(nd,new gddDestructor);
 	}
 	else
 	{
