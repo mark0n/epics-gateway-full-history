@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.15  1997/05/20 15:48:30  jbk
+ * changes for the latest CAS library in EPICS 3.13.beta9
+ *
  * Revision 1.14  1997/03/17 16:01:06  jbk
  * bug fixes and additions
  *
@@ -72,8 +75,8 @@ typedef enum {
 class gdd;
 class gatePvData;
 class gateServer;
-class gateAsyncR;
-class gateAsyncW;
+/* class gateAsyncR; */
+/*class gateAsyncW; */
 class gateVcData;
 class gateAs;
 class gateAsNode;
@@ -99,6 +102,34 @@ public:
 private:
 	gateAsNode* node; // I must delete this when done using it
 	gateVcData& vc;
+};
+
+// ---------------------- async read/write pending operation ------------------
+
+class gateAsyncR : public casAsyncReadIO, public tsDLNode<gateAsyncR>
+{
+public:
+	gateAsyncR(const casCtx &ctx,gdd& wdd) : casAsyncReadIO(ctx),dd(wdd)
+		{ dd.reference(); }
+
+	virtual ~gateAsyncR(void);
+
+	gdd& DD(void) { return dd; }
+private:
+	gdd& dd;
+};
+
+class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
+{
+public:
+	gateAsyncW(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
+		{ dd.reference(); }
+
+	virtual ~gateAsyncW(void);
+
+	gdd& DD(void) { return dd; }
+private:
+	gdd& dd;
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -227,34 +258,6 @@ inline time_t gateVcData::timeLastTrans(void) const
 
 inline void gateVcData::addChan(gateChan* c) { chan.add(*c); }
 inline void gateVcData::removeChan(gateChan* c) { chan.remove(*c); }
-
-// ---------------------- async read/write pending operation ------------------
-
-class gateAsyncR : public casAsyncReadIO, public tsDLNode<gateAsyncR>
-{
-public:
-	gateAsyncR(const casCtx &ctx,gdd& wdd) : casAsyncReadIO(ctx),dd(wdd)
-		{ dd.reference(); }
-
-	virtual ~gateAsyncR(void);
-
-	gdd& DD(void) { return dd; }
-private:
-	gdd& dd;
-};
-
-class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
-{
-public:
-	gateAsyncW(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
-		{ dd.reference(); }
-
-	virtual ~gateAsyncW(void);
-
-	gdd& DD(void) { return dd; }
-private:
-	gdd& dd;
-};
 
 #endif
 
