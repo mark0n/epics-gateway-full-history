@@ -3,14 +3,16 @@
 TOP = ../../..
 include $(TOP)/config/CONFIG_EXTENSIONS
 
+# The following pointers should be defined in $(TOP)/config/RELEASE
+# They can be specified at this point, though
+
+# EPICS_BASE = /home/phoebus/EVANS/epics/baseLatest
+# EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
+# EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
+
 # Use of GNU regex library (version 0.12) for patterns and aliasing
-GNU_REGEX_LOCATION = ../../../../regex-0.12
-
-# The base ppointer should be defined in $(TOP)/config/RELEASE
-
-#EPICS_BASE = /home/phoebus/EVANS/epics/baseLatest
-#EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
-#EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
+# GNU_REGEX_INC = ../../../../regex-0.12
+# GNU_REGEX_LIB = ../../../../regex-0.12
 
 # Optimization
 OPTIMIZE = YES
@@ -52,7 +54,7 @@ USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Install exception handler and print exceptions to log file
 USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
 
-USR_INCLUDES += -I$(GNU_REGEX_LOCATION)
+USR_INCLUDES += -I$(GNU_REGEX_INC)
 
 
 PROD_LIBS += gate ca cas As Com gdd
@@ -79,4 +81,4 @@ SRCS += gateway.cc
 
 include $(TOP)/config/RULES.Host
 
-LIBOBJS += $(GNU_REGEX_LOCATION)/regex.o
+LIBOBJS += $(GNU_REGEX_LIB)/regex.o
