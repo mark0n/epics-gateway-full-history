@@ -1,6 +1,4 @@
-#
-# $Id$
-#
+# Makefile.Host for Gateway
 
 TOP = ../../..
 include $(TOP)/config/CONFIG_EXTENSIONS
@@ -10,28 +8,48 @@ include $(TOP)/config/CONFIG_EXTENSIONS
 #EPICS_BASE = /home/phoebus/JBA/epics/base_07_23_98
 #EPICS_BASE = /home/phoebus/JBA/epics/base
 #EPICS_BASE = /home/phoebus/JBA/epics/baseGateway
-EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
+#EPICS_BASE = /home/phoebus/EVANS/epics/baseLatest
+#EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
+#EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
+
+# Optimization
+OPTIMIZE = YES
+ifeq ($(OPTIMIZE),YES)
+  HOST_OPT = YES
+  EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
+else
+  HOST_OPT = NO
+  EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
+endif
+
+# Compiler options
+#USR_CXXFLAGS += -xsb
 
 SHARED_LIBRARIES=NO
 
 CXXCMPLR=STRICT
 
-#CCC = purify -chain-length=20 CC
-#CCC = purify -first-only -chain-length=25 CC
+# Purify
+#CXX = purify -first-only -chain-length=25 $($(CPLUSPLUS)_$(CXXCMPLR))
 
 # Quantify -collection-granularity=function runs faster than default=line
 # Quantify -use-machine=sparcstation_5 sets timing for Nike
 #CCC = quantify -collection-granularity=function -use-machine=sparcstation_5:85MHz CC 
 
-HOST_OPT=NO
-
+# Turn on debug mode
 # USR_CXXFLAGS += -DDEBUG_MODE
 # Turn off Gateway debug calls:
 USR_CXXFLAGS += -DNODEBUG
+# Use stat PV's
+USR_CXXFLAGS += -DSTAT_PVS
 # Use rate statistics
 USR_CXXFLAGS += -DRATE_STATS
+# Use CAS diagnostics statistics
+USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Fix GDD ENUM problem (Requires hacks to base as well):
 USR_CXXFLAGS += -DENUM_HACK
+# Install exception handler and print exceptions to log file
+USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
 
 #PROD_LIBS += gate ca cas As Com gdd
 PROD_LIBS += ca cas As Com gdd

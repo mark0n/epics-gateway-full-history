@@ -1,53 +1,8 @@
+/* Author: Jim Kowalkowski
+ * Date: 2/96 */
+
 #ifndef __GATE_RESOURCES_H
 #define __GATE_RESOURCES_H
-
-/* 
- * Author: Jim Kowalkowski
- * Date: 2/96
- *
- * $Id$
- *
- * $Log$
- * Revision 1.14  1998/03/09 14:42:04  jba
- * Upon USR1 signal gateway now executes commands specified in a
- * gateway.command file.
- * Incorporated latest changes to access security in gateAsCa.cc
- *
- * Revision 1.13  1997/05/15 14:35:49  jba
- * Added gateway restart script report.
- *
- * Revision 1.12  1997/03/17 16:01:00  jbk
- * bug fixes and additions
- *
- * Revision 1.11  1997/02/21 17:31:18  jbk
- * many many bug fixes and improvements
- *
- * Revision 1.10  1996/12/11 13:04:05  jbk
- * All the changes needed to implement access security.
- * Bug fixes for createChannel and access security stuff
- *
- * Revision 1.8  1996/11/27 04:55:35  jbk
- * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
- *
- * Revision 1.7  1996/10/22 15:58:39  jbk
- * changes, changes, changes
- *
- * Revision 1.6  1996/09/23 20:40:44  jbk
- * many fixes
- *
- * Revision 1.5  1996/09/12 12:17:54  jbk
- * Fixed up file defaults and logging in the resources class
- *
- * Revision 1.4  1996/09/10 15:04:11  jbk
- * many fixes.  added instructions to usage. fixed exist test problems.
- *
- * Revision 1.3  1996/07/26 02:34:44  jbk
- * Interum step.
- *
- * Revision 1.2  1996/07/23 16:32:38  jbk
- * new gateway that actually runs
- *
- */
 
 #define GATE_SCRIPT_FILE    "gateway.killer"
 #define GATE_RESTART_FILE   "gateway.restart"
@@ -61,6 +16,8 @@
 
 #define GATE_REALLY_SMALL    0.0000001
 #define GATE_CONNECT_SECONDS 1
+
+#include "gateVersion.h"
 
 class gateAs;
 class gateAsNode;

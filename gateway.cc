@@ -1,63 +1,7 @@
 // Author: Jim Kowalkowski
 // Date: 2/96
-//
-// $Id$
-//
-// $Log$
-// Revision 1.17  1998/03/09 14:42:06  jba
-// Upon USR1 signal gateway now executes commands specified in a
-// gateway.command file.
-// Incorporated latest changes to access security in gateAsCa.cc
-//
-// Revision 1.16  1997/06/09 14:18:52  jba
-// Environment variable GATEWAY_CORE_SIZE now sets size limit of core file.
-//
-// Revision 1.15  1997/05/15 14:35:50  jba
-// Added gateway restart script report.
-//
-// Revision 1.14  1997/03/17 16:01:08  jbk
-// bug fixes and additions
-//
-// Revision 1.13  1997/02/21 17:31:22  jbk
-// many many bug fixes and improvements
-//
-// Revision 1.12  1997/02/11 21:47:08  jbk
-// Access security updates, bug fixes
-//
-// Revision 1.11  1997/01/12 20:33:22  jbk
-// Limit the size of core files
-//
-// Revision 1.10  1996/12/11 13:04:11  jbk
-// All the changes needed to implement access security.
-// Bug fixes for createChannel and access security stuff
-//
-// Revision 1.9  1996/11/27 04:55:47  jbk
-// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
-//
-// Revision 1.8  1996/11/21 19:29:17  jbk
-// Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
-//
-// Revision 1.7  1996/11/07 14:11:09  jbk
-// Set up to use the latest CA server library.
-// Push the ulimit for FDs up to maximum before starting CA server
-//
-// Revision 1.6  1996/10/22 15:58:43  jbk
-// changes, changes, changes
-//
-// Revision 1.5  1996/09/12 12:17:55  jbk
-// Fixed up file defaults and logging in the resources class
-//
-// Revision 1.4  1996/09/10 15:04:14  jbk
-// many fixes.  added instructions to usage. fixed exist test problems.
-//
-// Revision 1.3  1996/07/26 02:34:47  jbk
-// Interum step.
-//
-// Revision 1.2  1996/07/23 16:32:44  jbk
-// new gateway that actually runs
-//
 
-#define DEBUG_GATEWAY 1
+#define DEBUG_CORE_FILE 1
 
 #include <stdio.h>
 #include <string.h>
@@ -373,7 +317,7 @@ static int startEverything(void)
 		if (core_size)
 			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=20000000;
 		lim.rlim_cur=core_len;
-#if DEBUG_GATEWAY == 0
+#if DEBUG_CORE_FILE == 0
 	      // KE: Truncating the core file makes it unusable -- may as well delete
 	      //  it or not create it or set limit to zero or ...
 		if(setrlimit(RLIMIT_CORE,&lim)<0)
@@ -398,8 +342,8 @@ static int startEverything(void)
 	time(&now);
 	tblock=localtime(&now);
 	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-	printf("%s Starting Gateway Server PID=%d\n",
-	  timeStampStr,sid);	  
+	printf("%s %s [%s %s] PID=%d\n",
+	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__,sid);	  
 
 	gatewayServer();
 	return 0;

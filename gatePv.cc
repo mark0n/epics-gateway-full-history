@@ -1,105 +1,10 @@
 // Author: Jim Kowalkowski
 // Date: 2/96
-//
-// $Id$
-//
-// $Log$
-// Revision 1.21  1998/12/22 20:10:19  evans
-// This version has much debugging printout (inside #if's).
-// Changed gateVc::remove-> vcRemove and add -> vcAdd.
-//   Eliminates warnings about hiding private ancestor functions on Unix.
-//   (Warning is invalid.)
-// Now compiles with no warnings for COMPLR=STRICT on Solaris.
-// Made changes to speed it up:
-//   Put #if around ca_add_fd_registration.
-//     Also eliminates calls to ca_pend in fdCB.
-//   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
-//   Changed mainLoop to call fdManager::process with delay=0.
-//   Put explicit ca_poll in the mainLoop.
-//   All these changes eliminate calls to poll() which was the predominant
-//     time user.  Speed up under load is as much as a factor of 5. Under
-//     no load it runs continuously, however, rather than sleeping in
-//     poll().
-// Added #if NODEBUG around calls to Gateway debug routines (for speed).
-// Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
-// Added timeStamp routine to gateServer.cc.
-// Added line with PID and time stamp to log file on startup.
-// Changed freopen for stderr to use "a" so it doesn't overwrite the log.
-// Incorporated Ralph Lange changes by hand.
-//   Changed clock_gettime to osiTime to avoid unresolved reference.
-//   Fixed his gateAs::readPvList to eliminate core dump.
-// Made other minor fixes.
-// Did minor cleanup as noticed problems.
-// This version appears to work but has debugging (mostly turned off).
-//
-// Revision 1.19  1998/09/24 20:58:37  jba
-// Real name is now used for access security pattern matching.
-// Fixed PV Pattern Report
-// New gdd api changes
-//
-// Revision 1.18  1998/03/09 14:42:04  jba
-// Upon USR1 signal gateway now executes commands specified in a
-// gateway.command file.
-// Incorporated latest changes to access security in gateAsCa.cc
-//
-// Revision 1.17  1997/09/25 18:20:47  jba
-// Added cast and include for tsDLList.h.
-//
-// Revision 1.16  1997/06/12 21:32:07  jba
-// pv_name update.
-//
-// Revision 1.15  1997/03/17 16:00:59  jbk
-// bug fixes and additions
-//
-// Revision 1.14  1997/02/21 17:31:15  jbk
-// many many bug fixes and improvements
-//
-// Revision 1.13  1997/02/11 21:47:04  jbk
-// Access security updates, bug fixes
-//
-// Revision 1.12  1997/01/12 20:34:08  jbk
-// bug fix
-//
-// Revision 1.11  1996/12/17 14:32:21  jbk
-// Updates for access security
-//
-// Revision 1.10  1996/12/11 13:04:01  jbk
-// All the changes needed to implement access security.
-// Bug fixes for createChannel and access security stuff
-//
-// Revision 1.9  1996/12/09 20:51:07  jbk
-// bug in array support
-//
-// Revision 1.8  1996/12/07 16:42:18  jbk
-// many bug fixes, array support added
-//
-// Revision 1.7  1996/10/22 16:06:40  jbk
-// changed list operators head to first
-//
-// Revision 1.6  1996/10/22 15:58:36  jbk
-// changes, changes, changes
-//
-// Revision 1.5  1996/09/10 15:04:10  jbk
-// many fixes.  added instructions to usage. fixed exist test problems.
-//
-// Revision 1.4  1996/09/06 11:56:21  jbk
-// little fixes
-//
-// Revision 1.3  1996/08/14 21:10:32  jbk
-// next wave of updates, menus stopped working, units working, value not
-// working correctly sometimes, can't delete the channels
-//
-// Revision 1.2  1996/07/26 02:34:43  jbk
-// Interum step.
-//
-// Revision 1.1  1996/07/23 16:32:35  jbk
-// new gateway that actually runs
-//
-//
 
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 #define DEBUG_VC_DELETE 0
+#define DEBUG_GDD 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -150,7 +55,9 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 	initClear();
-	m->setStat(statPvTotal,++total_pv);
+#ifdef STAT_PVS
+	m->setStat(statPvTotal,++m->total_pv);
+#endif
 	init(m,e,name);
 }
 
@@ -158,7 +65,9 @@ gatePvData::gatePvData(gateServer* m,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 	initClear();
-	m->setStat(statPvTotal,++total_pv);
+#ifdef STAT_PVS
+	m->setStat(statPvTotal,++m->total_pv);
+#endif
 	init(m,m->getAs()->findEntry(name),name);
 }
 
@@ -167,7 +76,9 @@ gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateVcData=%8.8x,name=%s)\n",
 		(int)m,(int)d,name);
 	initClear();
-	m->setStat(statPvTotal,++total_pv);
+#ifdef STAT_PVS
+	m->setStat(statPvTotal,++m->total_pv);
+#endif
 	setVC(d);
 	markAddRemoveNeeded();
 	init(m,m->getAs()->findEntry(name),name);
@@ -178,7 +89,9 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateExistData=%8.8x,name=%s)\n",
 		(int)m,(int)d,name);
 	initClear();
-	m->setStat(statPvTotal,++total_pv);
+#ifdef STAT_PVS
+	m->setStat(statPvTotal,++m->total_pv);
+#endif
 	markAckNakNeeded();
 	addET(d);
 	init(m,m->getAs()->findEntry(name),name);
@@ -187,19 +100,18 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 gatePvData::~gatePvData(void)
 {
 	gateDebug1(5,"~gatePvData() name=%s\n",name());
-	mrg->setStat(statPvTotal,--total_pv);
+#ifdef STAT_PVS
+	mrg->setStat(statPvTotal,--mrg->total_pv);
+	if(getState() == gatePvInactive || getState() == gatePvActive)
+	{
+		mrg->setStat(statAlive,--mrg->total_alive);
+	}
+#endif
 	unmonitor();
-	status=ca_clear_channel(chan);
+	status=ca_clear_channel(chID);
 	SEVCHK(status,"clear channel");
 	delete [] pv_name;
 }
-
-long gatePvData::total_alive=0;
-long gatePvData::total_active=0;
-long gatePvData::total_pv=0;
-#ifdef RATE_STATS
-unsigned long gatePvData::client_event_count=0;
-#endif
 
 void gatePvData::initClear(void)
 {
@@ -228,7 +140,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		status=-1;
 	else
 	{
-		status=ca_search_and_connect(pv_name,&chan,connectCB,this);
+		status=ca_search_and_connect(pv_name,&chID,connectCB,this);
 		SEVCHK(status,"gatePvData::init() - search and connect");
 	}
 
@@ -239,7 +151,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	if(status==ECA_NORMAL)
 #endif
 	{
-		status=ca_replace_access_rights_event(chan,accessCB);
+		status=ca_replace_access_rights_event(chID,accessCB);
 		if(status==ECA_NORMAL)
 			status=0;
 		else
@@ -251,7 +163,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		setState(gatePvDead);
 		status=-1;
 	}
-
+	
 	if(status)
 	{
 		// what do I do here? Nothing for now, let creator fix trouble
@@ -272,14 +184,14 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		  mrg->vcList()->count(),pv_name);
 #endif
 	}
-
+	
 #if OMIT_CHECK_EVENT
 #else
 	checkEvent(); // do ca_pend_event
 #endif
 }
 
-aitEnum gatePvData::nativeType(void)
+aitEnum gatePvData::nativeType(void) const
 {
 	return gddDbrToAit[fieldType()].type;
 }
@@ -287,11 +199,13 @@ aitEnum gatePvData::nativeType(void)
 int gatePvData::activate(gateVcData* vcd)
 {
 	gateDebug2(5,"gatePvData::activate(gateVcData=%8.8x) name=%s\n",
-		(int)vcd,name());
-	mrg->setStat(statActive,++total_active);
-
+	  (int)vcd,name());
+#ifdef STAT_PVS
+	mrg->setStat(statActive,++mrg->total_active);
+#endif
+	
 	int rc=0;
-
+	
 	switch(getState())
 	{
 	case gatePvInactive:
@@ -304,7 +218,7 @@ int gatePvData::activate(gateVcData* vcd)
 		break;
 	case gatePvDead:
 		gateDebug0(3,"gatePvData::activate() PV is dead\n");
-		vc=NULL; // NOTE: be sure vc does not response
+		vc=NULL; // NOTE: be sure vc does not respond
 		rc=-1;
 		break;
 	case gatePvActive:
@@ -324,7 +238,9 @@ int gatePvData::activate(gateVcData* vcd)
 int gatePvData::deactivate(void)
 {
 	gateDebug1(5,"gatePvData::deactivate() name=%s\n",name());
-	mrg->setStat(statActive,--total_active);
+#ifdef STAT_PVS
+	mrg->setStat(statActive,--mrg->total_active);
+#endif
 #if DEBUG_VC_DELETE
 	printf("gatePvData::deactivate: %s\n",name());
 #endif
@@ -382,7 +298,7 @@ int gatePvData::life(void)
 		// let the ConnectCleanup() routine just delete active PVs from 
 		// the connecting PV list
 		// mrg->CDeletePV(pv_name,x);
-
+		
 		mrg->pvAdd(pv_name,*this);
 
 		if(needAddRemove())
@@ -410,7 +326,9 @@ int gatePvData::life(void)
 			}
 			markAckNakNotNeeded();
 		}
-		mrg->setStat(statAlive,++total_alive);
+#ifdef STAT_PVS
+		mrg->setStat(statAlive,++mrg->total_alive);
+#endif
 #if DEBUG_PV_LIST
 		{
 		    long now;
@@ -444,7 +362,9 @@ int gatePvData::life(void)
 		gateDebug0(3,"gatePvData::life() dead PV\n");
 		setAliveTime();
 		setState(gatePvInactive);
-		mrg->setStat(statAlive,++total_alive);
+#ifdef STAT_PVS
+		mrg->setStat(statAlive,++mrg->total_alive);
+#endif
 		break;
 	case gatePvInactive:
 		gateDebug0(3,"gatePvData::life() inactive PV\n");
@@ -471,12 +391,16 @@ int gatePvData::death(void)
 	{
 	case gatePvInactive:
 		gateDebug0(3,"gatePvData::death() inactive PV\n");
-		mrg->setStat(statAlive,--total_alive);
+#ifdef STAT_PVS
+		mrg->setStat(statAlive,--mrg->total_alive);
+#endif
 		break;
 	case gatePvActive:
 		gateDebug0(3,"gatePvData::death() active PV\n");
 		if(vc) delete vc; // get rid of VC
-		mrg->setStat(statAlive,--total_alive);
+#ifdef STAT_PVS
+		mrg->setStat(statAlive,--mrg->total_alive);
+#endif
 		break;
 	case gatePvConnect:
 		gateDebug0(3,"gatePvData::death() connecting PV\n");
@@ -547,7 +471,7 @@ int gatePvData::unmonitor(void)
 
 	if(monitored())
 	{
-		rc=ca_clear_event(event);
+		rc=ca_clear_event(evID);
 		SEVCHK(rc,"gatePvData::Unmonitor(): clear event");
 		if(rc==ECA_NORMAL) rc=0;
 		markNotMonitored();
@@ -563,14 +487,14 @@ int gatePvData::monitor(void)
 	if(!monitored())
 	{
 		// gets only 1 element:
-		// rc=ca_add_event(eventType(),chan,eventCB,this,&event);
+		// rc=ca_add_event(eventType(),chID,eventCB,this,&event);
 		// gets native element count number of elements:
 
-		if(ca_read_access(chan))
+		if(ca_read_access(chID))
 		{
 			gateDebug1(5,"gatePvData::monitor() type=%ld\n",eventType());
-			rc=ca_add_array_event(eventType(),0,chan,eventCB,this,
-				0.0,0.0,0.0,&event);
+			rc=ca_add_array_event(eventType(),0,chID,eventCB,this,
+				0.0,0.0,0.0,&evID);
 			SEVCHK(rc,"gatePvData::Monitor() add event");
 
 			if(rc==ECA_NORMAL)
@@ -609,7 +533,7 @@ int gatePvData::get(void)
 			// always get only one element, the monitor will get
 			// all the rest of the elements
 			rc=ca_array_get_callback(dataType(),1 /*totalElements()*/,
-				chan,getCB,this);
+				chID,getCB,this);
 			SEVCHK(rc,"get with callback bad");
 #if OMIT_CHECK_EVENT
 #else
@@ -630,12 +554,14 @@ int gatePvData::get(void)
 	return (rc==ECA_NORMAL)?0:-1;
 }
 
+#if 0
+// KE: Isn't presently used
 int gatePvData::put(gdd* dd)
 {
 	gateDebug2(5,"gatePvData::put(gdd=%8.8x) name=%s\n",(int)dd,name());
 	int rc=ECA_NORMAL;
 	chtype cht;
-	long sz;
+	unsigned long count;
 
 	gateDebug1(6,"gatePvData::put() - Field type=%d\n",(int)fieldType());
 	// dd->dump();
@@ -648,27 +574,29 @@ int gatePvData::put(gdd* dd)
 
 		if(dd->isScalar())
 		{
-			gateDebug0(6,"gatePvData::put() ca put before\n");
-			rc=ca_array_put_callback(fieldType(),
-				1,chan,dd->dataAddress(),putCB,this);
-			gateDebug0(6,"gatePvData::put() ca put after\n");
+			cht=field(type);
+			count=1;
+			pData=dd->dataAddress();
 		}
 		else
 		{
 			// hopefully this is only temporary and we will get a string ait
 			if(fieldType()==DBF_STRING && dd->primitiveType()==aitEnumInt8)
 			{
-				sz=1;
 				cht=DBF_STRING;
+				count=1;
+				pData=dd->dataPointer();
 			}
 			else
 			{
-				sz=dd->getDataSizeElements();
 				cht=gddAitToDbr[dd->primitiveType()];
+				count=dd->getDataSizeElements();
+				pData=dd->dataPointer();
 			}
-			rc=ca_array_put_callback(cht,sz,chan,dd->dataPointer(),putCB,this);
 		}
-
+		gateDebug0(6,"gatePvData::put() ca put before\n");
+		rc=ca_array_put_callback(cht,count,chID,pData,putCB,this);
+		gateDebug0(6,"gatePvData::put() ca put after\n");
 		SEVCHK(rc,"put callback bad");
 		markAckNakNeeded();
 #if OMIT_CHECK_EVENT
@@ -688,6 +616,7 @@ int gatePvData::put(gdd* dd)
 	}
 	return (rc==ECA_NORMAL)?0:-1;
 }
+#endif
 
 int gatePvData::putDumb(gdd* dd)
 {
@@ -695,8 +624,17 @@ int gatePvData::putDumb(gdd* dd)
 	chtype cht=gddAitToDbr[dd->primitiveType()];
 	int rc=ECA_NORMAL;
 	aitString* str;
-	aitFixedString* fstr;
+	void *pValue;
+	unsigned long count;
 
+#if DEBUG_GDD
+		printf("gatePvData::putDumb: at=%d pt=%d ft=%d[%s] name=%s\n",
+		  dd->applicationType(),
+		  dd->primitiveType(),
+		  fieldType(),dbr_type_to_text(fieldType()),
+		  ca_name(chID));
+#endif
+	
 	switch(getState())
 	{
 	case gatePvActive:
@@ -711,22 +649,26 @@ int gatePvData::putDumb(gdd* dd)
 				str=(aitString*)dd->dataPointer();
 
 			// can only put one of these - arrays not valid to CA client
+			count=1;
+			pValue=(void *)str->string();
 			gateDebug1(5," putting String <%s>\n",str->string());
-			rc=ca_array_put(cht,1,chan,(void*)str->string());
 			break;
 		case aitEnumFixedString:
-			fstr=(aitFixedString*)dd->dataPointer();
-			gateDebug1(5," putting FString <%s>\n",fstr->fixed_string);
-			rc=ca_array_put(cht,dd->getDataSizeElements(),chan,(void*)fstr);
+			count=dd->getDataSizeElements();
+			pValue=dd->dataPointer();
+			gateDebug1(5," putting FString <%s>\n",(char *)pUser);
 			break;
 		default:
-			if(dd->isScalar())
-				rc=ca_array_put(cht,1,chan,dd->dataAddress());
-			else
-				rc=ca_array_put(cht,dd->getDataSizeElements(),
-					chan, dd->dataPointer());
+			if(dd->isScalar()) {
+				count=1;
+				pValue=dd->dataAddress();
+			} else {
+				count=dd->getDataSizeElements();
+				pValue=dd->dataPointer();
+			}
 			break;
 		}
+		rc=ca_array_put(cht,count,chID,pValue);	
 		SEVCHK(rc,"put dumb bad");
 #if OMIT_CHECK_EVENT
 #else
@@ -757,8 +699,8 @@ double gatePvData::eventRate(void)
 void gatePvData::connectCB(CONNECT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
-	gateDebug1(5,"gatePvData::connectCB(gatePvData=%8.8x)\n",(int)pv);
 
+	gateDebug1(5,"gatePvData::connectCB(gatePvData=%8.8x)\n",(int)pv);
 	gateDebug0(9,"conCB: -------------------------------\n");
 	gateDebug1(9,"conCB: name=%s\n",ca_name(args.chid));
 	gateDebug1(9,"conCB: type=%d\n",ca_field_type(args.chid));
@@ -769,7 +711,7 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 	gateDebug1(9,"conCB: state=%d\n",ca_state(args.chid));
 
 #ifdef RATE_STATS
-	++client_event_count;
+	++pv->mrg->client_event_count;
 #endif
 
 	// send message to user concerning connection
@@ -822,9 +764,16 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 			pv->data_func=dataDoubleCB;
 			break;
 		default:
+#if 1
+			fprintf(stderr,"gatePvData::connectCB: "
+			  "Unhandled field type[%s] for %s\n",
+			  dbr_type_to_text(ca_field_type(args.chid)),
+			  ca_name(args.chid));
+#endif			
 			pv->event_type=(chtype)-1;
 			pv->data_type=(chtype)-1;
 			pv->event_func=(gateCallback)NULL;
+			pv->data_func=(gateCallback)NULL;
 			break;
 		}
 
@@ -844,7 +793,7 @@ void gatePvData::putCB(EVENT_ARGS args)
 	gateDebug1(5,"gatePvData::putCB(gatePvData=%8.8x)\n",pv);
 
 #ifdef RATE_STATS
-	++client_event_count;
+	++pv->mrg->client_event_count;
 #endif
 
 	// notice that put with callback never fails here (always ack'ed)
@@ -859,12 +808,12 @@ void gatePvData::eventCB(EVENT_ARGS args)
 	gdd* dd;
 
 #ifdef RATE_STATS
-	++client_event_count;
+	++pv->mrg->client_event_count;
 #endif
 
 	if(args.status==ECA_NORMAL)
 	{
-		// only sends PV event data (attributes) and ADD transactions
+		// only sends event_data and does ADD transactions
 		if(pv->active())
 		{
 			gateDebug0(5,"gatePvData::eventCB() active pv\n");
@@ -877,7 +826,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 					pv->vc->vcAdd(dd);
 				}
 				else
-					pv->vc->eventData(dd);
+					pv->vc->setEventData(dd);
 			}
 		}
 		++(pv->event_count);
@@ -892,17 +841,17 @@ void gatePvData::getCB(EVENT_ARGS args)
 	gdd* dd;
 
 #ifdef RATE_STATS
-	++client_event_count;
+	++pv->mrg->client_event_count;
 #endif
 
 	pv->markNoGetPending();
 	if(args.status==ECA_NORMAL)
 	{
-		// get only sends PV data (attributes)
+		// get only sends pv_data
 		if(pv->active())
 		{
 			gateDebug0(5,"gatePvData::getCB() pv active\n");
-			if(dd=pv->runDataCB((void*)(args.dbr))) pv->vc->pvData(dd);
+			if(dd=pv->runDataCB((void*)(args.dbr))) pv->vc->setPvData(dd);
 			pv->monitor();
 		}
 	}
@@ -921,7 +870,7 @@ void gatePvData::accessCB(ACCESS_ARGS args)
 	gateVcData* vc=pv->VC();
 
 #ifdef RATE_STATS
-	++client_event_count;
+	++pv->mrg->client_event_count;
 #endif
 
 	// sets general read/write permissions for the gateway itself
@@ -953,7 +902,7 @@ void gatePvData::accessCB(ACCESS_ARGS args)
 gdd* gatePvData::dataStringCB(void* /*dbr*/)
 {
 	gateDebug0(4,"gatePvData::dataStringCB\n");
-	// no useful attributes returned by this function
+	// no useful pv_data returned by this function
 	return NULL;
 }
 
@@ -966,12 +915,12 @@ gdd* gatePvData::dataEnumCB(void* dbr)
 	gddAtomic* menu=new gddAtomic(GR->appEnum,aitEnumFixedString,1,ts->no_str);
 
 	// DBR_CTRL_ENUM response
-    for (i=0;i<ts->no_str;i++) {
-        strncpy(items[i].fixed_string,&(ts->strs[i][0]),
-            sizeof(aitFixedString));
-        items[i].fixed_string[sizeof(aitFixedString)-1u] = '\0';
-    }
-
+	for (i=0;i<ts->no_str;i++) {
+		strncpy(items[i].fixed_string,&(ts->strs[i][0]),
+		  sizeof(aitFixedString));
+		items[i].fixed_string[sizeof(aitFixedString)-1u] = '\0';
+	}
+	
 
 	menu->putRef(items,new gateStringDestruct);
 	return menu;
@@ -1262,7 +1211,8 @@ gdd* gatePvData::eventShortCB(void* dbr)
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

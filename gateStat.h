@@ -1,16 +1,9 @@
 // Author: Jim Kowalkowski
 // Date: 7/96
-//
-// $Id$
-//
-// $Log$
-// Revision 1.2.2.1  1998/11/13 15:17:01  lange
-// += time stamps for stats
-//
 
-// class gateStat:
-// Contains data and CAS interface for one bit of gate status info
-// Update is done via a gate server's method (setStat) calling gateStat::post_data
+// gateStat: Contains data and CAS interface for one bit of gate
+// status info.  Update is done via a gate server's method (setStat)
+// calling gateStat::post_data.
 
 #ifndef GATE_STAT_H
 #define GATE_STAT_H
@@ -37,6 +30,7 @@ public:
 	virtual const char *getName() const;
 
 	void postData(long val);
+	void postData(unsigned long val);
 	void postData(double val);
 
 private:

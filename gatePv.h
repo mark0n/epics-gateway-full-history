@@ -1,57 +1,8 @@
+/* Author: Jim Kowalkowski
+ * Date: 2/96 */
+
 #ifndef GATE_NEW_PV_H
 #define GATE_NEW_PV_H
-
-/* 
- * Author: Jim Kowalkowski
- * Date: 2/96
- *
- * $Id$
- *
- * $Log$
- * Revision 1.7  1998/12/22 20:10:19  evans
- * This version has much debugging printout (inside #if's).
- * Changed gateVc::remove-> vcRemove and add -> vcAdd.
- *   Eliminates warnings about hiding private ancestor functions on Unix.
- *   (Warning is invalid.)
- * Now compiles with no warnings for COMPLR=STRICT on Solaris.
- * Made changes to speed it up:
- *   Put #if around ca_add_fd_registration.
- *     Also eliminates calls to ca_pend in fdCB.
- *   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
- *   Changed mainLoop to call fdManager::process with delay=0.
- *   Put explicit ca_poll in the mainLoop.
- *   All these changes eliminate calls to poll() which was the predominant
- *     time user.  Speed up under load is as much as a factor of 5. Under
- *     no load it runs continuously, however, rather than sleeping in
- *     poll().
- * Added #if NODEBUG around calls to Gateway debug routines (for speed).
- * Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
- * Added timeStamp routine to gateServer.cc.
- * Added line with PID and time stamp to log file on startup.
- * Changed freopen for stderr to use "a" so it doesn't overwrite the log.
- * Incorporated Ralph Lange changes by hand.
- *   Changed clock_gettime to osiTime to avoid unresolved reference.
- *   Fixed his gateAs::readPvList to eliminate core dump.
- * Made other minor fixes.
- * Did minor cleanup as noticed problems.
- * This version appears to work but has debugging (mostly turned off).
- *
- * Revision 1.5  1997/03/17 16:01:00  jbk
- * bug fixes and additions
- *
- * Revision 1.4  1997/02/21 17:31:16  jbk
- * many many bug fixes and improvements
- *
- * Revision 1.3  1996/12/17 14:32:24  jbk
- * Updates for access security
- *
- * Revision 1.2  1996/09/10 15:04:11  jbk
- * many fixes.  added instructions to usage. fixed exist test problems.
- *
- * Revision 1.1  1996/07/23 16:32:36  jbk
- * new gateway that actually runs
- *
- */
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -100,43 +51,46 @@ public:
 
 	typedef gdd* (gatePvData::*gateCallback)(void*);
 
-	int active(void) const			{ return (pv_state==gatePvActive)?1:0; }
-	int inactive(void)	const		{ return (pv_state==gatePvInactive)?1:0; }
-	int dead(void) const			{ return (pv_state==gatePvDead)?1:0; }
-	int pendingConnect(void) const	{ return (pv_state==gatePvConnect)?1:0; }
+        int active(void) const { return (pv_state==gatePvActive)?1:0; }
+        int inactive(void) const { return (pv_state==gatePvInactive)?1:0; }
+        int dead(void) const { return (pv_state==gatePvDead)?1:0; }
+        int pendingConnect(void) const { return (pv_state==gatePvConnect)?1:0; }
 
-	int pendingGet(void) const		{ return (get_state)?1:0; }
-	int monitored(void) const		{ return (mon_state)?1:0; }
-	int needAckNak(void) const		{ return (test_flag)?1:0; }
-	int needAddRemove(void) const	{ return (complete_flag)?1:0; }
-	int abort(void) const			{ return (abort_flag)?1:0; }
+        int pendingGet(void) const { return (get_state)?1:0; }
+        int monitored(void) const { return (mon_state)?1:0; }
+        int needAckNak(void) const { return (test_flag)?1:0; }
+        int needAddRemove(void) const { return (complete_flag)?1:0; }
+        int abort(void) const { return (abort_flag)?1:0; }
 
-	const char* name(void) const		{ return pv_name; }
-	gateVcData* VC(void)				{ return vc; }
-	gateAsEntry* getEntry(void)			{ return ae; }
-	gatePvState getState(void) const	{ return pv_state; }
-	int getStatus(void) const			{ return status; }
-	chid getChannel(void) const			{ return chan; }
-	evid getEvent(void) const			{ return event; }
-	int getCaState(void) const			{ return ca_state(chan); }
-	aitInt32 totalElements(void) const	{ return ca_element_count(chan); }
-	aitUint32 maxElements(void) const	{ return max_elements; }
-	chtype fieldType(void)				{ return ca_field_type(chan); }
-	aitEnum nativeType(void);
-	chtype dataType(void) const			{ return data_type; }
-	chtype eventType(void) const		{ return event_type; }
-	void checkEvent(void)				{ ca_pend_event(GATE_REALLY_SMALL); }
-	double eventRate(void);
+        const char* name(void) const { return pv_name; }
+        gateVcData* VC(void) const { return vc; }
+        gateAsEntry* getEntry(void) const { return ae; }
+        gatePvState getState(void) const { return pv_state; }
+        int getStatus(void) const { return status; }
+        chid getChannel(void) const { return chID; }
+        evid getEvent(void) const { return evID; }
+        int getCaState(void) const { return ca_state(chID); }
+        aitInt32 totalElements(void) const { return ca_element_count(chID); }
+        aitUint32 maxElements(void) const { return max_elements; }
+        chtype fieldType(void) const { return ca_field_type(chID); }
+        aitEnum nativeType(void) const;
+        chtype dataType(void) const { return data_type; }
+        chtype eventType(void) const { return event_type; }
+        void checkEvent(void) { ca_poll(); }
+        double eventRate(void);
 
-	int activate(gateVcData* from);	// change inactive to active due to connect
-	int deactivate(void);		// change active to inactive due to disconnect
-	int death(void);			// pv becomes dead
-	int life(void);				// pv becomes alive
-	int monitor(void);			// add monitor
-	int unmonitor(void);		// delete monitor
-	int get(void);				// get callback
-	int put(gdd*);				// put callback
-	int putDumb(gdd*);			// just put
+        int activate(gateVcData* from); // set to active (CAS connect)
+        int deactivate(void);           // set to inactive (CAS disconnect)
+        int death(void);                // set to not connected (CAC disconnect)
+        int life(void);                 // set to connected (CAC connect)
+        int monitor(void);              // add monitor
+        int unmonitor(void);            // delete monitor
+        int get(void);                  // get callback
+#if 0
+// KE: Isn't presently used
+#endif
+        int put(gdd*);                  // put callback
+        int putDumb(gdd*);              // put, no callback
 
 	time_t timeInactive(void) const;
 	time_t timeActive(void) const;
@@ -145,17 +99,9 @@ public:
 	time_t timeLastTrans(void) const;
 	time_t timeConnecting(void) const;
 
-	void setVC(gateVcData* t)	{ vc=t; }
+	void setVC(gateVcData* t) { vc=t; }
 	void setTransTime(void);
 	void addET(gateExistData*);
-
-	static long total_alive;
-	static long total_active;
-	static long total_pv;
-	
-#ifdef RATE_STATS
-	static unsigned long client_event_count;
-#endif
 
 protected:
 	void init(gateServer*,gateAsEntry*,const char* name);
@@ -168,36 +114,36 @@ protected:
 	void setTimes(void);
 
 private:
-	void markMonitored(void)			{ mon_state=1; }
-	void markGetPending(void)			{ get_state=1; }
-	void markAckNakNeeded(void)			{ test_flag=1; }
-	void markAddRemoveNeeded(void)		{ complete_flag=1; }
-	void markAbort(void)				{ abort_flag=1; }
-	void markNotMonitored(void)			{ mon_state=0; }
-	void markNoGetPending(void)			{ get_state=0; }
-	void markAckNakNotNeeded(void)		{ test_flag=0; }
-	void markAddRemoveNotNeeded(void)	{ complete_flag=0; }
-	void markNoAbort(void)				{ abort_flag=0; }
+        void markMonitored(void) { mon_state=1; }
+        void markGetPending(void) { get_state=1; }
+        void markAckNakNeeded(void) { test_flag=1; }
+        void markAddRemoveNeeded(void) { complete_flag=1; }
+        void markAbort(void) { abort_flag=1; }
+        void markNotMonitored(void) { mon_state=0; }
+        void markNoGetPending(void) { get_state=0; }
+        void markAckNakNotNeeded(void) { test_flag=0; }
+        void markAddRemoveNotNeeded(void) { complete_flag=0; }
+        void markNoAbort(void) { abort_flag=0; }
 
-	void setState(gatePvState s)		{ pv_state=s; }
+        void setState(gatePvState s) { pv_state=s; }
 
-	gdd* runEventCB(void* data)	{ return (this->*event_func)(data); }
-	gdd* runDataCB(void* data)	{ return (this->*data_func)(data); }
+        gdd* runEventCB(void* data) { return (this->*event_func)(data); }
+        gdd* runDataCB(void* data) { return (this->*data_func)(data); }
 
-	tsDLList<gateExistData> et_list; // pending exist testing list
+        tsDLList<gateExistData> et_list; // pending exist testing list
 
-	gateServer* mrg;
-	gateVcData* vc;		// virtual connection
-	gateAsEntry* ae;
-	aitUint32 max_elements;
-	int status;
-	unsigned long event_count;
-	char* pv_name;		// name of the pv I am connected to
-	chid chan;			// channel access ID
-	evid event;			// CA event thing
-	chtype event_type;	// type associated with monitor event
-	chtype data_type;	// type associated with attribute retrieval
-	gatePvState pv_state;	// over-all state of the PV
+        gateServer* mrg;
+        gateVcData* vc;         // virtual connection
+        gateAsEntry* ae;
+        aitUint32 max_elements;
+        int status;
+        unsigned long event_count;
+        char* pv_name;          // name of the pv I am connected to
+        chid chID;              // channel access ID
+        evid evID;              // CA event thing
+        chtype event_type;      // type associated with monitor event
+        chtype data_type;       // type associated with attribute retrieval
+        gatePvState pv_state;   // over-all state of the PV
 
 	gateCallback event_func;
 	gateCallback data_func;
@@ -206,19 +152,19 @@ private:
 	int get_state; // 0=no get pending, 1=get pending
 	int test_flag; // true if NAK/ACK response required after completion
 	int abort_flag;	// true if activate-connect sequence should be aborted
-	int complete_flag; // true if ADD/REMOVE response required after completion
+	int complete_flag; // true if ADD/REMOVE required after completion
 
 	time_t no_connect_time; // when no one connected to held PV
 	time_t dead_alive_time; // when PV went dead / came alive
 	time_t last_trans_time; // last transaction occurred at this time
 
-	static void connectCB(CONNECT_ARGS args);	// connect CA callback
-	static void accessCB(ACCESS_ARGS args);		// access security CA callback
-	static void eventCB(EVENT_ARGS args);
-	static void putCB(EVENT_ARGS args);
-	static void getCB(EVENT_ARGS args);
+	static void connectCB(CONNECT_ARGS args);	// connection callback
+	static void accessCB(ACCESS_ARGS args);		// access security callback
+	static void eventCB(EVENT_ARGS args);       // value-changed callback
+	static void putCB(EVENT_ARGS args);         // put callback
+	static void getCB(EVENT_ARGS args);         // get callback
 
-	// callback functions for event when monitored
+	// Callback functions for event when monitored
 	gdd* eventStringCB(void*);
 	gdd* eventEnumCB(void*);
 	gdd* eventShortCB(void*);
@@ -227,7 +173,7 @@ private:
 	gdd* eventCharCB(void*);
 	gdd* eventLongCB(void*);
 
-	// callback functions for get of attributes
+	// Callback functions for get of pv_data
 	gdd* dataStringCB(void*);
 	gdd* dataEnumCB(void*);
 	gdd* dataShortCB(void*);
@@ -261,10 +207,10 @@ inline time_t gatePvData::timeAlive(void) const
 inline time_t gatePvData::timeConnecting(void) const
 	{ return (time(NULL)-dead_alive_time); }
 
-inline void gatePvData::setInactiveTime(void)	{ time(&no_connect_time); }
-inline void gatePvData::setActiveTime(void)		{ time(&no_connect_time); }
-inline void gatePvData::setAliveTime(void)		{ time(&dead_alive_time); }
-inline void gatePvData::setTransTime(void)		{ time(&last_trans_time); }
+inline void gatePvData::setInactiveTime(void) { time(&no_connect_time); }
+inline void gatePvData::setActiveTime(void)   { time(&no_connect_time); }
+inline void gatePvData::setAliveTime(void)    { time(&dead_alive_time); }
+inline void gatePvData::setTransTime(void)    { time(&last_trans_time); }
 
 inline void gatePvData::setTimes(void)
 {
@@ -282,7 +228,8 @@ inline void gatePvData::setDeathTime(void)
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

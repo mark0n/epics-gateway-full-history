@@ -1,41 +1,5 @@
 // Author: Jim Kowalkowski
 // Date: 2/96
-//
-// $Id$
-//
-// $Log$
-// Revision 1.12  1997/02/21 17:31:17  jbk
-// many many bug fixes and improvements
-//
-// Revision 1.11  1996/12/17 14:32:27  jbk
-// Updates for access security
-//
-// Revision 1.10  1996/12/11 13:04:02  jbk
-// All the changes needed to implement access security.
-// Bug fixes for createChannel and access security stuff
-//
-// Revision 1.8  1996/11/27 04:55:33  jbk
-// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
-//
-// Revision 1.7  1996/10/22 15:58:38  jbk
-// changes, changes, changes
-//
-// Revision 1.6  1996/09/12 12:17:53  jbk
-// Fixed up file defaults and logging in the resources class
-//
-// Revision 1.5  1996/09/10 15:04:12  jbk
-// many fixes.  added instructions to usage. fixed exist test problems.
-//
-// Revision 1.4  1996/09/07 13:01:51  jbk
-// fixed bugs.  reference the gdds from CAS now.
-//
-// Revision 1.3  1996/07/26 02:34:44  jbk
-// Interum step.
-//
-// Revision 1.2  1996/07/23 16:32:37  jbk
-// new gateway that actually runs
-//
-//
 
 #define GATE_RESOURCE_FILE 1
 

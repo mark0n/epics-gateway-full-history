@@ -1,130 +1,24 @@
 // Author: Jim Kowalkowski
 // Date: 7/96
-//
-// $Id$
-//
-// $Log$
-// Revision 1.28  1998/12/22 20:10:20  evans
-// This version has much debugging printout (inside #if's).
-// Changed gateVc::remove-> vcRemove and add -> vcAdd.
-//   Eliminates warnings about hiding private ancestor functions on Unix.
-//   (Warning is invalid.)
-// Now compiles with no warnings for COMPLR=STRICT on Solaris.
-// Made changes to speed it up:
-//   Put #if around ca_add_fd_registration.
-//     Also eliminates calls to ca_pend in fdCB.
-//   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
-//   Changed mainLoop to call fdManager::process with delay=0.
-//   Put explicit ca_poll in the mainLoop.
-//   All these changes eliminate calls to poll() which was the predominant
-//     time user.  Speed up under load is as much as a factor of 5. Under
-//     no load it runs continuously, however, rather than sleeping in
-//     poll().
-// Added #if NODEBUG around calls to Gateway debug routines (for speed).
-// Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
-// Added timeStamp routine to gateServer.cc.
-// Added line with PID and time stamp to log file on startup.
-// Changed freopen for stderr to use "a" so it doesn't overwrite the log.
-// Incorporated Ralph Lange changes by hand.
-//   Changed clock_gettime to osiTime to avoid unresolved reference.
-//   Fixed his gateAs::readPvList to eliminate core dump.
-// Made other minor fixes.
-// Did minor cleanup as noticed problems.
-// This version appears to work but has debugging (mostly turned off).
-//
-// Revision 1.26  1998/09/24 20:58:37  jba
-// Real name is now used for access security pattern matching.
-// Fixed PV Pattern Report
-// New gdd api changes
-//
-// Revision 1.25  1998/03/09 14:42:05  jba
-// Upon USR1 signal gateway now executes commands specified in a
-// gateway.command file.
-// Incorporated latest changes to access security in gateAsCa.cc
-//
-// Revision 1.24  1997/06/30 16:07:00  jba
-// Added Dead PVs report
-//
-// Revision 1.23  1997/06/11 01:18:43  jba
-// Fixed delete for name_* vars.
-//
-// Revision 1.22  1997/06/09 18:02:35  jba
-// Removed unused variables, changed delete to free for name_* vars.
-//
-// Revision 1.21  1997/05/20 15:48:26  jbk
-// changes for the latest CAS library in EPICS 3.13.beta9
-//
-// Revision 1.20  1997/03/17 16:01:01  jbk
-// bug fixes and additions
-//
-// Revision 1.19  1997/02/21 17:31:18  jbk
-// many many bug fixes and improvements
-//
-// Revision 1.18  1997/02/11 21:47:06  jbk
-// Access security updates, bug fixes
-//
-// Revision 1.17  1996/12/17 14:32:29  jbk
-// Updates for access security
-//
-// Revision 1.16  1996/12/11 13:04:06  jbk
-// All the changes needed to implement access security.
-// Bug fixes for createChannel and access security stuff
-//
-// Revision 1.15  1996/12/07 16:42:21  jbk
-// many bug fixes, array support added
-//
-// Revision 1.14  1996/11/27 04:55:37  jbk
-// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
-//
-// Revision 1.13  1996/11/21 19:29:11  jbk
-// Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
-//
-// Revision 1.12  1996/11/07 14:11:05  jbk
-// Set up to use the latest CA server library.
-// Push the ulimit for FDs up to maximum before starting CA server
-//
-// Revision 1.11  1996/10/22 16:06:42  jbk
-// changed list operators head to first
-//
-// Revision 1.10  1996/10/22 15:58:40  jbk
-// changes, changes, changes
-//
-// Revision 1.9  1996/09/23 20:40:42  jbk
-// many fixes
-//
-// Revision 1.8  1996/09/12 12:17:54  jbk
-// Fixed up file defaults and logging in the resources class
-//
-// Revision 1.7  1996/09/10 15:04:13  jbk
-// many fixes.  added instructions to usage. fixed exist test problems.
-//
-// Revision 1.6  1996/09/07 13:01:52  jbk
-// fixed bugs.  reference the gdds from CAS now.
-//
-// Revision 1.5  1996/09/06 11:56:23  jbk
-// little fixes
-//
-// Revision 1.4  1996/08/14 21:10:33  jbk
-// next wave of updates, menus stopped working, units working, value not
-// working correctly sometimes, can't delete the channels
-//
-// Revision 1.3  1996/07/26 02:34:45  jbk
-// Interum step.
-//
-// Revision 1.2  1996/07/23 16:32:39  jbk
-// new gateway that actually runs
-//
 
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 #define DEBUG_PV_CONNNECT_CLEANUP 0
-#define DEBUG_TIMES 1
-#define DEBUG_EXCEPTION 1
-
-//#define GATE_TIME_STAT_INTERVAL 60 /* sec */
-#define GATE_TIME_STAT_INTERVAL 1800 /* sec (half hour) */
+#define DEBUG_TIMES 0
 
 #define USE_FDS 0
+
+// This causes the GATE_DEBUG_VERSION to be printed in the mainLoop
+#define DEBUG_ 0
+#define GATE_DEBUG_VERSION "2-17-99"
+
+#define GATE_TIME_STAT_INTERVAL 300 /* sec */
+//#define GATE_TIME_STAT_INTERVAL 1800 /* sec (half hour) */
+
+// Interval for rate statistics in seconds
+#define RATE_STATS_INTERVAL 10u
+
+#define ULONG_DIFF(n1,n2) (((n1) >= (n2))?((n1)-(n2)):((n1)+(ULONG_MAX-(n2))))
 
 #include <stdio.h>
 #include <string.h>
@@ -209,7 +103,8 @@ void gateServer::mainLoop(void)
 	// so delay must be less than 100 ms to insure ca_poll gets called
 	//	osiTime delay(0u,500000000u);    // (sec, nsec) (500 ms)
 	//	osiTime delay(0u,100000000u);    // (sec, nsec) (100 ms)
-	osiTime delay(0u,0u);    // (sec, nsec) (0 ms, select will not block)
+	osiTime delay(0u,10000000u);     // (sec, nsec) (10 ms)
+	//	osiTime delay(0u,0u);    // (sec, nsec) (0 ms, select will not block)
 	SigFunc old;
 	unsigned char cnt=0;
 #if DEBUG_TIMES
@@ -218,6 +113,10 @@ void gateServer::mainLoop(void)
 
 	printf("%s gateServer::mainLoop: Starting and printing statistics every %d seconds\n",
 	  timeStamp(),GATE_TIME_STAT_INTERVAL);
+#endif
+#if DEBUG_
+	printf("gateServer::mainLoop: Version %s\n",
+	  GATE_DEBUG_VERSION);
 #endif
 
 	as_rules=global_resources->getAs();
@@ -230,11 +129,14 @@ void gateServer::mainLoop(void)
 	old=signal(SIGPIPE,sig_pipe);
 	sigignore(SIGPIPE);
 	time(&start_time);
-	exist_count=0;
-	loop_count=0;
-#if RATE_STATS
-	osiTime rateStatsDelay(10u,0u);
-	statTimer = new gateRateStatsTimer(rateStatsDelay, this);
+
+	// Initialize stat counters
+#if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
+	osiTime rateStatsDelay(RATE_STATS_INTERVAL,0u);
+	gateRateStatsTimer *statTimer =
+	  new gateRateStatsTimer(rateStatsDelay, this);
+	// Call the expire routine to initialize it
+	statTimer->expire();
 #endif
 
 #if DEBUG_TIMES
@@ -245,7 +147,9 @@ void gateServer::mainLoop(void)
 #endif
 	while(not_done)
 	{
+#if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
 		loop_count++;
+#endif
 #if DEBUG_TIMES
 		nLoops++;
 		begin=osiTime::getCurrent();
@@ -287,13 +191,10 @@ void gateServer::mainLoop(void)
 		}
 #endif
 		
-		// make sure messages get out
-#if 0
-		// KE: ++cnt==0 is always false -- stdout is not getting flushed
-		if(++cnt==0) { fflush(stderr); fflush(stdout); }
-#else
+		// Make sure messages get out
 		fflush(stderr); fflush(stdout);
-#endif
+
+		// Do flagged reports
 		if(report_flag2) { report2(); report_flag2=0; }
 		if(command_flag) { gateCommands(global_resources->commandFile()); command_flag=0; }
 	}
@@ -440,7 +341,6 @@ void gateFd::callBack(void)
 
 gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 {
-	struct utsname ubuf;
 	gateDebug0(5,"gateServer()\n");
 	// this is a CA client, initialize the library
 	SEVCHK(ca_task_initialize(),"CA task initialize");
@@ -458,6 +358,11 @@ gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 
 	select_mask|=(alarmEventMask|valueEventMask|logEventMask);
 
+	exist_count=0;
+#if statCount
+	struct utsname ubuf;
+
+	// Initialize stats
 	if(uname(&ubuf)<0)
 		host_name=strDup("gateway");
 	else
@@ -465,6 +370,22 @@ gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 
 	host_len=strlen(host_name);
 	initStats();
+	total_alive=0;
+	total_active=0;
+	total_pv=0;
+	total_vc=0;
+	total_fd=0;
+#ifdef RATE_STATS
+	client_event_count=0;
+	post_event_count=0;
+	loop_count=0;
+#endif
+#ifdef CAS_DIAGNOSTICS
+	setEventsProcessed(0);
+	setEventsPosted(0);	
+#endif
+#endif
+
 	setDeadCheckTime();
 	setInactiveCheckTime();
 	setConnectCheckTime();
@@ -485,7 +406,9 @@ gateServer::~gateServer(void)
 	delete [] name_total;
 	delete [] name_fd;
 #endif
+#if statCount
 	delete [] host_name;
+#endif
 
 	while((pv_node=pv_list.first()))
 	{
@@ -508,9 +431,11 @@ gateServer::~gateServer(void)
 		delete vc;
 	}
 
+#if statCount
 	// remove all server stats
 	for(int i=0;i<statCount;i++)
 		delete stat_table[i].pv;
+#endif
 
 	SEVCHK(ca_flush_io(),"CA flush io");
 	SEVCHK(ca_task_exit(),"CA task exit");
@@ -534,22 +459,21 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 
 	if((opened))
 	{
-		s->setStat(statFd,++total_fd);
+#ifdef STAT_PVS
+		s->setStat(statFd,++s->total_fd);
+#endif
 		reg=new gateFd(fd,fdrRead,*s);
 	}
 	else
 	{
-		s->setStat(statFd,--total_fd);
+#ifdef STAT_PVS
+		s->setStat(statFd,--s->total_fd);
+#endif
 		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
 		reg=fileDescriptorManager.lookUpFD(fd,fdrRead);
 		delete reg;
 	}
 }
-
-long gateServer::total_fd=0;
-#ifdef RATE_STATS
-long gateServer::fake_zero=0;
-#endif
 
 osiTime gateServer::delay_quick(0u,100000u);
 osiTime gateServer::delay_normal(1u,0u);
@@ -559,7 +483,7 @@ void gateServer::quickDelay(void)   { delay_current=&delay_quick; }
 void gateServer::normalDelay(void)  { delay_current=&delay_normal; }
 osiTime& gateServer::currentDelay(void) { return *delay_current; }
 
-#if DEBUG_EXCEPTION
+#if HANDLE_EXCEPTIONS
 void gateServer::exCB(EXCEPT_ARGS args)
 #else
 void gateServer::exCB(EXCEPT_ARGS /*args*/)
@@ -582,7 +506,7 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 
 	// this is the exception callback
 	// problem - log a message about the PV
-#if DEBUG_EXCEPTION
+#if HANDLE_EXCEPTIONS
 #define MAX_EXCEPTIONS 25    
 	static int nexceptions=0;
 	static int ended=0;
@@ -813,18 +737,19 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	const char* real_name;
 	gateAsEntry* node;
 	char* stat_name=NULL;
-	int i;
 
 	++exist_count;
 
+#if statCount
 	// trap server stats PVs here
-	for(i=0;i<statCount;i++)
+	for(int i=0;i<statCount;i++)
 	{
 		if(strcmp(pvname,stat_table[i].pvname)==0)
 		{
 			return pverExistsHere;
 		}
 	}
+#endif
 
 	// see if requested name is allowed
 	if(!(node=getAs()->findEntry(pvname)))
@@ -908,10 +833,10 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
 	gateVcData* rc;
 	const char* real_name;
-	int i;
 
+#if statCount
 	// trap (and create if needed) server stats PVs
-	for(i=0;i<statCount;i++)
+	for(int i=0;i<statCount;i++)
 	{
 		if(strcmp(pvname,stat_table[i].pvname)==0)
 		{
@@ -921,6 +846,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 			return pvCreateReturn(*stat_table[i].pv);
 		}
 	}
+#endif
 
 	if((real_name=as_rules->getAlias(pvname))==NULL)
 		real_name=pvname;
@@ -945,12 +871,13 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	return rc?pvCreateReturn(*rc):pvCreateReturn(S_casApp_pvNotFound);
 }
 
+#if statCount
 void gateServer::setStat(int type, double val)
 {
 	if(stat_table[type].pv) stat_table[type].pv->postData(val);
 }
 
-void gateServer::setStat(int type, long val)
+void gateServer::setStat(int type, unsigned long val)
 {
 	if(stat_table[type].pv) stat_table[type].pv->postData(val);
 }
@@ -959,6 +886,7 @@ void gateServer::initStats(void)
 {
 	int i;
 	struct utsname ubuf;
+	static unsigned long zero=0u;
 
 	// set up PV names for server stats and fill them into the stat_table
 	if(uname(&ubuf)<0)
@@ -970,8 +898,62 @@ void gateServer::initStats(void)
 
 	for(i=0;i<statCount;i++)
 	{
+		switch(i) {
+#ifdef STAT_PVS
+		case statActive:
+			stat_table[i].name="active";
+			stat_table[i].init_value=&total_active;
+			break;
+		case statAlive:
+			stat_table[i].name="alive";
+			stat_table[i].init_value=&total_alive;
+			break;
+		case statVcTotal:
+			stat_table[i].name="vctotal";
+			stat_table[i].init_value=&total_vc;
+			break;
+		case statFd:
+			stat_table[i].name="fd";
+			stat_table[i].init_value=&total_fd;
+			break;
+		case statPvTotal:
+			stat_table[i].name="pvtotal";
+			stat_table[i].init_value=&total_pv;
+			break;
+#endif
+#ifdef RATE_STATS
+		case statClientEventRate:
+			stat_table[i].name="clientEventRate";
+			stat_table[i].init_value=&zero;
+			break;
+		case statPostEventRate:
+			stat_table[i].name="postEventRate";
+			stat_table[i].init_value=&zero;
+			break;
+		case statExistTestRate:
+			stat_table[i].name="existTestRate";
+			stat_table[i].init_value=&zero;
+			break;
+		case statLoopRate:
+			stat_table[i].name="loopRate";
+			stat_table[i].init_value=&zero;
+			break;
+#endif
+#ifdef CAS_DIAGNOSTICS
+		case statServerEventRate:
+			stat_table[i].name="serverEventRate";
+			stat_table[i].init_value=&zero;
+			break;
+		case statServerEventRequestRate:
+			stat_table[i].name="serverPostRate";
+			stat_table[i].init_value=&zero;
+			break;
+#endif
+		}
+
                 stat_table[i].pvname=new char[host_len+1+strlen(stat_table[i].name)+1];
 		sprintf(stat_table[i].pvname,"%s.%s",host_name,stat_table[i].name);
+                stat_table[i].pv=NULL;
 	}
 }
 
@@ -985,21 +967,7 @@ void gateServer::clearStat(int type)
 	stat_table[type].pv=NULL;
 }
 
-gateServerStats gateServer::stat_table[] = {
-	{ "active",NULL,NULL,&gatePvData::total_active },
-	{ "alive",NULL,NULL,&gatePvData::total_alive },
-	{ "vctotal",NULL,NULL,&gateVcData::total_vc },
-	{ "fd",NULL,NULL,&gateServer::total_fd },
-	{ "pvtotal",NULL,NULL,&gatePvData::total_pv },
-#ifdef RATE_STATS
-	{ "clientEventRate",NULL,NULL,&gateServer::fake_zero },
-	{ "postEventRate",NULL,NULL,&gateServer::fake_zero },
-	{ "existTestRate",NULL,NULL,&gateServer::fake_zero },
-	{ "loopRate",NULL,NULL,&gateServer::fake_zero },
-#endif
-};
-
-#ifdef RATE_STATS
+#if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
 // Rate statistics
 
 void gateRateStatsTimer::expire()
@@ -1007,41 +975,73 @@ void gateRateStatsTimer::expire()
 	static int first=1;
 	static osiTime prevTime;
 	osiTime curTime=osiTime::getCurrent();
+	double delTime;
+#ifdef RATE_STATS
 	static unsigned long cePrevCount,etPrevCount,mlPrevCount,pePrevCount ;
-	unsigned long ceCurCount=gatePvData::client_event_count;
-	unsigned long peCurCount=gateVcData::post_event_count;
-	unsigned long etCurCount=mrg->getExistCount();
-	unsigned long mlCurCount=mrg->getLoopCount();
-	double delTime,ceRate,peRate,etRate,mlRate;
+	unsigned long ceCurCount=mrg->client_event_count;
+	unsigned long peCurCount=mrg->post_event_count;
+	unsigned long etCurCount=mrg->exist_count;
+	unsigned long mlCurCount=mrg->loop_count;
+	double ceRate,peRate,etRate,mlRate;
+#endif
+#ifdef CAS_DIAGNOSTICS
+	static unsigned long sePrevCount,srPrevCount;
+	unsigned long seCurCount=mrg->getEventsProcessed();
+	unsigned long srCurCount=mrg->getEventsPosted();
+	double seRate,srRate;
+#endif
 
 	// Initialize the first time
 	if(first)
 	{
 		prevTime=curTime;
+#ifdef RATE_STATS
 		cePrevCount=ceCurCount;
 		pePrevCount=peCurCount;
 		etPrevCount=etCurCount;
 		mlPrevCount=mlCurCount;
+#endif
+#ifdef CAS_DIAGNOSTICS
+		sePrevCount=seCurCount;
+		srPrevCount=srCurCount;
+#endif
 		first=0;
-		return;
 	}
 	delTime=(double)(curTime-prevTime);
 
+#ifdef RATE_STATS
 	// Calculate the client event rate
-	ceRate=(delTime > 0)?(double)(ceCurCount-cePrevCount)/delTime:0.0;
+	ceRate=(delTime > 0)?(double)(ULONG_DIFF(ceCurCount,cePrevCount))/
+	  delTime:0.0;
 	mrg->setStat(statClientEventRate,ceRate);
 
 	// Calculate the post event rate
-	peRate=(delTime > 0)?(double)(peCurCount-pePrevCount)/delTime:0.0;
+	peRate=(delTime > 0)?(double)(ULONG_DIFF(peCurCount,pePrevCount))/
+	  delTime:0.0;
 	mrg->setStat(statPostEventRate,peRate);
 
 	// Calculate the exist test rate
-	etRate=(delTime > 0)?(double)(etCurCount-etPrevCount)/delTime:0.0;
+	etRate=(delTime > 0)?(double)(ULONG_DIFF(etCurCount,etPrevCount))/
+	  delTime:0.0;
 	mrg->setStat(statExistTestRate,etRate);
 
 	// Calculate the main loop rate
-	mlRate=(delTime > 0)?(double)(mlCurCount-mlPrevCount)/delTime:0.0;
+	mlRate=(delTime > 0)?(double)(ULONG_DIFF(mlCurCount,mlPrevCount))/
+	  delTime:0.0;
 	mrg->setStat(statLoopRate,mlRate);
+#endif
+
+#ifdef CAS_DIAGNOSTICS
+	// Calculate the server event rate
+	seRate=(delTime > 0)?(double)(ULONG_DIFF(seCurCount,sePrevCount))/
+	  delTime:0.0;
+	mrg->setStat(statServerEventRate,seRate);
+
+	// Calculate the server event request rate
+	srRate=(delTime > 0)?(double)(ULONG_DIFF(srCurCount,srPrevCount))/
+	  delTime:0.0;
+	mrg->setStat(statServerEventRequestRate,srRate);
+#endif
 
 #if 0
 	printf("gateRateStatsTimer::expire(): ceCurCount=%ld cePrevCount=%ld ceRate=%g\n",
@@ -1053,12 +1053,19 @@ void gateRateStatsTimer::expire()
 
 	// Reset the previous values
 	prevTime=curTime;
+#ifdef RATE_STATS
 	cePrevCount=ceCurCount;
 	pePrevCount=peCurCount;
 	etPrevCount=etCurCount;
 	mlPrevCount=mlCurCount;
+#endif
+#ifdef CAS_DIAGNOSTICS
+	sePrevCount=seCurCount;
+	srPrevCount=srCurCount;
+#endif
 }
 #endif
+#endif     // STAT_PVS
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */

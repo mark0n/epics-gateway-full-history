@@ -1,99 +1,8 @@
 // Author: Jim Kowalkowski
 // Date: 2/96
-//
-// $Id$
-//
-// $Log$
-// Revision 1.23  1998/12/22 20:10:20  evans
-// This version has much debugging printout (inside #if's).
-// Changed gateVc::remove-> vcRemove and add -> vcAdd.
-//   Eliminates warnings about hiding private ancestor functions on Unix.
-//   (Warning is invalid.)
-// Now compiles with no warnings for COMPLR=STRICT on Solaris.
-// Made changes to speed it up:
-//   Put #if around ca_add_fd_registration.
-//     Also eliminates calls to ca_pend in fdCB.
-//   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
-//   Changed mainLoop to call fdManager::process with delay=0.
-//   Put explicit ca_poll in the mainLoop.
-//   All these changes eliminate calls to poll() which was the predominant
-//     time user.  Speed up under load is as much as a factor of 5. Under
-//     no load it runs continuously, however, rather than sleeping in
-//     poll().
-// Added #if NODEBUG around calls to Gateway debug routines (for speed).
-// Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
-// Added timeStamp routine to gateServer.cc.
-// Added line with PID and time stamp to log file on startup.
-// Changed freopen for stderr to use "a" so it doesn't overwrite the log.
-// Incorporated Ralph Lange changes by hand.
-//   Changed clock_gettime to osiTime to avoid unresolved reference.
-//   Fixed his gateAs::readPvList to eliminate core dump.
-// Made other minor fixes.
-// Did minor cleanup as noticed problems.
-// This version appears to work but has debugging (mostly turned off).
-//
-// Revision 1.20  1997/10/28 19:14:00  jba
-// pv_name change.
-//
-// Revision 1.19  1997/06/12 21:32:09  jba
-// pv_name update.
-//
-// Revision 1.18  1997/06/09 18:03:38  jba
-// Removed unused vars, changed delete to free for pv_name.
-//
-// Revision 1.17  1997/05/20 15:48:29  jbk
-// changes for the latest CAS library in EPICS 3.13.beta9
-//
-// Revision 1.16  1997/03/17 16:01:05  jbk
-// bug fixes and additions
-//
-// Revision 1.15  1997/02/21 17:31:20  jbk
-// many many bug fixes and improvements
-//
-// Revision 1.13  1997/02/11 21:47:07  jbk
-// Access security updates, bug fixes
-//
-// Revision 1.12  1996/12/17 14:32:35  jbk
-// Updates for access security
-//
-// Revision 1.11  1996/12/11 13:04:08  jbk
-// All the changes needed to implement access security.
-// Bug fixes for createChannel and access security stuff
-//
-// Revision 1.10  1996/12/07 16:42:22  jbk
-// many bug fixes, array support added
-//
-// Revision 1.9  1996/11/27 04:55:42  jbk
-// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
-//
-// Revision 1.8  1996/11/21 19:29:14  jbk
-// Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
-//
-// Revision 1.7  1996/11/07 14:11:07  jbk
-// Set up to use the latest CA server library.
-// Push the ulimit for FDs up to maximum before starting CA server
-//
-// Revision 1.6  1996/10/22 16:06:43  jbk
-// changed list operators head to first
-//
-// Revision 1.5  1996/10/22 15:58:41  jbk
-// changes, changes, changes
-//
-// Revision 1.4  1996/09/23 20:40:42  jbk
-// many fixes
-//
-// Revision 1.3  1996/09/07 13:01:54  jbk
-// fixed bugs.  reference the gdds from CAS now.
-//
-// Revision 1.2  1996/07/26 02:34:46  jbk
-// Interum step.
-//
-// Revision 1.1  1996/07/23 16:32:42  jbk
-// new gateway that actually runs
-//
-//
 
 #define DEBUG_VC_DELETE 0
+#define DEBUG_GDD 0
 
 #include <stdio.h>
 #include <string.h>
@@ -104,12 +13,30 @@
 #include <fcntl.h>
 
 #include "gdd.h"
+#include "gddApps.h"
 
 #include "gateResources.h"
 #include "gateServer.h"
 #include "gateVc.h"
 #include "gatePv.h"
 #include "gateAs.h"
+
+// ---------------------------- utilities ------------------------------------
+static char *timeStamp(void)
+  // Gets current time and puts it in a static array
+  // The calling program should copy it to a safe place
+  //   e.g. strcpy(savetime,timestamp());
+{
+	static char timeStampStr[16];
+	long now;
+	struct tm *tblock;
+	
+	time(&now);
+	tblock=localtime(&now);
+	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+	
+	return timeStampStr;
+}
 
 // ------------------------gateChan
 
@@ -165,7 +92,7 @@ gateVcData::gateVcData(gateServer* m,const char* name):casPV(*m)
 	time_last_trans=0;
 	read_access=aitTrue;
 	mrg=m;
-	data=NULL;
+	pv_data=NULL;
 	event_data=NULL;
 	pv=NULL;
 	entry=NULL;
@@ -185,7 +112,7 @@ gateVcData::gateVcData(gateServer* m,const char* name):casPV(*m)
 
 	if(mrg->pvFind(pv_name,pv)==0)
 	{
-		// Activate could possibly perform get for attributes and value
+		// Activate could possibly perform get for pv_data and event_data
 		// before returning here.  Be sure to mark this state connecting
 		// so that everything works out OK in this situation.
 		setState(gateVcConnect);
@@ -203,7 +130,9 @@ gateVcData::gateVcData(gateServer* m,const char* name):casPV(*m)
 	else
 		status=1;
 
-	mrg->setStat(statVcTotal,++total_vc);
+#ifdef STAT_PVS
+	mrg->setStat(statVcTotal,++mrg->total_vc);
+#endif
 }
 
 gateVcData::~gateVcData(void)
@@ -214,18 +143,15 @@ gateVcData::~gateVcData(void)
 	gateDebug0(5,"~gateVcData()\n");
 	gateVcData* x;
 	if(in_list_flag) mrg->vcDelete(pv_name,x);
-	if(data) data->unreference();
+	if(pv_data) pv_data->unreference();
 	if(event_data) event_data->unreference();
 	delete [] pv_name;
 	pv_name="Error";
 	if (pv) pv->setVC(NULL);
-	mrg->setStat(statVcTotal,--total_vc);
-}
-
-long gateVcData::total_vc=0 ;
-#ifdef RATE_STATS
-unsigned long gateVcData::post_event_count=0;
+#ifdef STAT_PVS
+	mrg->setStat(statVcTotal,--mrg->total_vc);
 #endif
+}
 
 const char* gateVcData::getName() const
 {
@@ -250,10 +176,13 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 	return c;
 }
 
-void gateVcData::dumpValue(void)
+#if 0
+	// KE: Not used
+void gateVcData::dumpEventData(void)
 {
 	if(event_data) event_data->dump();
 }
+#endif
 
 void gateVcData::report(void)
 {
@@ -266,10 +195,13 @@ void gateVcData::report(void)
 		p->report();
 }
 
-void gateVcData::dumpAttributes(void)
+#if 0
+	// KE: Not used
+void gateVcData::dumpPvData(void)
 {
-	if(data) data->dump();
+	if(pv_data) pv_data->dump();
 }
+#endif
 
 void gateVcData::vcRemove(void)
 {
@@ -343,7 +275,7 @@ void gateVcData::ack(void)
 
 void gateVcData::vcAdd(gdd* dd)
 {
-	// an add indicates that the attributes and value are ready
+	// an add indicates that the pv_data and event_data are ready
 	gateDebug2(1,"gateVcData::vcAdd(gdd=%8.8x) name=%s\n",(int)dd,name());
 
 	if(event_data) event_data->unreference();
@@ -351,7 +283,7 @@ void gateVcData::vcAdd(gdd* dd)
 
 #ifdef ENUM_HACK
 	// related dd needed for enums to string conversion
-	if(data) event_data->setRelated(data);
+	if(pv_data) event_data->setRelated(pv_data);
 #endif
 
 	switch(getState())
@@ -370,10 +302,10 @@ void gateVcData::vcAdd(gdd* dd)
 	}
 }
 
-void gateVcData::eventData(gdd* dd)
+void gateVcData::setEventData(gdd* dd)
 {
 	// always accept event data also, perhaps log a message if bad state
-	gateDebug2(10,"gateVcData::eventData(gdd=%8.8x) name=%s\n",(int)dd,name());
+	gateDebug2(10,"gateVcData::setEventData(gdd=%8.8x) name=%s\n",(int)dd,name());
 
 	if(event_data) event_data->unreference();
 	event_data=dd;
@@ -381,38 +313,38 @@ void gateVcData::eventData(gdd* dd)
 	switch(getState())
 	{
 	case gateVcConnect:
-		gateDebug0(2,"gateVcData::eventData() connecting\n");
+		gateDebug0(2,"gateVcData::setEventData() connecting\n");
 		break;
 	case gateVcClear:
-		gateDebug0(2,"gateVcData::eventData() clear\n");
+		gateDebug0(2,"gateVcData::setEventData() clear\n");
 		break;
 	case gateVcReady:
-		gateDebug0(2,"gateVcData::eventData() ready\n");
+		gateDebug0(2,"gateVcData::setEventData() ready\n");
 		break;
 	default:
-		gateDebug0(2,"gateVcData::eventData() default state\n");
+		gateDebug0(2,"gateVcData::setEventData() default state\n");
 		break;
 	}
 	vcEvent();
 }
 
-void gateVcData::pvData(gdd* dd)
+void gateVcData::setPvData(gdd* dd)
 {
 	// always accept the data transaction - no matter what state
 	// this is the PV atttributes, which come in during the connect state
 	// currently
-	gateDebug2(2,"gateVcData::pvData(gdd=%8.8x) name=%s\n",(int)dd,name());
+	gateDebug2(2,"gateVcData::setPvData(gdd=%8.8x) name=%s\n",(int)dd,name());
 
-	if(data) data->unreference();
-	data=dd;
+	if(pv_data) pv_data->unreference();
+	pv_data=dd;
 
 	switch(getState())
 	{
 	case gateVcClear:
-		gateDebug0(2,"gateVcData::pvData() clear\n");
+		gateDebug0(2,"gateVcData::setPvData() clear\n");
 		break;
 	default:
-		gateDebug0(2,"gateVcData::pvData() default state\n");
+		gateDebug0(2,"gateVcData::setPvData() default state\n");
 		break;
 	}
 	vcData();
@@ -425,31 +357,40 @@ aitEnum gateVcData::nativeType(void) const
 	else return aitEnumFloat64;  // this sucks - potential problem area
 }
 
+#if 0
+// KE: Isn't presently used
 int gateVcData::put(gdd* dd)
 {
 	// is this appropriate if put fails?  Be sure to indicate that put
-	// failed by modifing the stat/sevr fields of the value
+	// failed by modifing the stat/sevr fields of the event_data
 	gateDebug2(10,"gateVcData::put(gdd=%8.8x) name=%s\n",(int)dd,name());
 	// value()->put(dd);
 	pv->put(dd);
-	if(value())
+	if(event_data)
 	{
 		gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
-		table.smartCopy(value(),dd);
+		table.smartCopy(event_data,dd);
 	}
 	return 0;
 }
+#endif
 
 int gateVcData::putDumb(gdd* dd)
 {
 	gateDebug2(10,"gateVcData::putDumb(gdd=%8.8x) name=%s\n",(int)dd,name());
-	// if(value()) value()->put(dd);
+
 	if(pv) pv->putDumb(dd);
-	if(value())
+
+#if 0
+	// KE: What if the putDumb fails?  Rely on the event callback to
+	// keep the event_data up-to-date
+	if(event_data)
 	{
 		gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
-		table.smartCopy(value(),dd);
+		table.smartCopy(event_data,dd);
 	}
+#endif
+
 	return 0;
 }
 
@@ -462,10 +403,10 @@ void gateVcData::vcNew(void)
 
 	// what do I do here? should do async completion to createPV
 	// or should be async complete if there is a pending read
-	// New() indicates that all attributes and value are available
+	// New() indicates that all pv_data and event_data are available
 
 	// If interest register went from not interested to interested,
-	// then post the event value here
+	// then post the event_data here
 
 	if(wio.count()) // write pending
 	{
@@ -489,8 +430,8 @@ void gateVcData::vcNew(void)
 			rio.remove(*asyncr);
 
 #if 0
-			if(attributes() &&
-				attributes()->applicationType()==global_resources->appEnum &&
+			if(pv_data &&
+				pv_data->applicationType()==global_resources->appEnum &&
 				asyncr->DD().applicationType()==global_resources->appValue)
 			{
 				if(asyncr->DD().primitiveType()==aitEnumInvalid)
@@ -499,27 +440,27 @@ void gateVcData::vcNew(void)
 				if((asyncr->DD().primitiveType()==aitEnumString ||
 					asyncr->DD().primitiveType()==aitEnumFixedString))
 				{
-					if(value())
+					if(event_data)
 					{
 						aitUint16 val;
 						aitFixedString* fs;
 
 						// hideous special case for reading enum as string
-						attributes()->getRef(fs);
-						value()->getConvert(val);
+						pv_data->getRef(fs);
+						event_data->getConvert(val);
 						asyncr->DD().put(fs[val]);
 					}
 				}
 				else
 				{
-					if(value()) table.smartCopy(&asyncr->DD(),value());
+					if(event_data) table.smartCopy(&asyncr->DD(),event_data);
 				}
 			}
 			else
 #endif
 			{
-				if(attributes()) table.smartCopy(&asyncr->DD(),attributes());
-				if(value())	 table.smartCopy(&asyncr->DD(),value());
+				if(pv_data) table.smartCopy(&asyncr->DD(),pv_data);
+				if(event_data)	 table.smartCopy(&asyncr->DD(),event_data);
 			}
 
 			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
@@ -529,7 +470,9 @@ void gateVcData::vcNew(void)
 	if(needInitialPosting())
 	{
 		postEvent(select_mask,*event_data); // event data needs to be posted
-		post_event_count++;
+#ifdef RATE_STATS
+		mrg->post_event_count++;
+#endif
 	}
 }
 
@@ -548,7 +491,9 @@ void gateVcData::vcEvent(void)
 			if(t>=1)
 			{
 				postEvent(select_mask,*event_data);
-				post_event_count++;
+#ifdef RATE_STATS
+				mrg->post_event_count++;
+#endif
 				setTransTime();
 			}
 		}
@@ -557,7 +502,9 @@ void gateVcData::vcEvent(void)
 			// no more than 4 events per second
 			// if(++event_count<4)
 				postEvent(select_mask,*event_data);
-				post_event_count++;
+#ifdef RATE_STATS
+				mrg->post_event_count++;
+#endif
 			// if(t>=1)
 			// 	event_count=0;
 			// setTransTime();
@@ -567,7 +514,7 @@ void gateVcData::vcEvent(void)
 
 void gateVcData::vcData()
 {
-	// PV attributes just appeared - don't really care
+	// pv_data just appeared - don't really care
 	gateDebug1(10,"gateVcData::vcData() name=%s\n",name());
 }
 
@@ -603,77 +550,142 @@ void gateVcData::interestDelete(void)
 caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 {
 	gateDebug1(10,"gateVcData::read() name=%s\n",name());
-	caStatus rc=S_casApp_success;
+	static const aitString str = "Not Supported by Gateway";
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
 
-	// ---- handle async return if PV not ready
-	if(!ready())
-	{
-		gateDebug0(10,"gateVcData::read() pv not ready\n");
-		// the read will complete when the connection is complete
-		rio.add(*(new gateAsyncR(ctx,dd)));
-		rc=S_casApp_asyncCompletion;
-	}
-	else
-	{
+#if DEBUG_GDD
+	fflush(stderr);
+	printf("***************************************** %s *** read ****\n",
+	  timeStamp());
+	printf("gateVcData::read: at=%d pt=%d name=%s\n",
+	  dd.applicationType(),
+	  dd.primitiveType(),
+	  name());
+	fflush(stdout);
 #if 0
+	dd.dump();
+#endif
+#endif
+
+	// Branch on application type
+	unsigned at=dd.applicationType();
+	switch(at) {
+	case gddAppType_ackt:
+	case gddAppType_acks:
+	case gddAppType_dbr_stsack_string:
+		fprintf(stderr,"%s gateVcData::read: "
+		  "Got unsupported app type %d for %s\n",
+		  timeStamp(),at,name());
+		fflush(stderr);
+		return S_casApp_noSupport;
+		break;
+	case gddAppType_className:
+		dd.put(str);
+		return S_casApp_success;
+		break;
+	default:
+		if(!ready()) {
+			// Specify async return if PV not ready
+			gateDebug0(10,"gateVcData::read() pv not ready\n");
+			// the read will complete when the connection is complete
+			rio.add(*(new gateAsyncR(ctx,dd)));
+			return S_casApp_asyncCompletion;
+		} else {
+			// Copy the current state
+			if(pv_data) table.smartCopy(&dd,pv_data);
+			if(event_data) table.smartCopy(&dd,event_data);
+			return S_casApp_success;
+		}
+	}
+	
+#if 0
+// KE: Old code that was #if'ed out
+	caStatus rc=S_casApp_success;
+	{
 		aitFixedString* fs;
 		aitInt16 val;
-
-		if(attributes() &&
-			attributes()->applicationType()==global_resources->appEnum &&
-			dd.applicationType()==global_resources->appValue)
+		
+		if(pv_data &&
+		  pv_data->applicationType()==global_resources->appEnum &&
+		  dd.applicationType()==global_resources->appValue)
 		{
 			if(dd.primitiveType()==aitEnumInvalid)
-				dd.setPrimType(aitEnumString);
-
+			  dd.setPrimType(aitEnumString);
+			
 			if((dd.primitiveType()==aitEnumString ||
-				dd.primitiveType()==aitEnumFixedString))
+			  dd.primitiveType()==aitEnumFixedString))
 			{
-				if(value())
+				if(event_data)
 				{
 					// hideous special case for reading enum as string
-					attributes()->getRef(fs);
-					value()->getConvert(val);
+					pv_data->getRef(fs);
+					event_data->getConvert(val);
 					dd.put(fs[val]);
 				}
 			}
 			else
 			{
-				if(value()) table.smartCopy(&dd,value());
+				if(event_data) table.smartCopy(&dd,event_data);
 			}
 		}
 		else
-#endif
 		{
-			if(attributes())	table.smartCopy(&dd,attributes());
-			if(value())			table.smartCopy(&dd,value());
+			if(pv_data)	table.smartCopy(&dd,pv_data);
+			if(event_data) table.smartCopy(&dd,event_data);
 		}
 	}
 
 	return rc;
+#endif
 }
 
 caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 {
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
-	caStatus rc=S_casApp_success;
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
 
-	if(!global_resources->isReadOnly())
-	{
-		// ---- handle async return if PV not ready
-		if(!ready())
-		{
+#if DEBUG_GDD
+	fflush(stderr);
+	printf("***************************************** %s *** write ***\n",
+	  timeStamp());
+	printf("gateVcData::write: at=%d pt=%d name=%s\n",
+	  dd.applicationType(),
+	  dd.primitiveType(),
+	  name());
+	fflush(stdout);
+#if 0
+	dd.dump();
+#endif
+#endif
+	
+	// Branch on application type
+	unsigned at=dd.applicationType();
+	switch(at) {
+	case gddAppType_ackt:
+	case gddAppType_acks:
+	case gddAppType_className:
+	case gddAppType_dbr_stsack_string:
+		fprintf(stderr,"%s gateVcData::write: "
+		  "Got unsupported app type %d for %s\n",
+		  timeStamp(),at,name());
+		fflush(stderr);
+		return S_casApp_noSupport;
+		break;
+	default:
+		if(global_resources->isReadOnly()) return S_casApp_success;
+		
+		if(!ready()) {
+			// Handle async return if PV not ready
 			gateDebug0(10,"gateVcData::write() pv not ready\n");
 			wio.add(*(new gateAsyncW(ctx,dd)));
-			rc=S_casApp_asyncCompletion;
-		}
-		else
+			return S_casApp_asyncCompletion;
+		} else {
+			// Do a dumb put (that potentially may fail)
+			// No support for put callback
 			putDumb(&dd);
+			return S_casApp_success;
+		}
 	}
-
-	return rc;
 }
 
 aitEnum gateVcData::bestExternalType(void) const
@@ -689,8 +701,8 @@ unsigned gateVcData::maxDimension(void) const
 	// This information could be asked for very early, before the data
 	// gdd is ready.
 
-	if(data)
-		dim=data->dimension();
+	if(pv_data)
+		dim=pv_data->dimension();
 	else
 	{
 		if(maximumElements()>1)
@@ -770,7 +782,8 @@ gateAsyncW::~gateAsyncW(void)
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

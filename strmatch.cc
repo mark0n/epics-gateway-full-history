@@ -37,17 +37,6 @@
 /* Modified by Claude Saunders, APS Controls Group, Argonne National Lab */
 /* Extracted patmatch function from expand.c source of ksh */
 
-#ifndef lint
-static char sccsid[] = "@(#)strmatch.c	1.2 8/19/93";
-#endif /* not lint */
-/* $Log$
- * Revision 1.1  1996/07/26 02:34:48  jbk
- * Interum step.
- *
- * Revision 1.2  1994/05/11  20:16:31  saunders
- * First fully functional version added to cvs addon environment.
- * */
-
 /*
  * Routines to expand arguments to commands.  We have to deal with
  * backquotes, shell variables, and file metacharacters.
