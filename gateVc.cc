@@ -20,6 +20,10 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.31  2000/05/02 13:49:39  lange
+ * Uses GNU regex library (0.12) for pattern matching;
+ * Fixed some CAS beacon problems (reconnecting IOCs)
+ *
  *********************************************************************-*/
 
 #define DEBUG_STATE 0
@@ -281,68 +285,6 @@ void gateVcData::vcRemove(void)
 		break;
 	}
 }
-
-void gateVcData::nak(void)
-{
-	gateDebug1(1,"gateVcData::nak() name=%s\n",name());
-
-	switch(getState())
-	{
-	case gateVcClear:
-		gateDebug0(1,"gateVcData::nak() clear\n");
-		break;
-	case gateVcConnect:
-		gateDebug0(1,"gateVcData::nak() connecting\n");
-		delete this;
-		break;
-	case gateVcReady:
-		gateDebug0(1,"gateVcData::nak() ready\n");
-		// automatically sets alarm conditions for put callback failure
-		event_data->setStatSevr(WRITE_ALARM,INVALID_ALARM);
-#if DEBUG_EVENT_DATA
-		if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
-			heading("gateVcData::nak",name());
-			dumpdd(99,"event_data",name(),event_data);
-		}
-#endif
-#if 0
-		// KE: Doesn't do anything
-		vcPutComplete(gateFalse);
-#endif		
-		break;
-	default:
-		gateDebug0(1,"gateVcData::nak() default state\n");
-		break;
-	}
-}
-
-void gateVcData::ack(void)
-{
-	gateDebug1(1,"gateVcData::ack() name=%s\n",name());
-
-#if 0
-	// KE: Doesn't do anything
-	switch(getState())
-	{
-	case gateVcClear:
-		gateDebug0(1,"gateVcData::ack() clear\n");
-		break;
-	case gateVcConnect:
-		gateDebug0(1,"gateVcData::ack() connecting\n");
-		break;
-	case gateVcReady:
-		gateDebug0(1,"gateVcData::ack() ready\n");
-#if 0
-		// KE: Doesn't do anything
-		vcPutComplete(gateTrue);
-#endif
-		break;
-	default:
-		gateDebug0(1,"gateVcData::ack() default state\n");
-	}
-#endif
-}
-
 
 // This function is called by the gatePvData::eventCB to copy the gdd
 // generated there into the event_data when needAddRemove is True,
@@ -674,10 +616,10 @@ void gateVcData::vcPostEvent(void)
 				     event_data);
 		if(event_data->isAtomic())
 		{
-			t=timeLastTrans();
+			//t=timeLastTrans();
 			// hardcoded to 1 second for monitor updates
-			if(t>=1)
-			{
+			//if(t>=1)
+			//{
 #if DEBUG_EVENT_DATA
 				if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
 					heading("gateVcData::vcPostEvent",name());
@@ -692,8 +634,8 @@ void gateVcData::vcPostEvent(void)
 #ifdef RATE_STATS
 				mrg->post_event_count++;
 #endif
-				setTransTime();
-			}
+				//setTransTime();
+			//}
 		}
 		else
 		{
@@ -730,18 +672,6 @@ void gateVcData::vcDelete(void)
 {
 	gateDebug1(10,"gateVcData::vcDelete() name=%s\n",name());
 }
-
-#if 0
-#if NODEBUG
-void gateVcData::vcPutComplete(gateBool /*b*/)
-#else
-void gateVcData::vcPutComplete(gateBool b)
-#endif
-{
-	gateDebug2(10,"gateVcData::vcPutComplete(gateBool=%d) name=%s\n",
-		(int)b,name());
-}
-#endif
 
 caStatus gateVcData::interestRegister(void)
 {

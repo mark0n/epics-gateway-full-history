@@ -21,6 +21,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.23  2000/05/02 13:49:39  lange
+ * Uses GNU regex library (0.12) for pattern matching;
+ * Fixed some CAS beacon problems (reconnecting IOCs)
+ *
  *********************************************************************-*/
 
 #include <sys/types.h>
@@ -123,8 +127,6 @@ public:
 	virtual void vcData(void);
 
 	void vcRemove(void);
-	void ack(void);
-	void nak(void);
 	void vcAdd(void);
 	void setEventData(gdd *dd); // Sets event_data from GatePvData::eventCB
 	void setPvData(gdd *dd);    // Sets pv_data from GatePvData::getCB
