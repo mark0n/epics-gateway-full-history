@@ -100,6 +100,7 @@ void operator delete(void* x)
 #define PARM_RO          16
 #define PARM_UID         17
 #define PARM_PREFIX      18
+#define PARM_GID         19
 
 #define HOME_DIR_SIZE    300
 #define GATE_LOG         "gateway.log"
@@ -140,6 +141,7 @@ static PARM_STUFF ptable[] = {
     { "-dead_timeout",     13, PARM_DEAD,        "seconds" },
     { "-server",            9, PARM_SERVER,      "(start as server)" },
     { "-uid",               4, PARM_UID,         "user_id_number" },
+    { "-gid",               4, PARM_GID,         "group_id_number" },
     { "-ro",                3, PARM_RO,          NULL },
     { "-prefix",            7, PARM_PREFIX,      "statistics prefix" },
     { "-help",              5, PARM_HELP,        NULL },
@@ -258,6 +260,7 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# connect timeout=%d\n",global_resources->connectTimeout());
 	fprintf(fd,"# inactive timeout=%d\n",global_resources->inactiveTimeout());
 	fprintf(fd,"# user id=%d\n",getuid());
+	fprintf(fd,"# group id=%d\n",getgid());
 	fprintf(fd,"# \n");
 	fprintf(fd,"# use the following to execute commands in command file:\n");
 	fprintf(fd,"#    kill -USR1 %d\n",sid);
@@ -355,7 +358,9 @@ static int startEverything(char *prefix)
 
 int main(int argc, char** argv)
 {
-	int i,j,uid;
+	int i,j;
+	uid_t uid;
+	gid_t gid;
 	int not_done=1;
 	int no_error=1;
 	int level=0;
@@ -417,6 +422,19 @@ int main(int argc, char** argv)
 						{
 							sscanf(argv[i],"%d",&uid);
 							setuid(uid);
+							not_done=0;
+						}
+					}
+					break;
+				case PARM_GID:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							sscanf(argv[i],"%d",&gid);
+							setgid(gid);
 							not_done=0;
 						}
 					}
@@ -688,6 +706,7 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tconnect=%d\n",gr->connectTimeout());
 		fprintf(stderr,"\tinactive=%d\n",gr->inactiveTimeout());
 		fprintf(stderr,"\tuser id=%d\n",getuid());
+		fprintf(stderr,"\tgroup id=%d\n",getgid());
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
 		return -1;
@@ -718,6 +737,7 @@ int main(int argc, char** argv)
 		fprintf(stderr," inactive timeout =%d\n",gr->inactiveTimeout());
 		fprintf(stderr," dead timeout =%d\n",gr->deadTimeout());
 		fprintf(stderr," user id=%d\n",getuid());
+		fprintf(stderr," group id=%d\n",getgid());
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
 		fflush(stderr);
@@ -790,6 +810,8 @@ void print_instructions(void)
 	
 	pr(stderr,"-uid number: Run the server with this id, server does a\n");
 	pr(stderr," setuid(2) to this user id number.\n\n");
+	pr(stderr,"-gid number: Run the server with this id, server does a\n");
+	pr(stderr," setgid(2) to this group id number.\n\n");
 }
 
 // -------------------------------------------------------------------
