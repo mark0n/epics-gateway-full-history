@@ -20,6 +20,8 @@ CXXCMPLR=STRICT
 HOST_OPT=NO
 
 # USR_CXXFLAGS += -DDEBUG_MODE
+# Fix GDD ENUM problem (Requires hacks to base as well):
+USR_CXXFLAGS += -DENUM_HACK
 
 #PROD_LIBS += gate ca cas As Com gdd
 PROD_LIBS += ca cas As Com gdd
