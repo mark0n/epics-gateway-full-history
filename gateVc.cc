@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.5  1996/10/22 15:58:41  jbk
+// changes, changes, changes
+//
 // Revision 1.4  1996/09/23 20:40:42  jbk
 // many fixes
 //
@@ -290,7 +293,7 @@ void gateVcData::vcNew(void)
 	if(wio.count()) // write pending
 	{
 		gateDebug0(1,"gateVcData::vcNew() write pending\n");
-		while((async=wio.head()))
+		while((async=wio.first()))
 		{
 			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)async);
 			wio.remove(*async);
@@ -303,7 +306,7 @@ void gateVcData::vcNew(void)
 	{
 		gateDebug0(1,"gateVcData::vcNew() read pending\n");
 		// complete the read
-		while((async=rio.head()))
+		while((async=rio.first()))
 		{
 			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)async);
 			rio.remove(*async);

@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.10  1996/10/22 15:58:40  jbk
+// changes, changes, changes
+//
 // Revision 1.9  1996/09/23 20:40:42  jbk
 // many fixes
 //
@@ -110,21 +113,21 @@ gateServer::~gateServer(void)
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
 
-	while((pv_node=pv_list.head()))
+	while((pv_node=pv_list.first()))
 	{
 		pv_list.remove(pv_node->getData()->name(),old_pv);
 		pv=old_pv->getData();
 		pv_node->destroy();
 	}
 
-	while((pv_node=pv_con_list.head()))
+	while((pv_node=pv_con_list.first()))
 	{
 		pv_con_list.remove(pv_node->getData()->name(),old_pv);
 		pv=old_pv->getData();
 		pv_node->destroy();
 	}
 
-	while((vc=vc_list.head()))
+	while((vc=vc_list.first()))
 	{
 		vc_list.remove(vc->name(),old_vc);
 		vc->markNoList();
@@ -199,7 +202,7 @@ void gateServer::connectCleanup(void)
 	   timeConnectCleanup()<global_resources->connectTimeout())
 		return;
 
-	for(node=pv_con_list.head();node;)
+	for(node=pv_con_list.first();node;)
 	{
 		cnode=node;
 		node=node->getNext();
@@ -233,7 +236,7 @@ void gateServer::inactiveDeadCleanup(void)
 
 	if(dead_check==0 && in_check==0) return;
 
-	for(node=pv_list.head();node;)
+	for(node=pv_list.first();node;)
 	{
 		cnode=node;
 		node=node->getNext();

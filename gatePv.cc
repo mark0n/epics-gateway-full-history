@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.6  1996/10/22 15:58:36  jbk
+// changes, changes, changes
+//
 // Revision 1.5  1996/09/10 15:04:10  jbk
 // many fixes.  added instructions to usage. fixed exist test problems.
 //
@@ -266,7 +269,7 @@ int gatePvData::life(void)
 		{
 			// I know this is not used, but it does not seem
 			// right. Who deletes or destroys the et node?
-			while((et=et_list.head()))
+			while((et=et_list.first()))
 			{
 				et->ack();
 				et_list.remove(*et);
@@ -315,7 +318,7 @@ int gatePvData::death(void)
 		{
 			// I know this is not used, but it does not seem
 			// right. Who deletes or destroys the et node?
-			while((et=et_list.head()))
+			while((et=et_list.first()))
 			{
 				et->nak();
 				et_list.remove(*et);
