@@ -355,52 +355,6 @@ int gateAs::readPvList(const char* lfile)
 	return 0;
 }
 
-#if 0
-// KE: This just creates a gateAsClient using the input args.  No
-// information from gateAs is used.  Just create the gateAsClient in
-// gateChan, where it is used.
-gateAsClient* gateAs::getInfo(gateVcData *vc, gateAsEntry* pase, const char* u, 
-  const char* h)
-{
-	gateDebug3(12,"asentry=%p user=%s host=%s\n",pase,u,h);
-
-	gateAsClient* node=new gateAsClient(vc,pase,u,h);
-
-	gateDebug2(12," node: user=%s host=%s\n",node->user(),node->host());
-	gateDebug2(12,"  read=%s write=%s\n",
-	  node->readAccess()?"True":"False",node->writeAccess()?"True":"False");
-	gateDebug3(12,"  pattern=%s group=%s level=%d\n",pase->pattern,pase->group,pase->level);
-
-	return node;
-}
-
-#if 0
-// KE: Not used
-gateAsClient* gateAs::getInfo(gateVcData *vc, const char* pv, const char* u,
-  const char* h)
-{
-	gateAsEntry* pe;
-	gateAsClient* node;
-	
-#ifdef USE_DENYFROM
-	if((pe=findEntry(pv,h)))
-	  node=new gateAsClient(vc,pe,u,h);
-	else
-	  node=NULL;
-#else
-	if((pe=findEntry(pv)))
-	  node=new gateAsClient(vc,pe,u,h);
-	else
-	  node=NULL;
-#endif
-	
-	gateDebug3(12,"pv=%s user=%s host=%s\n",pv,u,h);
-	gateDebug1(12," node=%8.8x\n",(int)node);
-	return node;
-}
-#endif
-#endif
-
 long gateAs::initialize(const char* afile)
 {
 	long rc=0;

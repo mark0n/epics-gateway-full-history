@@ -405,6 +405,15 @@ void gateServer::report1(void)
 
 	printf("---------------------------------------------------------------------------\n"
 	  "Active Virtual Connection Report: %s",ctime(&t));
+
+#if statCount
+	// Stat PVs
+	for(int i=0; i < statCount; i++) {
+		if(stat_table[i].pv) stat_table[i].pv->report();
+	}
+#endif
+
+	// Virtual PVs
 	tsDLIter<gateVcData> iter=vc_list.firstIter();
 	while(iter.valid()) {
 		iter->report();
@@ -419,6 +428,7 @@ void gateServer::report2(void)
 	time_t t,diff;
 	double rate;
 	int tot_dead=0,tot_inactive=0,tot_active=0,tot_connect=0,tot_disconnect=0;
+	int tot_stat=0;
 
 	time(&t);
 	diff=t-start_time;
@@ -450,6 +460,21 @@ void gateServer::report2(void)
 	printf("Total inactive PVs: %d\n",tot_inactive);
 	printf("Total active PVs: %d\n",tot_active);
 	printf("Total connecting PVs: %d\n",tot_connect);
+
+#if statCount
+	// Stat PVs
+	for(int i=0; i < statCount; i++) {
+		if(stat_table[i].pv) tot_stat++;
+	}
+	printf("Total active stat PVs: %d [of %d]\n",tot_stat,statCount);
+
+	printf("\nStat PVs:\n");
+	for(int i=0; i < statCount; i++) {
+		if(stat_table[i].pv) {
+			printf(" %s\n",stat_table[i].pv->getName());
+		}
+	}
+#endif
 
 	printf("\nDead PVs:\n");
 	iter=pv_list.firstIter();
@@ -635,7 +660,7 @@ gateServer::~gateServer(void)
 
 #if statCount
 	// remove all server stats
-	for(int i=0;i<statCount;i++)
+	for(int i=0; i < statCount; i++)
 		delete stat_table[i].pv;
 #endif
 
@@ -963,7 +988,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",(void *)&ctx,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
-	gateAsEntry* pNode;
+	gateAsEntry* pEntry;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
 
 	++exist_count;
@@ -982,7 +1007,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		getClientHostName(ctx, hostname, sizeof(hostname));
 		
 		// See if requested name is allowed and check for aliases
-		if ( !(pNode = getAs()->findEntry(pvname, hostname)) )
+		if ( !(pEntry = getAs()->findEntry(pvname, hostname)) )
 		{
 			gateDebug2(1,"gateServer::pvExistTest() %s (from %s) is not allowed\n",
 			  pvname, hostname);
@@ -991,7 +1016,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	} else {
 		// See if requested name is allowed and check for aliases.
 		// NULL will avoid checking the deny_from_list
-		if ( !(pNode = getAs()->findEntry(pvname, NULL)) )
+		if ( !(pEntry = getAs()->findEntry(pvname, NULL)) )
 		{
 			gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
 			  pvname);
@@ -1001,7 +1026,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 #else
 	// See if requested name is allowed and check for aliases.  Uses
 	// information in .pvlist, not .access.
-	if ( !(pNode = getAs()->findEntry(pvname)) )
+	if ( !(pEntry = getAs()->findEntry(pvname)) )
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
 				   pvname);
@@ -1009,7 +1034,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	}
 #endif
 
-    pNode->getRealName(pvname, real_name, sizeof(real_name));
+    pEntry->getRealName(pvname, real_name, sizeof(real_name));
 
 #ifdef USE_DENYFROM
     gateDebug3(1,"gateServer::pvExistTest() %s (from %s) real name %s\n",
@@ -1022,7 +1047,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 #if statCount
 	// Check internal PVs
 	if(!strncmp(stat_prefix,real_name,stat_prefix_len)) {
-		for(int i=0;i<statCount;i++)
+		for(int i=0; i < statCount; i++)
 		{
 			if(strcmp(real_name,stat_table[i].pvname)==0)
 			{
@@ -1077,8 +1102,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	else
 	{
 		// We don't have it so make a new gatePvData
-		gateDebug1(5,"gateServer::pvExistTest() %s creating new gatePv\n",pvname);
-		pv=new gatePvData(this,pNode,real_name);
+		gateDebug1(5,"gateServer::pvExistTest() %s creating new gatePv\n",real_name);
+		pv=new gatePvData(this,pEntry,real_name);
 
 #if DEBUG_DELAY
 		if(!strncmp("Xorbit",pvname,6)) {
@@ -1091,19 +1116,19 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		{
 		case gatePvConnect:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s (new async ET)\n",
-			  pvname,pv->getStateName());
+			  real_name,pv->getStateName());
 			pv->addET(ctx);
 			rc=pverAsyncCompletion;
 			break;
 		case gatePvInactive:
 		case gatePvActive:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s ?\n",
-			  pvname,pv->getStateName());
+			  real_name,pv->getStateName());
 			rc=pverExistsHere;
 			break;
 		default:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s ?\n",
-			  pvname,pv->getStateName());
+			  real_name,pv->getStateName());
 			rc=pverDoesNotExistHere;
 			break;
 		}
@@ -1128,29 +1153,29 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 {
 	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
 	gateVcData* rc;
-    gateAsEntry* pe;
+    gateAsEntry* pEntry;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
 
 	// See if requested name is allowed and check for aliases.  Uses
 	// information in .pvlist, not .access.
-    if ( !(pe = getAs()->findEntry(pvname)) )
+    if ( !(pEntry = getAs()->findEntry(pvname)) )
     {
         gateDebug1(2,"gateServer::createPV() called for denied PV %s "
 		  " - this should not happen!\n", pvname);
         return pvCreateReturn(S_casApp_pvNotFound);
     }
 
-    pe->getRealName(pvname, real_name, sizeof(real_name));
+    pEntry->getRealName(pvname, real_name, sizeof(real_name));
 
 #if statCount
 	// Trap (and create if needed) server stats PVs
-	if(!strncmp(stat_prefix,pvname,stat_prefix_len)) {
-		for(int i=0;i<statCount;i++)
+	if(!strncmp(stat_prefix,real_name,stat_prefix_len)) {
+		for(int i=0; i < statCount; i++)
 		{
-			if(strcmp(pvname,stat_table[i].pvname)==0)
+			if(strcmp(real_name,stat_table[i].pvname)==0)
 			{
 				if(stat_table[i].pv==NULL)
-				  stat_table[i].pv=new gateStat(this,pvname,i);
+				  stat_table[i].pv=new gateStat(this,pEntry,real_name,i);
 				
 				return pvCreateReturn(*stat_table[i].pv);
 			}
@@ -1159,9 +1184,9 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 #endif
 
 #if DEBUG_DELAY
-	if(!strncmp("Xorbit",pvname,6)) {
+	if(!strncmp("Xorbit",real_name,6)) {
 		printf("%s gateServer::createPV: loop_count=%d %s\n",
-		  timeStamp(),loop_count,pvname);
+		  timeStamp(),loop_count,real_name);
 	}
 #endif
 	
@@ -1173,7 +1198,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 
 		if(rc->getStatus())
 		{
-			gateDebug1(5,"gateServer::createPV() bad PV %s\n",pvname);
+			gateDebug1(5,"gateServer::createPV() bad PV %s\n",real_name);
 			delete rc;
 			rc=NULL;
 		}
@@ -1283,7 +1308,7 @@ void gateServer::initStats(char *prefix)
 	// value.  The value may have changed before the stat pvs are
 	// created.  This allows the value at the time of creation to be
 	// used.
-	for(i=0;i<statCount;i++)
+	for(i=0; i < statCount; i++)
 	{
 		switch(i) {
 #ifdef STAT_PVS

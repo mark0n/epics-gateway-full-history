@@ -234,17 +234,6 @@ public:
 	gateAs(const char* pvlist_file);
 	~gateAs(void);
 
-#if 0
-	// user must delete the gateAsClient that the following function returns
-#if 0
-	// KE: Not used
-	gateAsClient* getInfo(gateVcData *vc, const char* pv, const char* user,
-	  const char* host);
-#endif
-	gateAsClient* getInfo(gateVcData *vc, gateAsEntry* e, const char* user,
-	  const char* host);
-#endif
-	
 #ifdef USE_DENYFROM
 	inline gateAsEntry* findEntry(const char* pv, const char* host = 0);
 	bool isDenyFromListUsed(void) const { return denyFromListUsed; }

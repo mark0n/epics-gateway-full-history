@@ -33,6 +33,7 @@
 #include "gddApps.h"
 #include "gateResources.h"
 #include "gateServer.h"
+#include "gateAs.h"
 #include "gateStat.h"
 
 static struct timespec *timeSpec(void)
@@ -54,8 +55,70 @@ static struct timespec *timeSpec(void)
 
 #if statCount
 
-gateStat::gateStat(gateServer *s,const char *n,int t) :
-	casPV(*s),post_data(0),type(t),serv(s),name(strDup(n))
+//////// gateStatChan (derived from gate chan derived from casChannel)
+
+gateStatChan::gateStatChan(const casCtx &ctx, casPV *casPvIn, gateAsEntry *asentry,
+  const char * const user, const char * const host) :
+	gateChan(ctx,casPvIn,asentry,user,host)
+{
+	gateStat *pStat=(gateStat *)casPv;
+	if(pStat) pStat->addChan(this);
+}
+
+gateStatChan::~gateStatChan(void)
+{
+	gateStat *pStat=(gateStat *)casPv;
+	if(pStat) pStat->removeChan(this);
+}
+
+// This is a new virtual write in CAS that knows the casChannel.  The
+// casPV::write() is not called if this one is implemented.  This
+// write calls a new, overloaded gateStat::write() that has the
+// gateChan as an argument to do what used to be done in the virtual
+// gateStat::write().
+caStatus gateStatChan::write(const casCtx &ctx, const gdd &value)
+{
+	gateStat *pStat=(gateStat *)casPv;
+
+	// Trap writes
+	if(asclient && asclient->clientPvt()->trapMask) {
+		FILE *fp=global_resources->getPutlogFp();
+		if(fp) {
+			fprintf(fp,"%s %s@%s %s\n",
+			  timeStamp(),
+			  asclient->user()?asclient->user():"Unknown",
+			  asclient->host()?asclient->host():"Unknown",
+			  pStat && pStat->getName()?pStat->getName():"Unknown");
+			fflush(fp);
+		}
+	}
+	
+	// Call the non-virtual-function write() in the gateStat
+	if(pStat) return pStat->write(ctx,value,*this);
+	else return S_casApp_noSupport;
+}
+
+bool gateStatChan::readAccess(void) const
+{
+	return (asclient->readAccess())?true:false;
+}
+
+bool gateStatChan::writeAccess(void) const
+{
+	return (asclient->writeAccess())?true:false;
+}
+
+//////// gateStat (derived from casPV)
+
+gateStat::gateStat(gateServer *s, gateAsEntry *e, const char *n, int t) :
+	casPV(*s),
+	value(NULL),
+	attr(NULL),
+	post_data(0),
+	type(t),
+	serv(s),
+	name(strDup(n)),
+	asentry(e)
 {
 
 // Define the value gdd;
@@ -111,6 +174,13 @@ const char *gateStat::getName() const
 	return name; 
 }
 
+casChannel* gateStat::createChannel(const casCtx &ctx,
+  const char * const user, const char * const host)
+{
+	gateStatChan *pChan=new gateStatChan(ctx,this,asentry,user,host);
+	return pChan;
+}
+
 caStatus gateStat::interestRegister(void)
 {
 	post_data=1;
@@ -129,7 +199,18 @@ aitEnum gateStat::bestExternalType(void) const
 #endif
 }
 
-caStatus gateStat::write(const casCtx & /*ctx*/, const gdd &dd)
+// This is the virtual write function defined in casPV.  It should no
+// longer be called if casChannel::write is implemented.
+caStatus gateStat::write(const casCtx& ctx, const gdd& dd)
+{
+	fprintf(stderr,"Virtual gateStat::write called for %s.\n"
+	  "  This is an error!\n",getName());
+	return S_casApp_noSupport;
+}
+
+// This is a non-virtual-function write that allows passing a pointer
+// to the gateChannel.  Currently chan is not used.
+caStatus gateStat::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 {
     gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
 	caStatus retVal=S_casApp_noSupport;
@@ -191,6 +272,17 @@ caStatus gateStat::read(const casCtx & /*ctx*/, gdd &dd)
 	fflush(stderr);
 #endif
 	return retVal;
+}
+
+void gateStat::report(void)
+{
+	printf("%-30s\n",getName());
+
+	tsDLIter<gateStatChan> iter=chan_list.firstIter();
+	while(iter.valid()) {
+		iter->report();
+		iter++;
+	}
 }
 
 void gateStat::postData(long val)

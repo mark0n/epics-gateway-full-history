@@ -60,7 +60,7 @@
 #  - anything starting with test is not allowed
 
 
-EVALUATION ORDER DENY, ALLOW
+EVALUATION ORDER ALLOW, DENY
 
 [0-9].*                 ALLOW
 [a-z].*                 ALLOW
@@ -68,5 +68,5 @@ EVALUATION ORDER DENY, ALLOW
 
 Beam:*                  ALLOW     Beam 1
 PS*                     ALLOW     PowerSupply 1
-hydra.*Flag             ALLOW     GatewayAdmin
+gateway.*Flag		ALLOW	  GatewayAdmin
 test.*                  DENY
