@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.5  1996/09/10 15:04:10  jbk
+// many fixes.  added instructions to usage. fixed exist test problems.
+//
 // Revision 1.4  1996/09/06 11:56:21  jbk
 // little fixes
 //
@@ -261,6 +264,8 @@ int gatePvData::life(void)
 
 		if(needAckNak())
 		{
+			// I know this is not used, but it does not seem
+			// right. Who deletes or destroys the et node?
 			while((et=et_list.head()))
 			{
 				et->ack();
@@ -308,6 +313,8 @@ int gatePvData::death(void)
 		// still on connecting list, add to the PV list as dead
 		if(needAckNak())
 		{
+			// I know this is not used, but it does not seem
+			// right. Who deletes or destroys the et node?
 			while((et=et_list.head()))
 			{
 				et->nak();

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.5  1996/09/23 20:40:41  jbk
+ * many fixes
+ *
  * Revision 1.4  1996/09/07 13:01:53  jbk
  * fixed bugs.  reference the gdds from CAS now.
  *
@@ -123,8 +126,8 @@ private:
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;
-	gateAsyncRW* rio;	// NULL unless read posting required and connect
-	gateAsyncRW* wio;	// NULL unless write posting required and connect
+	tsDLList<gateAsyncRW> rio;	// NULL unless read posting required and connect
+	tsDLList<gateAsyncRW> wio;	// NULL unless write posting required and connect
 	gdd* data;
 	gdd* event_data;
 };
@@ -143,7 +146,7 @@ inline void gateVcData::markNotInterested(void)
 
 // ---------------------- async read/write pending operation ------------------
 
-class gateAsyncRW : public casAsyncIO
+class gateAsyncRW : public casAsyncIO, public tsDLNode<gateAsyncRW>
 {
 public:
 	gateAsyncRW(const casCtx &ctx,gdd& wdd) : casAsyncIO(ctx),dd(wdd)

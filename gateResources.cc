@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.6  1996/09/12 12:17:53  jbk
+// Fixed up file defaults and logging in the resources class
+//
 // Revision 1.5  1996/09/10 15:04:12  jbk
 // many fixes.  added instructions to usage. fixed exist test problems.
 //
@@ -43,12 +46,13 @@ gateResources::gateResources(void)
 	list_buffer=NULL;
 	pattern_list=NULL;
 
-	home_dir=strdup(GATE_HOME);
-	suffix=strdup(GATE_SUFFIX);
-	prefix=strdup(GATE_LOG);
+	home_dir=strDup(GATE_HOME);
+	suffix=strDup(GATE_SUFFIX);
+	prefix=strDup(GATE_LOG);
 
 	debug_level=0;
 	log_on=0;
+	ro=0;
 
 	genLogFile();
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
@@ -105,7 +109,7 @@ int gateResources::setHome(char* dir)
 	else
 	{
 		delete [] home_dir;
-		home_dir=strdup(dir);
+		home_dir=strDup(dir);
 		rc=0;
 	}
 	return rc;
@@ -123,7 +127,7 @@ int gateResources::setListFile(char* file)
 	if(pattern_list) delete [] pattern_list;
 	if(pv_list_file) delete [] pv_list_file;
 
-	pv_list_file=strdup(file);
+	pv_list_file=strDup(file);
 
 	if( (pv_fd=fopen(pv_list_file,"r"))==(FILE*)NULL ||
 		fstat(fileno(pv_fd),&stat_buf)<0 )
@@ -172,7 +176,7 @@ int gateResources::setAliasFile(char* file)
 	if(alias_table)   delete [] alias_table;
 	if(pv_alias_file) delete [] pv_alias_file;
 
-	pv_alias_file=strdup(file);
+	pv_alias_file=strDup(file);
 
 	if( (pv_fd=fopen(pv_alias_file,"r"))==NULL ||
 		fstat(fileno(pv_fd),&stat_buf)<0 )
@@ -247,7 +251,7 @@ int gateResources::setDebugLevel(int level)
 int gateResources::setAccessFile(char* file)
 {
 	if(pv_access_file) delete [] pv_access_file;
-	pv_access_file=strdup(file);
+	pv_access_file=strDup(file);
 	return 0;
 }
 
@@ -280,7 +284,7 @@ int gateResources::setUpLogging(void)
 int gateResources::setSuffix(char* s)
 {
 	delete [] suffix;
-	suffix=strdup(s);
+	suffix=strDup(s);
 	genLogFile();
 	return 0;
 }
@@ -288,7 +292,7 @@ int gateResources::setSuffix(char* s)
 int gateResources::setLogFile(char* file)
 {
 	delete [] prefix;
-	prefix=strdup(file);
+	prefix=strDup(file);
 	genLogFile();
 	return 0;
 }

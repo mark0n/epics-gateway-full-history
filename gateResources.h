@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.6  1996/09/23 20:40:44  jbk
+ * many fixes
+ *
  * Revision 1.5  1996/09/12 12:17:54  jbk
  * Fixed up file defaults and logging in the resources class
  *
@@ -30,7 +33,7 @@
 #define GATE_LOG "GATEWAY"
 #define GATE_HOME "."
 #define GATE_SUFFIX "log"
-#define GATE_CONNECT_TIMEOUT 1
+#define GATE_CONNECT_TIMEOUT 0
 #define GATE_INACTIVE_TIMEOUT (60*60*2)
 #define GATE_DEAD_TIMEOUT (60*2)
 
@@ -59,6 +62,9 @@ public:
 	int setSuffix(char* word);
 	int setUpLogging(void);
 	int setLogFile(char* file);
+
+	void setReadOnly(void)		{ ro=1; }
+	int isReadOnly(void)		{ return ro; }
 
 	void setConnectTimeout(time_t sec)	{ connect_timeout=sec; }
 	void setInactiveTimeout(time_t sec)	{ inactive_timeout=sec; }
@@ -98,6 +104,7 @@ private:
 	char* pv_alias_file;
 	char* log_file;
 	int debug_level;
+	int ro;
 	int log_on; // 0=off, 1=on
 	time_t connect_timeout;
 	time_t inactive_timeout;

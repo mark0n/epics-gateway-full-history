@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.5  1996/09/12 12:17:55  jbk
+// Fixed up file defaults and logging in the resources class
+//
 // Revision 1.4  1996/09/10 15:04:14  jbk
 // many fixes.  added instructions to usage. fixed exist test problems.
 //
@@ -59,6 +62,7 @@ void operator delete(void* x)
 //	-sip ip_addr = IP address where CAS listens for requests
 //	-cport port_number = CA client library port
 //	-sport port_number = CAS port number
+//	-ro = read only server, no puts allowed
 //	-? = display usage
 //
 //	GATEWAY_HOME = environement variable pointing to the home of the gateway
@@ -97,6 +101,7 @@ void operator delete(void* x)
 #define PARM_CLIENT_PORT	13
 #define PARM_HELP			14
 #define PARM_NS				15
+#define PARM_RO				16
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
@@ -130,6 +135,7 @@ static PARM_STUFF ptable[] = {
 	{ "-dead_timeout",		13,	PARM_DEAD,			"seconds" },
 	{ "-noserver",			9,	PARM_NS,			"(start interactively)" },
 	{ "-ns",				3,	PARM_NS,			NULL },
+	{ "-ro",				3,	PARM_RO,			NULL },
 	{ "-help",				5,	PARM_HELP,			NULL },
 	{ NULL,			-1,	-1 }
 };
@@ -254,6 +260,10 @@ int main(int argc, char** argv)
 					return 0;
 				case PARM_NS:
 					no_server=1;
+					not_done=0;
+					break;
+				case PARM_RO:
+					gr->setReadOnly();
 					not_done=0;
 					break;
 				case PARM_PV:

@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.9  1996/09/23 20:40:42  jbk
+// many fixes
+//
 // Revision 1.8  1996/09/12 12:17:54  jbk
 // Fixed up file defaults and logging in the resources class
 //
@@ -75,8 +78,9 @@ gateFd::~gateFd(void)
 
 void gateFd::callBack(void)
 {
-	gateDebug0(5,"gateFd::callback()\n");
-	server.checkEvent();
+	gateDebug0(51,"gateFd::callback()\n");
+	// server.checkEvent();  old way
+	ca_pend_event(GATE_REALLY_SMALL); // new way
 }
 
 // ----------------------- server methods --------------------
@@ -191,14 +195,17 @@ void gateServer::connectCleanup(void)
 	gatePvNode *node,*cnode;
 	gatePvData* pv;
 
-	if(timeConnectCleanup()<global_resources->connectTimeout()) return;
+	if(global_resources->connectTimeout()>0 && 
+	   timeConnectCleanup()<global_resources->connectTimeout())
+		return;
 
 	for(node=pv_con_list.head();node;)
 	{
 		cnode=node;
 		node=node->getNext();
 		pv=cnode->getData();
-		if(pv->timeConnecting()>=global_resources->connectTimeout())
+		if(global_resources->connectTimeout()==0 ||
+		   pv->timeConnecting()>=global_resources->connectTimeout())
 		{
 			gateDebug1(3,"gateServer::connectCleanup() cleaning up PV %s\n",
 				pv->name());
