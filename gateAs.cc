@@ -174,13 +174,13 @@ int gateAs::readPvList(const char* lfile)
 	fclose(fd);
 
 	// resolve the aliases - slow and horrid, only done once here
-	for(pa=head_alias;pa;pa=pa->next)
-	{
-		if((pe=findEntry(pa->name))==NULL)
-			pe=new gateAsEntry(pa->name,default_group,1,head_pv);
-
-		pe->alias=pa->alias;
-	}
+//	for(pa=head_alias;pa;pa=pa->next)
+//	{
+//		if((pe=findEntry(pa->name))==NULL)
+//			pe=new gateAsEntry(pa->name,default_group,1,head_pv);
+//
+//		pe->alias=pa->alias;
+//	}
 
 	// fix all the pattern lists so that they alway search the special patterns
 	for(i=0;i<128;i++)
@@ -360,6 +360,7 @@ int gateAs::readFunc(char* buf, int max)
 
 void gateAs::report(FILE* fd)
 {
+	int i;
 	gateAsDeny* pd;
 	gateAsAlias* pa;
 	gateAsEntry* pe;
@@ -373,8 +374,14 @@ void gateAs::report(FILE* fd)
 		fprintf(fd," %s -> %s\n",pa->name,pa->alias);
 
 	fprintf(fd,"\n=====PV Pattern Report=====\n");
-	for(pe=head_pat;pe;pe=pe->next)
-		fprintf(fd," %s %s %d\n",pe->name,pe->group,pe->level);
+	for(i=0;i<128;i++)
+	{
+		for(pe=pat_table[i];pe && pe->next;pe=pe->next)
+			fprintf(fd," %s %s %d\n",pe->name,pe->group,pe->level);
+	}
+
+//for(pe=head_pat;pe;pe=pe->next)
+//	fprintf(fd," %s %s %d\n",pe->name,pe->group,pe->level);
 
 	fprintf(fd,"\n=====PV Report=====\n");
 	for(pe=head_pv;pe;pe=pe->next)

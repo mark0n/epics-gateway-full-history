@@ -5,6 +5,11 @@
 # $Id$
 #
 # $Log$
+# Revision 1.12  1998/03/09 14:42:02  jba
+# Upon USR1 signal gateway now executes commands specified in a
+# gateway.command file.
+# Incorporated latest changes to access security in gateAsCa.cc
+#
 # Revision 1.11  1997/06/16 17:28:02  jba
 # Build gateway with beta10
 #
@@ -40,6 +45,8 @@ include $(EPICS)/config/CONFIG_EXTENSIONS
 #EPICS_BASE = /usr/local/epics/baseR3.13.0.beta10
 #EPICS_BASE = /usr/local/epics/baseR3.13.0.beta11
 #EPICS_BASE = /home/phoebus/JBA/epics/beta10AsFix
+#EPICS_BASE = /home/phoebus/JBA/epics/base
+EPICS_BASE = /usr/local/epics/baseR3.13.0.beta12
 
 #USR_INCLUDES += -I$(EPICS_BASE_INCLUDE)/os/$(T_A)
 

@@ -4,6 +4,11 @@
 // $Id$
 //
 // $Log$
+// Revision 1.18  1998/03/09 14:42:04  jba
+// Upon USR1 signal gateway now executes commands specified in a
+// gateway.command file.
+// Incorporated latest changes to access security in gateAsCa.cc
+//
 // Revision 1.17  1997/09/25 18:20:47  jba
 // Added cast and include for tsDLList.h.
 //
@@ -939,7 +944,7 @@ gdd* gatePvData::eventStringCB(void* dbr)
 	aitString* str = (aitString*)value->dataAddress();
 
 	// DBR_TIME_STRING response
-	str->installString(ts->value);
+	str->copy(ts->value);
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
 	return value;

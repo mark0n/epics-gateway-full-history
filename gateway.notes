@@ -5,3 +5,7 @@ Wed Feb 18 09:10:14 CST 1998
 	gateway.command file. 
 	Incorporated latest changes to access security in gateAsCa.cc
 
+Tue Apr 21 22:38:59 CDT 1998
+	Real name is now used for access security pattern matching.
+	Fixed PV Pattern Report 
+	New gdd api changes

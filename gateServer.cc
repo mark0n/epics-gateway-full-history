@@ -5,6 +5,11 @@
 // $Id$
 //
 // $Log$
+// Revision 1.25  1998/03/09 14:42:05  jba
+// Upon USR1 signal gateway now executes commands specified in a
+// gateway.command file.
+// Incorporated latest changes to access security in gateAsCa.cc
+//
 // Revision 1.24  1997/06/30 16:07:00  jba
 // Added Dead PVs report
 //
@@ -567,7 +572,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 		gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",real_name);
 		rc=pverDoesNotExistHere;
 	}
-	else if((node=getAs()->findEntry(pvname)))
+	else if((node=getAs()->findEntry(real_name)))
 	{
 		// don't know - need to check
 		gateDebug1(5,"gateServer::pvExistTest() %s new\n",pvname);

@@ -35,6 +35,7 @@
 # ALIAS:
 #  Define a PV alias.  The gateway will transparently translate the PV
 #  alias name to a real name on the control network is serves.
+#  Real name is used for pattern matching.
 #
 # PV:
 #  Used to declare access security rules for specific PV names.  The 
