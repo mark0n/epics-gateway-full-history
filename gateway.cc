@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.14  1997/03/17 16:01:08  jbk
+// bug fixes and additions
+//
 // Revision 1.13  1997/02/21 17:31:22  jbk
 // many many bug fixes and improvements
 //
@@ -314,6 +317,19 @@ static int startEverything(void)
 	
 	if(fd!=stderr) fclose(fd);
 	chmod(GATE_SCRIPT_FILE,00755);
+	
+	if((fd=fopen(GATE_RESTART_FILE,"w"))==(FILE*)NULL)
+	{
+		fprintf(stderr,"open of restart file %s failed\n",
+			GATE_RESTART_FILE);
+		fd=stderr;
+	}
+
+	fprintf(fd,"\n kill %d # to kill off this gateway\n\n",sid);
+	fflush(fd);
+	
+	if(fd!=stderr) fclose(fd);
+	chmod(GATE_RESTART_FILE,00755);
 	
 	if(getrlimit(RLIMIT_NOFILE,&lim)<0)
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");

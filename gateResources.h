@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.12  1997/03/17 16:01:00  jbk
+ * bug fixes and additions
+ *
  * Revision 1.11  1997/02/21 17:31:18  jbk
  * many many bug fixes and improvements
  *
@@ -39,6 +42,7 @@
  */
 
 #define GATE_SCRIPT_FILE    "gateway.killer"
+#define GATE_RESTART_FILE   "gateway.restart"
 #define GATE_PV_LIST_FILE   "gateway.pvlist"
 #define GATE_PV_ACCESS_FILE "gateway.access"
 
