@@ -30,8 +30,8 @@
 #include <time.h>
 #endif
 
-#include "gdd.h"
-#include "gddApps.h"
+#include <gdd.h>
+#include <gddApps.h>
 #include "gateResources.h"
 #include "gateServer.h"
 #include "gateAs.h"

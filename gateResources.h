@@ -54,6 +54,9 @@
 
 // Utilities
 char *timeStamp(void);
+char *getComputerName(void);
+void gatewayServer(char *prefix);
+void printRecentHistory(void);
 
 class gateAs;
 

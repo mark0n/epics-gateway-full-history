@@ -47,9 +47,9 @@
 # include <unistd.h>
 #endif
 
-#include "gdd.h"
-#include "gddApps.h"
-#include "dbMapper.h"
+#include <gdd.h>
+#include <gddApps.h>
+#include <dbMapper.h>
 
 #include "gateResources.h"
 #include "gateServer.h"

@@ -31,23 +31,25 @@
 # include <io.h>         /* for access, chmod  (usually in unistd.h) */
 #else
 # include <unistd.h>
+# include <sys/utsname.h>
 #endif
 
 #include "cadef.h"
 
 #include "gateResources.h"
 #include "gateAs.h"
-#include "gddAppTable.h"
-#include "dbMapper.h"
+#include <gddAppTable.h>
+#include <dbMapper.h>
 
 // Global variables
 gateResources* global_resources;
 
 // ---------------------------- utilities ------------------------------------
+
+
+// Gets current time and puts it in a static array The calling program
+// should copy it to a safe place e.g. strcpy(savetime,timestamp());
 char *timeStamp(void)
-	// Gets current time and puts it in a static array
-	// The calling program should copy it to a safe place
-	//   e.g. strcpy(savetime,timestamp());
 {
 	static char timeStampStr[16];
 	long now;
@@ -58,6 +60,35 @@ char *timeStamp(void)
 	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 	
 	return timeStampStr;
+}
+
+// Gets the computer name and allocates memory for it using strDup
+// (from base/src/gdd/aitHelpers.h)
+char *getComputerName(void)
+{
+	char*name=NULL;
+
+#ifdef WIN32
+	TCHAR computerName[MAX_COMPUTERNAME_LENGTH+1];
+	DWORD size=MAX_COMPUTERNAME_LENGTH+1;
+	// Will probably be uppercase
+	BOOL status=GetComputerName(computerName,&size);
+	if(status && size > 0) {
+		// Convert to lowercase and copy
+		// OK for ANSI.  Won't work for Unicode w/o conversion.
+		char *pChar=computerName;
+		while(*pChar) *pChar=tolower(*pChar++);
+		name=strDup(computerName);
+	}
+#else
+	struct utsname ubuf;
+	if(uname(&ubuf) >= 0) {
+		// Use the name of the host
+		name=strDup(ubuf.nodename);
+	}
+#endif
+
+	return name;
 }
 
 gateResources::gateResources(void)

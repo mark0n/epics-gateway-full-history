@@ -51,12 +51,12 @@
 #endif
 
 #include <envDefs.h>
-#include "epicsVersion.h"
+#include <osiProcess.h>
+#include <gdd.h>
+#include <epicsVersion.h>
 #include "gateResources.h"
 
 // Function Prototypes
-void gatewayServer(char *prefix);
-void printRecentHistory(void);
 static int startEverything(char *prefix);
 static void print_instructions(void);
 static int manage_gateway(void);
@@ -566,9 +566,24 @@ static int startEverything(char *prefix)
 	printEnv(stdout,"EPICS_CA_ADDR_LIST");
 	printEnv(stdout,"EPICS_CA_AUTO_ADDR_LIST");
 	printEnv(stdout,"EPICS_CA_SERVER_PORT");
+	printEnv(stdout,"EPICS_CA_MAX_ARRAY_BYTES");
 	printEnv(stdout,"EPICS_CAS_INTF_ADDR_LIST");
 	printEnv(stdout,"EPICS_CAS_SERVER_PORT");
 	printEnv(stdout,"EPICS_CAS_IGNORE_ADDR_LIST");
+
+	// Get user name
+	char userName[21];
+	osiGetUserNameReturn ret=osiGetUserName(userName,21);
+	if(ret != osiGetUserNameSuccess) {
+		strcpy(userName,"Unknown");
+	}
+	userName[20]='\0';
+	
+	// Get host name
+	char *hostName=getComputerName();
+	if(!hostName) hostName=strDup("Unknown");
+	printf("Running as user %s on host %s\n",userName,hostName);
+	delete [] hostName;
 
 	// Put log
 	FILE *putFp=global_resources->getPutlogFp();

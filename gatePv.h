@@ -38,8 +38,8 @@
 # include <sys/time.h>
 #endif
 
-#include "aitTypes.h"
-#include "gddAppTable.h"
+#include <aitTypes.h>
+#include <gddAppTable.h>
 #include "tsDLList.h"
 
 #include "gateAsyncIO.h"

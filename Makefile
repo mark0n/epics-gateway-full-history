@@ -33,26 +33,37 @@ ifeq ($(OS_CLASS),hp700)
 endif
 
 # Purify
-ifeq ($(OS_CLASS),solaris)
 #PURIFY=YES
+ifeq ($(PURIFY),YES)
+ifeq ($(OS_CLASS),solaris)
 PURIFY_FLAGS = -first-only -chain-length=26 -max_threads=256
 # Put the cache files in the appropriate bin directory
 PURIFY_FLAGS += -always-use-cache-dir -cache-dir=$(shell $(PERL) $(TOP)/config/fullPathName.pl .)
-
-#CXX = purify -first-only -chain-length=26 -max_threads=160 $($(CPLUSPLUS)_$(CXXCMPLR))
+DEBUGCMD = purify $(PURIFY_FLAGS)
+endif
 endif
 
 # Quantify
 #QUANTIFY=YES
-QUANTIFY_FLAGS = -measure-timed-calls=user+system -record-system-calls=no -collection-granularity=function -max_threads=160 -use-machine=UltraSparc:168MHz
-# QUANTIFY_FLAGS = -collection-granularity=function -max_threads=160 -use-machine=UltraSparc:168MHz
+ifeq ($(QUANTIFY),YES)
+ifeq ($(OS_CLASS),solaris)
+#QUANTIFY_FLAGS += -measure-timed-calls=user+system
+QUANTIFY_FLAGS += -collection-granularity=function
+QUANTIFY_FLAGS += -use-machine=UltraSparcIII:1002MHz
+QUANTIFY_FLAGS += -max_threads=160
+
+# QUANTIFY_FLAGS += -record-system-calls=no
+
 # -measure-timed-calls=elapsed-time (default) gives wall clock time
 #   for system calls
 # -measure-timed-calls=user+system gives user+system time
 # -record-system-calls=no gives 0 time for system calls
 # -collection-granularity=function runs faster than default=line
-# -use-machine=sparcstation_5:85MHz sets timing for old Nike
 # -use-machine=UltraSparc:168MHz timing for Nike
+# -use-machine=UltraSparcIII:1002MHz timing for Ctlapps1
+DEBUGCMD = quantify $(QUANTIFY_FLAGS)
+endif
+endif
 
 # Turn on debug mode
 # USR_CXXFLAGS += -DDEBUG_MODE
@@ -134,6 +145,7 @@ xxxx:
 	@echo ACC_SFLAGS_YES: $(ACC_SFLAGS_YES)
 	@echo ACC_SFLAGS_NO: $(ACC_SFLAGS_NO)
 	@echo SHARED_LIBRARIES: $(SHARED_LIBRARIES)
+	@echo DEBUGCMD: $(DEBUGCMD)
 
 # **************************** Emacs Editing Sequences *****************
 # Local Variables:

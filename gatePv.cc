@@ -51,10 +51,10 @@
 
 #include "tsDLList.h"
 
-#include "gdd.h"
-#include "gddApps.h"
-#include "gddAppTable.h"
-#include "dbMapper.h"
+#include <gdd.h>
+#include <gddApps.h>
+#include <gddAppTable.h>
+#include <dbMapper.h>
 
 #include "gateResources.h"
 #include "gateServer.h"

@@ -39,6 +39,7 @@ Argonne, IL 60439<br>
   </li>
   <li><a href="#Starting">Starting the Gateway</a></li>
   <li><a href="#Using">Using the Gateway</a></li>
+  <li><a href="#ErrorMessages">Error messages</a></li>
   <li><a href="#Building">Building the Gateway</a></li>
   <li><a href="#AccessSecurity">Access Security</a></li>
   <li><a href="#Report">Reports</a></li>
@@ -502,6 +503,35 @@ the program has officially exited. These processes may also print error
 messages after the Gateway prints its termination message just before calling
 exit. It is a good idea to check that the Gateway has truly shut down. This
 behavior may be corrected in future releases of base.</p>
+
+<p></p>
+
+<h2><a name="ErrorMessages">Error messages</a></h2>
+
+<p>The Gateway gets error messages from several places, including internally,
+the Channel Access Server library, and the Channel Access Client library.
+These errors typically appear in the log. The Gateway internal messages
+usually have a timestamp. Messages from the Channel Access Server library are
+typically sent to the EPICS Errlog facility and are received by the Gateway,
+often with different lines of the message being received separately. These
+messages typically do not have a timestamp, and the Gateway puts a line in
+the log with a timestamp when it thinks the message is complete. This line
+will say "!!! Errlog message received (message is above)". You must try to
+decide what lines above this line comprise the message. The problem is
+compounded by the fact that other kinds of messages may be interspersed
+between the lines for the Errlog message. The Channel Access Server library
+can also write messages directly. The Channel Access Client library can use
+the Errlog facility or send exception messages to the Gateway. The Errlog
+messages are handled as described. The exception messages are printed with as
+much additional information as is available and will start with a line with a
+timestamp saying "gateServer::exCB: Channel Access Exception:". Common
+exception messages, such as "Virtual circuit unresponsive" and "Virtual
+circuit disconnect" only print a single, timestamped line without the
+additional information. In most cases the Gateway prints a line with a
+timestamp saying how it was terminated. If the process is killed with SIGKILL
+(-9) or the machine is rebooted, this line has no chance to appear. In all
+cases the Gateway attempts to timestamp messages as timing is often important
+in diagnosing problems.</p>
 
 <h2><a name="Building">Building the Gateway</a></h2>
 

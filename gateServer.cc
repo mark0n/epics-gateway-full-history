@@ -34,6 +34,7 @@
 #define DEBUG_CLOCK 0
 #define DEBUG_ACCESS 0
 #define DEBUG_DESC 0
+#define DEBUG_FDMGR 0
 
 #ifdef __linux__
 #undef USE_LINUX_PROC_FOR_CPU
@@ -81,7 +82,7 @@
 # include <unistd.h>
 #endif
 
-#include "gdd.h"
+#include <gdd.h>
 
 #if DEBUG_EXCEPTION
 #include <epicsThrowTrace.h>
@@ -93,10 +94,6 @@
 #include "gateVc.h"
 #include "gatePv.h"
 #include "gateStat.h"
-
-// Function Prototypes
-void gatewayServer(char *prefix);
-void printRecentHistory(void);
 
 #ifdef __linux__
 # ifdef USE_LINUX_PROC_FOR_CPU
@@ -1498,11 +1495,22 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	pvExistReturn rc;
 	gateAsEntry* pEntry;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
+#if DEBUG_FDMGR
+	static double cumTime=0.0;
+	epicsTime startTime, endTime;
+#endif
 
 	++exist_count;
 
 #if DEBUG_EXIST
 	printf("%s pvExistTest: %s\n",timeStamp(),pvname?pvname:"NULL");
+#endif
+#if DEBUG_FDMGR
+	startTime=epicsTime::getCurrent();
+	if(exist_count%1000 == 0) {
+		printf("%s pvExistTest: exist_count=%lu cumTime=%.3f\n",
+		  timeStamp(),exist_count,cumTime);
+	}
 #endif
 
 #ifdef USE_DENYFROM
@@ -1519,6 +1527,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		{
 			gateDebug2(1,"gateServer::pvExistTest() %s (from %s) is not allowed\n",
 			  pvname, hostname);
+#if DEBUG_FDMGR
+			endTime=epicsTime::getCurrent();
+			cumTime+=(endTime-startTime);
+#endif
 			return pverDoesNotExistHere;
 		}
 	} else {
@@ -1528,6 +1540,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		{
 			gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
 			  pvname);
+#if DEBUG_FDMGR
+			endTime=epicsTime::getCurrent();
+			cumTime+=(endTime-startTime);
+#endif
 			return pverDoesNotExistHere;
 		}
 	}
@@ -1538,6 +1554,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
 				   pvname);
+#if DEBUG_FDMGR
+		endTime=epicsTime::getCurrent();
+		cumTime+=(endTime-startTime);
+#endif
 		return pverDoesNotExistHere;
 	}
 #endif
@@ -1564,11 +1584,19 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 				  pEntry->group?pEntry->group:"NULL");
 				printf("  pverExistsHere\n"); 
 #endif
+#if DEBUG_FDMGR
+				endTime=epicsTime::getCurrent();
+				cumTime+=(endTime-startTime);
+#endif
 				return pverExistsHere;
 			}
 			if(strcmp(real_name,stat_table[i].descPvName)==0) {
 #if DEBUG_DESC
 				printf("  pverExistsHere\n"); 
+#endif
+#if DEBUG_FDMGR
+				endTime=epicsTime::getCurrent();
+				cumTime+=(endTime-startTime);
 #endif
 				return pverExistsHere;
 			}
@@ -1665,6 +1693,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	}
 #endif
 
+#if DEBUG_FDMGR
+	endTime=epicsTime::getCurrent();
+	cumTime+=(endTime-startTime);
+#endif
 	return rc;
 }
 
@@ -1803,30 +1835,8 @@ void gateServer::initStats(char *prefix)
 		stat_prefix=prefix;
 	} else {
 		// Make one up
-#ifdef WIN32
-		TCHAR computerName[MAX_COMPUTERNAME_LENGTH+1];
-		DWORD size=MAX_COMPUTERNAME_LENGTH+1;
-		// Will probably be uppercase
-		BOOL status=GetComputerName(computerName,&size);
-		if(status && size > 0) {
-			// Convert to lowercase and copy
-			// OK for ANSI.  Won't work for Unicode w/o conversion.
-			char *pChar=computerName;
-			while(*pChar) *pChar=tolower(*pChar++);
-			stat_prefix=strDup(computerName);
-		} else {
-			stat_prefix=strDup("gateway");
-		}
-#else
-		struct utsname ubuf;
-		if(uname(&ubuf) >= 0) {
-			// Use the name of the host
-			stat_prefix=strDup(ubuf.nodename);
-		} else {
-			// If all else fails use "gateway"
-			stat_prefix=strDup("gateway");
-		}
-#endif
+		stat_prefix=getComputerName();
+		if(!stat_prefix || !stat_prefix[0]) stat_prefix=strDup("gateway");
 	}
 	stat_prefix_len=strlen(stat_prefix);
 

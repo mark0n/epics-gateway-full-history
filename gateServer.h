@@ -35,7 +35,6 @@
 #else
 # include <unistd.h>
 # include <sys/time.h>
-# include <sys/utsname.h>
 #endif
 
 #include "casdef.h"
