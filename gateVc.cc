@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.19  1997/06/12 21:32:09  jba
+// pv_name update.
+//
 // Revision 1.18  1997/06/09 18:03:38  jba
 // Removed unused vars, changed delete to free for pv_name.
 //
@@ -178,7 +181,7 @@ gateVcData::~gateVcData(void)
 	if(data) data->unreference();
 	if(event_data) event_data->unreference();
 	delete [] pv_name;
-	pv_name=strDup("Error");
+	pv_name="Error";
 	pv->setVC(NULL);
 	mrg->setStat(statVcTotal,--total_vc);
 }
