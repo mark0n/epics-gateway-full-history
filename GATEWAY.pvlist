@@ -58,15 +58,17 @@
 #    security group Beam, similarly for PS using PowerSupply and hydra flags using
 #    GatewayAdmin
 #  - anything starting with test is not allowed
+#  - ps0 ... ps9 are translated to PSCurrent0.ai ... PSCurrent9.ai
 
 
 EVALUATION ORDER ALLOW, DENY
 
-[0-9].*                 ALLOW
-[a-z].*                 ALLOW
-[A-Z].*                 ALLOW
+[0-9].*          ALLOW
+[a-z].*          ALLOW
+[A-Z].*          ALLOW
 
-Beam:*                  ALLOW     Beam 1
-PS*                     ALLOW     PowerSupply 1
-gateway.*Flag		ALLOW	  GatewayAdmin
-test.*                  DENY
+Beam:*           ALLOW Beam 1
+PS*              ALLOW PowerSupply 1
+gateway.*Flag    Allow GatewayAdmin
+test.*           DENY
+ps\([0-9]\)      ALIAS PSCurrent\1.ai PowerSupply 1

@@ -888,6 +888,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	switch(at) {
 	case gddAppType_ackt:
 	case gddAppType_acks:
+		// Not useful and not monitorable so data would be out-of-date
 #if 0
 		fprintf(stderr,"%s gateVcData::read(): "
 		  "Got unsupported app type %d for %s\n",
@@ -901,6 +902,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 #endif
 		return S_casApp_noSupport;
 	case gddAppType_class:
+		// Would require supporting DBR_CLASS_NAME
 #if DEBUG_RTYP
 		fflush(stderr);
 		printf(" gddAppType_class (%d):\n",(int)at);
@@ -1028,7 +1030,9 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 	unsigned at=dd.applicationType();
 	switch(at) {
 	case gddAppType_class:
+		// Would require supporting DBR_CLASS_NAME
 	case gddAppType_dbr_stsack_string:
+		// Cannot be written
 #if 0
 		fprintf(stderr,"%s gateVcData::write: "
 		  "Got unsupported app type %d for %s\n",
