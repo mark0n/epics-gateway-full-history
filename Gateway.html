@@ -15,7 +15,7 @@
 
 <h2 style="text-align: center">Kenneth Evans, Jr.</h2>
 
-<h2 style="text-align: center">November 2003</h2>
+<h2 style="text-align: center">April 2004</h2>
 <br>
 
 
@@ -33,7 +33,7 @@ Argonne, IL 60439<br>
 <ul>
   <li><a href="#Introduction">Introduction</a>
     <ul>
-      <li><a></a><a href="#Overview">Overview</a></li>
+      <li><a href="#Overview">Overview</a></li>
       <li><a href="#History">History</a></li>
     </ul>
   </li>
@@ -45,6 +45,7 @@ Argonne, IL 60439<br>
   <li><a href="#ProcessVariables">Gateway Process Variables</a></li>
   <li><a href="#AlarmHandler">Alarm Handler</a></li>
   <li><a href="#PutLogging">Put Logging</a></li>
+  <li><a href="#BeaconAnomalies">Beacon Anomalies</a></li>
   <li><a href="#GUIInterface">GUI Interface</a></li>
   <li><a href="#Gateway">Gateway Configurations</a>
     <ul>
@@ -170,32 +171,42 @@ subsequent search requests as having the process variable. If the connection
 is then lost, the VC and its Chans are destroyed, and the PV becomes
 <strong>Disconnected</strong>.</p>
 
+<p><a href="#ProcessVariables">Internal process variables</a> in the Gateway
+give the number of PVs in each state, and can be used to monitor its
+behavior. In order to interpret the results, it is necessary to have an
+understanding of these states.</p>
+
 <p>PVs are either <strong>Alive</strong> or <strong>Unconnected</strong>.
 <strong>Alive</strong> consists of either <strong>Active</strong> or
 <strong>Inactive</strong>. <strong>Unconnected</strong> consists of
 <strong>Connecting</strong>, <strong>Dead</strong>, or
 <strong>Disconnected</strong>. (The lack of intuitive symmetry between
 <strong>Alive</strong> and <strong>Dead</strong> and the other semantics is
-historical and regrettable.) The top state in the picture above is
+historical and regrettable. Think of <strong>Alive</strong> as Connected and
+<strong>Dead</strong> as in Limbo.) The top state in the picture above is
 <strong>Unconnected,</strong> but it is not clear whether it is
 <strong>Connecting</strong>, <strong>Dead</strong>, or
 <strong>Disconnected</strong>. The middle state is <strong>Alive
 </strong>and<strong> Active</strong>. The bottom state is
 <strong>Alive</strong> and <strong>Inactive</strong>.</p>
-
-<p><a href="#ProcessVariables">Internal process variables</a> in the Gateway
-give the number of PVs in each state, and can be used to monitor its
-behavior. In order to interpret the results, it is necessary to have an
-understanding of these states.</p>
-
-<p align="center"><img alt="Gateway PV States" src="GatewayPvStates.gif"></p>
 <ul>
   <li>total = alive + unconnected</li>
   <li>alive = active + inactive</li>
-  <li>unconnected = connecting + dead + disconnected
-    <p></p>
-  </li>
+  <li>unconnected = connecting + dead + disconnected</li>
 </ul>
+
+<p>Saying this another way: The PVs for which the Gateway has an established
+client connection with an IOC are<strong> Alive</strong>. Otherwise they are
+<strong>Unconnected</strong>. For the <strong>Alive</strong> ones, if there
+is a server connection to an MEDM, then they are <strong>Active</strong>.
+Otherwise they are <strong>Inactive</strong>. If they are
+<strong>Unconnected</strong>, it may because they are
+<strong>Disconnected</strong> (meaning formerly connected),
+<strong>Connecting</strong>, or <strong>Dead</strong>.</p>
+
+<p></p>
+
+<p align="center"><img alt="Gateway PV States" src="GatewayPvStates.gif"></p>
 
 <p>The Gateway handles most of the information about a process variable that
 would be needed by most Channel Access Clients, in particular MEDM. An
@@ -297,6 +308,13 @@ uses the standard version of base, uses appreciably less CPU than Gateway
         mode and it restarts.</td>
     </tr>
     <tr>
+      <td>-report &lt;filename&gt;</td>
+      <td>Name of the file where <a href="#Report">reports</a> go. The
+        reports are appended if the file exists when the reports are
+        generated. If not specified, the name is
+        <strong>gateway.report</strong>.</td>
+    </tr>
+    <tr>
       <td>-home &lt;directory&gt;</td>
       <td>Directory where the Gateway looks for its input files and writes
         its output files. Setting this is equivalent to changing to that
@@ -329,7 +347,10 @@ uses the standard version of base, uses appreciably less CPU than Gateway
     <tr>
       <td>-cport &lt;port&gt;</td>
       <td>The port which the Gateway client uses to find the real process
-        variables. Sets the environment variable EPICS_CA_SERVER_PORT.</td>
+        variables. Sets the environment variable EPICS_CA_SERVER_PORT. Be
+        aware that if you specify -cport and do not specify -sport, then the
+        server port will also be the same as what you specify for -cport.
+        This is a Channel Access feature. To avoid it, specify -sport.</td>
     </tr>
     <tr>
       <td>-connect_timeout &lt;sec&gt;</td>
@@ -353,17 +374,19 @@ uses the standard version of base, uses appreciably less CPU than Gateway
       <td>-disconnect_timeout &lt;sec&gt;</td>
       <td>The amount of time in seconds that the Gateway will hold
         <strong>Disconnected</strong> process variables (those that were
-        connected but have been disconnected). When a
-        <strong>Disconnected</strong> process variable reconnects, the
-        Gateway will broadcast a beacon signal to inform the MEDMs that they
-        can reconnect to the Gateway. The default is 7200 (2 hours).</td>
+        connected but have been disconnected).  The default is 7200 (2
+      hours).</td>
     </tr>
     <tr>
       <td>-reconnect_inhibit &lt;sec&gt;</td>
-      <td>The minimum amount of time in seconds between additional beacons
-        sequences that the Gateway will send to its MEDMs when process
-        variables from the IOCs reconnect. Used to limit the beacon
-        sequences. The default is 300 (5 minutes).</td>
+      <td>The minimum amount of time in seconds after the last beacon anomaly
+        sequence before generating a new one. The Gateway generates a beacon
+        anomaly sequence when process variables from the IOCs reconnect and
+        when it rereads access security. Thus causes MEDMs to reissue search
+        requests for unconnected PVs. Used to limit the beacon sequences, and
+        hence the search requests. Search requests last for about 8 min., so
+        it is not necessary to reissue beacon anomalies much more frequently
+        than 8 min. The default is 300 (5 minutes).</td>
     </tr>
     <tr>
       <td>-server</td>
@@ -474,7 +497,9 @@ These two files are read at startup.</p>
 process variable <strong>gateway.newAsFlag</strong> (see<a
 href="#ProcessVariables"> Gateway Process Variables</a>) or by using the
 command file (see <a href="#Report">Reports</a>). This causes the two files
-to be reread and the access security to be changed accordingly.</p>
+to be reread and the access security to be changed accordingly. After
+rereading access security, the Gateway generates a beacon anomaly, which will
+cause MEDMs to reissue search requests for unfound PVs.</p>
 
 <p>Note that if reading the access security fails, the access security will
 go to the default, not what it was before the failure.</p>
@@ -484,9 +509,12 @@ the same as used for access security in IOCs. In fact, both IOCs and the
 Gateway use much of the same access-security code. These rules and the
 concepts can be complicated and will not be reproduced in this document. See
 the<a href="#ChannelAccess"> Application Developers Guide</a> for more
-information. There is a sample file, GATEWAY.access, in the source
-distribution and reproduced <a href="GATEWAY.access">here</a> to get you
-started. The version in the distribution may be more recent.</p>
+information. It can be noted that user names are case sensitive and host
+names are not. WIN32 may use a different case than UNIX for the same account.
+In this case user names must be entered with both versions. There is a sample
+file, GATEWAY.access, in the source distribution and reproduced<a
+href="GATEWAY.access">here</a> to get you started. The version in the
+distribution may be more recent.</p>
 
 <p>The pvlist file is specific to the Gateway. Its function is to specify
 what process variable name patterns are allowed or denied and to optionally
@@ -616,6 +644,49 @@ access file</a>, where writes are logged for process variables that belong to
 the GatewayAdmin group. Using the <a href="GATEWAY.pvlist">sample pvlist
 file</a>, these would be those that fit the pattern "gateway.*Flag".</p>
 
+<h2><a name="BeaconAnomalies">Beacon Anomalies</a></h2>
+
+<p>A server sends beacons, which are broadcast UDP packets, at regular
+intervals, EPICS_CA_BEACON_PERIOD, 15 s by default. The clients, such as
+MEDM, monitor these heartbeats. When there is a beacon anomaly, defined as
+anything that is different from this regular pattern, the clients reissue
+search requests for their unconnected PVs.</p>
+
+<p>A search request is a series of 100 UDP packets sent at increasingly
+longer intervals. It takes approximately 8 min. to complete the sequence. In
+most cases a server responds on the first or second packet; the connection
+process between the server and the client begins; and the search sequence
+ends. However for those PVs that are not found, the potential for a
+connection to happen exists for approximately 8 min.</p>
+
+<p>The clients used to condsider a change to no beacons to also be a beacon
+anomaly, but this logic has been changed starting with EPICS 3.14.5. Now,
+when an MEDM loses connection with a server, it tries to hold that connection
+open and may not reissue search requests. This is in part to prevent
+search-request storms under bad network conditions. If the server actually
+goes down, the MEDMs should reissue outstanding search requests.</p>
+
+<p>Accordingly, when a server, including the Gateway comes up, it
+intentionally broadcasts an irregular pattern for a short time so the clients
+will know a new server is online and reissue their outstanding search
+requests in case it might have those PVs. The Gateway also broadcasts this
+irregular pattern when a PV beomes connected again after having been
+disconnected and also when <a href="#AccessSecurity">access security</a> is
+reread. This is so the MEDMs will know to try to reconnect.</p>
+
+<p>For security reasons some network administrators will not allow UDP
+broadcasts to cross subnet boundaries. If this is the case, then when the
+MEDM is on a different subnet than the Gateway, it will not see beacons and
+will not be able to tell if the Gateway has come up, This is a common case in
+large installations. Owing to the length of the search request sequence, if a
+server such as the Gateway goes down and comes back up within approximately 8
+min,. the MEDM will reconnect. Otherwise, it will not, unless something else
+happens to make it reissue its searches. One such thing is to try to connect
+to a new PV. This causes a client to reissue outstanding searches along with
+the search for the new one. In any event, Gateway administrators should be
+careful to not have a long delay between killing and restarting a Gateway if
+possible.</p>
+
 <h2><a name="Report">Reports</a></h2>
 
 <p>The Gateway prints three kinds of reports: (1) the Virtual Connection
@@ -624,8 +695,8 @@ variables, (2) the Process Variable Report, which includes all process
 variables grouped by state, and (3) the Access Security Report, which
 includes the allowed and denied process-variable patterns from the pvlist
 file, <strong>gateway.pvlist</strong>, by default. The Gateway prints its
-reports to stdout, which is usually rerouted to the log file via -log on the
-<a href="#Starting">command line</a>. These reports can be long.</p>
+reports to the report file, <strong>gateway.report</strong>, by default,
+appending them if the file already exists. These reports can be long.</p>
 
 <p>The reports can be initiated by setting the associated <a
 href="#ProcessVariables">internal process variable</a>, for example,
@@ -637,10 +708,10 @@ any combination of the three reports, as well as to reread the access
 security files. See the -command <a href="#Starting">command-line option</a>
 for more details and an example. The Process Variable Report can be executed
 by sending a USR2 signal. (Use "kill -USR2 &lt;gateway-pid&gt;".) The Gateway
-makes a file, <strong>Gateway</strong>, when it starts. The commands and the
-correct pids are printed in that file, so you can look at it to get the
-appropriate command lines. Signals and the <strong>Gateway</strong> file are
-not available on WIN32.</p>
+makes a file, <strong>gateway.killer</strong>, when it starts. The commands
+and the correct pids are printed in that file, so you can look at it to get
+the appropriate command lines. Signals and the
+<strong>gateway.killer</strong> file are not available on WIN32.</p>
 
 <h2><a name="ServerMode">Server Mode</a></h2>
 
@@ -782,11 +853,27 @@ above 10 Hz.</p>
 <p><strong>gateway.cpuFract</strong></p>
 
 <p>This is the fraction of the available CPU time that is being used by the
-Gateway. It is a good monitor of the load on the Gateway. On WIN32 the
-cpuFract is always 1 and on Linux, it is always 0. This is owing to their
-implementation of the clock() function. This process variable is thus not
-useful on these platforms, and you will need to use another tool to monitor
-CPU usage.</p>
+Gateway; that is, the CPU time divided by the elapsed time. It is a good
+monitor of the load on the Gateway. On WIN32 the cpuFract is always 1 and not
+useful. This is owing to their implementation of the clock() function. On
+Linux, threads are separate processes, and the CPU time for them is not
+included, only that for the main process. This is because clock() on Linux
+returns only the CPU time for the process that called it. If there is more
+than one processor, the cpuFract could exceed unity. Note that Top on Linux
+shows the CPU time divided by the number of processors and optionally lists
+all threads separately. Thus, on Linux, the Gateway cpuFract should agree
+with the Top value for the main Gateway process multiplied by the number of
+processors. You can use Top to monitor the CPU time for all the Gateway
+processes if you need that.</p>
+
+<p><strong>gateway.load</strong></p>
+
+<p>This is the load average for the machine on which the Gateway is running.
+The load average is the number of processes in the system run queue averaged
+over one minute. It is implemented by the getloadavg() function, and you can
+look at the man page for more information. It is the same as the process
+variable with the same name in IOCs. It is another way to monitor the load.
+On WIN32 it is always zero and not useful.</p>
 
 <p><strong>gateway.serverEventRate</strong></p>
 
@@ -810,21 +897,21 @@ the command file.</p>
 
 <p><strong>gateway.report1Flag</strong></p>
 
-<p>Writing a 1 to this process variable causes Report 1 to be written to the
-log file. Report 1 is the <a href="#Report">VC Report</a>.The process
+<p>Writing a 1 to this process variable causes Report 1 to be appended to the
+report file. Report 1 is the <a href="#Report">VC Report</a>.The process
 variable is reset to 0 afterward.</p>
 
 <p><strong>gateway.report2Flag</strong></p>
 
-<p>Writing a 1 to this process variable causes Report 2 to be written to the
-log file. Report 2 is the <a href="#Report">PV Report</a>.The process
+<p>Writing a 1 to this process variable causes Report 2 to be appended to the
+report file. Report 2 is the <a href="#Report">PV Report</a>.The process
 variable is reset to 0 afterward.</p>
 
 <p><strong>gateway.report3Flag</strong></p>
 
-<p>Writing a 1 to this process variable causes Report 3 to be written to the
-log file. Report 3 is the <a href="#Report">Access Security Report</a>. The
-process variable is reset to 0 afterward.</p>
+<p>Writing a 1 to this process variable causes Report 3 to be appended to the
+report file. Report 3 is the <a href="#Report">Access Security Report</a>.
+The process variable is reset to 0 afterward.</p>
 
 <p><strong>gateway.newAsFlag</strong></p>
 

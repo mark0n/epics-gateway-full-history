@@ -20,7 +20,7 @@ include $(TOP)/config/CONFIG_EXTENSIONS
 # GNU_REGEX_LIB = ../../../../regex-0.12
 
 # Optimization
-HOST_OPT = NO
+#HOST_OPT = NO
 
 # Compiler options
 #USR_CXXFLAGS += -xsb
@@ -33,9 +33,14 @@ ifeq ($(OS_CLASS),hp700)
 endif
 
 # Purify
+ifeq ($(OS_CLASS),solaris)
 #PURIFY=YES
 PURIFY_FLAGS = -first-only -chain-length=26 -max_threads=256
+# Put the cache files in the appropriate bin directory
+PURIFY_FLAGS += -always-use-cache-dir -cache-dir=$(shell $(PERL) $(TOP)/config/fullPathName.pl .)
+
 #CXX = purify -first-only -chain-length=26 -max_threads=160 $($(CPLUSPLUS)_$(CXXCMPLR))
+endif
 
 # Quantify
 #QUANTIFY=YES
@@ -105,6 +110,7 @@ include $(TOP)/config/RULES.Host
 xxxx:
 	@echo HOST_OPT: $(HOST_OPT)
 	@echo PURIFY: $(PURIFY)
+	@echo PURIFY_FLAGS: $(PURIFY_FLAGS)
 	@echo PURIFYCMD: $(PURIFYCMD)
 	@echo QUANTIFY: $(QUANTIFY)
 	@echo QUANTIFYCMD: $(QUANTIFYCMD)

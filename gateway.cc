@@ -97,6 +97,7 @@ void operator delete(void* x)
 //	-access file_name = access security file
 //	-command file_name = USR1 command list file
 //	-putlog file_name = putlog file
+//	-report file_name = report file
 //	-home directory = the program's home directory
 //	-connect_timeout number = clear PV connect requests every number seconds
 //	-inactive_timeout number = Hold inactive PV connections for number seconds
@@ -117,6 +118,7 @@ void operator delete(void* x)
 //	process variable list file = gateway.pvlist
 //	USR1 command list file = gateway.command
 //	putlog file = gateway.putlog
+//	report file = gateway.report
 //	log file = gateway.log
 //	debug level = 0 (none)
 //  connect_timeout = 1 second
@@ -138,24 +140,25 @@ void operator delete(void* x)
 #define PARM_HOME              4
 #define PARM_COMMAND           5
 #define PARM_PUTLOG            6
-#define PARM_CONNECT           7
-#define PARM_INACTIVE          8
-#define PARM_DEAD              9
-#define PARM_USAGE            10
-#define PARM_SERVER_IP        11
-#define PARM_CLIENT_IP        12
-#define PARM_SERVER_PORT      13
-#define PARM_CLIENT_PORT      14
-#define PARM_HELP             15
-#define PARM_SERVER           16
-#define PARM_RO               17
-#define PARM_UID              18
-#define PARM_PREFIX           19
-#define PARM_GID              20
-#define PARM_RECONNECT        21
-#define PARM_DISCONNECT       22
-#define PARM_MASK             23
-#define PARM_SERVER_IGNORE_IP 24
+#define PARM_REPORT            7
+#define PARM_CONNECT           8
+#define PARM_INACTIVE          9
+#define PARM_DEAD             10
+#define PARM_USAGE            11
+#define PARM_SERVER_IP        12
+#define PARM_CLIENT_IP        13
+#define PARM_SERVER_PORT      14
+#define PARM_CLIENT_PORT      15
+#define PARM_HELP             16
+#define PARM_SERVER           17
+#define PARM_RO               18
+#define PARM_UID              19
+#define PARM_PREFIX           20
+#define PARM_GID              21
+#define PARM_RECONNECT        22
+#define PARM_DISCONNECT       23
+#define PARM_MASK             24
+#define PARM_SERVER_IGNORE_IP 25
 
 #define HOME_DIR_SIZE    300
 
@@ -169,6 +172,7 @@ static int make_server=0;
 static char *home_directory;
 static const char *log_file=NULL;
 static const char *putlog_file=NULL;
+static const char *report_file=NULL;
 #ifndef WIN32
 static pid_t parent_pid;
 #endif
@@ -190,6 +194,7 @@ static PARM_STUFF ptable[] = {
     { "-access",              7, PARM_ACCESS,      "file_name" },
     { "-command",             8, PARM_COMMAND,     "file_name" },
     { "-putlog",              7, PARM_PUTLOG,      "file_name" },
+    { "-report",              7, PARM_REPORT,      "file_name" },
     { "-home",                5, PARM_HOME,        "directory" },
     { "-sip",                 4, PARM_SERVER_IP,   "IP_address" },
     { "-cip",                 4, PARM_CLIENT_IP,   "IP_address_list" },
@@ -396,6 +401,7 @@ static int startEverything(char *prefix)
 	fprintf(fp,"# pvlist file=<%s>\n",global_resources->listFile());
 	fprintf(fp,"# command file=<%s>\n",global_resources->commandFile());
 	fprintf(fp,"# putlog file=<%s>\n",global_resources->putlogFile());
+	fprintf(fp,"# report file=<%s>\n",global_resources->reportFile());
 	fprintf(fp,"# debug level=%d\n",global_resources->debugLevel());
 	fprintf(fp,"# dead timeout=%ld\n",global_resources->deadTimeout());
 	fprintf(fp,"# connect timeout=%ld\n",global_resources->connectTimeout());
@@ -736,6 +742,16 @@ int main(int argc, char** argv)
 						}
 					}
 					break;
+				case PARM_REPORT:
+					if(++i>=argc) no_error=0;
+					else {
+						if(argv[i][0]=='-') no_error=0;
+						else {
+							report_file=argv[i];
+							not_done=0;
+						}
+					}
+					break;
 				case PARM_ACCESS:
 					if(++i>=argc) no_error=0;
 					else {
@@ -939,8 +955,8 @@ int main(int argc, char** argv)
 		getcwd(home_directory,HOME_DIR_SIZE);
 
 		// Get the default resources. The values of access_file,
-		// pvlist_file, command_file, and putlog_file depend on
-		// whether the default filenames exist in the cwd.
+		// pvlist_file, command_file, putlog_file, and report_file
+		// depend on whether the default filenames exist in the cwd.
 		global_resources = new gateResources;
 		gateResources* gr = global_resources;
 
@@ -954,6 +970,7 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tpvlist=%s\n",gr->listFile());
 		fprintf(stderr,"\tcommand=%s\n",gr->commandFile());
 		fprintf(stderr,"\tputlog=%s\n",gr->putlogFile());
+		fprintf(stderr,"\treport=%s\n",gr->reportFile());
 		fprintf(stderr,"\tdead=%ld\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%ld\n",gr->connectTimeout());
 		fprintf(stderr,"\tdisconnect=%ld\n",gr->disconnectTimeout());
@@ -984,8 +1001,8 @@ int main(int argc, char** argv)
 	getcwd(home_directory,HOME_DIR_SIZE);
 
 	// Get the default resources. The values of access_file,
-	// pvlist_file, command_file, and putlog_file depend on
-	// whether the default filenames exist in the cwd.
+	// pvlist_file, command_file, putlog_file, and report_file depend
+	// on whether the default filenames exist in the cwd.
 	global_resources = new gateResources;
 	gateResources* gr = global_resources;
 
@@ -1002,6 +1019,7 @@ int main(int argc, char** argv)
 	if(pvlist_file)			gr->setListFile(pvlist_file);
 	if(command_file)		gr->setCommandFile(command_file);
 	if(putlog_file)	    	gr->setPutlogFile(putlog_file);
+	if(report_file)	    	gr->setReportFile(report_file);
 #ifndef WIN32
 	gr->setServerMode(make_server);
 #endif
@@ -1083,6 +1101,7 @@ int main(int argc, char** argv)
 		fprintf(stderr," list file = <%s>\n",gr->listFile());
 		fprintf(stderr," command file = <%s>\n",gr->commandFile());
 		fprintf(stderr," putlog file = <%s>\n",gr->putlogFile());
+		fprintf(stderr," report file = <%s>\n",gr->reportFile());
 		fprintf(stderr," debug level = %d\n",gr->debugLevel());
 		fprintf(stderr," connect timeout = %ld\n",gr->connectTimeout());
 		fprintf(stderr," disconnect timeout = %ld\n",gr->disconnectTimeout());
@@ -1162,6 +1181,9 @@ static void print_instructions(void)
 	
 	pr(stderr,"-putlog file_name: Name of file where gateway put logging goes.\n");
 	pr(stderr," Put logging is specified with TRAPWRITE in the access file.\n\n");
+	
+	pr(stderr,"-report file_name: Name of file where gateway reports go.\n");
+	pr(stderr," Reports are appended to this file if it exists.\n\n");
 	
 	pr(stderr,"-home directory: Home directory where all your gateway\n");
 	pr(stderr," configuration files are kept where log and command files go.\n\n");

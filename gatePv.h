@@ -116,6 +116,8 @@ public:
 	const char* name(void) const { return pv_name; }
 	gateVcData* VC(void) const { return vc; }
 	gateAsEntry* getEntry(void) const { return asentry; }
+	void removeEntry(void) { asentry = NULL; }
+	void resetEntry(gateAsEntry *asentryIn) { asentry = asentryIn; }
 	gatePvState getState(void) const { return pv_state; }
 	const char* getStateName(void) const { return pv_state_names[pv_state]; }
 	int getStatus(void) const { return status; }
@@ -146,7 +148,11 @@ public:
 	time_t timeActive(void) const;
 	time_t timeDead(void) const;
 	time_t timeAlive(void) const;
-	time_t timeLastTrans(void) const;
+
+#if 0
+	// KE: Unused
+	time_t timeSinceLastTrans(void) const;
+#endif
 	time_t timeConnecting(void) const;
 	
 	void setVC(gateVcData* t) { vc=t; }
@@ -214,7 +220,7 @@ private:
 	int complete_flag; // true if ADD/REMOVE required after completion
 	
 	time_t no_connect_time; // when no one connected to held PV
-	time_t dead_alive_time; // when PV went dead / came alive
+	time_t dead_alive_time; // when PV went from dead to alive
 	time_t last_trans_time; // last transaction occurred at this time
 
 	// Callback functions used in eventCB
@@ -252,13 +258,17 @@ inline time_t gatePvData::timeInactive(void) const
 	{ return inactive()?(time(NULL)-no_connect_time):0; }
 inline time_t gatePvData::timeActive(void) const
 	{ return active()?(time(NULL)-no_connect_time):0; }
-inline time_t gatePvData::timeLastTrans(void) const
+#if 0
+	// KE: Unused
+inline time_t gatePvData::timeSinceLastTrans(void) const
 	{ return time(NULL)-last_trans_time; }
+#endif
 
 inline time_t gatePvData::timeDead(void) const
 {
-	time_t x=time(NULL)-dead_alive_time;
-	time_t y=timeLastTrans();
+	time_t now=time(NULL);
+	time_t x=now-dead_alive_time;
+	time_t y=now-last_trans_time;
 	if(dead())
 		return (x<y)?x:y;
 	else
@@ -270,10 +280,11 @@ inline time_t gatePvData::timeAlive(void) const
 inline time_t gatePvData::timeConnecting(void) const
 	{ return (time(NULL)-dead_alive_time); }
 
-inline void gatePvData::setInactiveTime(void) { time(&no_connect_time); }
-inline void gatePvData::setActiveTime(void)   { time(&no_connect_time); }
-inline void gatePvData::setAliveTime(void)    { time(&dead_alive_time); }
-inline void gatePvData::setTransTime(void)    { time(&last_trans_time); }
+inline void gatePvData::setReconnectTime(void) { time(&dead_alive_time); }
+inline void gatePvData::setInactiveTime(void)  { time(&no_connect_time); }
+inline void gatePvData::setActiveTime(void)    { time(&no_connect_time); }
+inline void gatePvData::setAliveTime(void)     { time(&dead_alive_time); }
+inline void gatePvData::setTransTime(void)     { time(&last_trans_time); }
 
 inline void gatePvData::setTimes(void)
 {

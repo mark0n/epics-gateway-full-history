@@ -33,6 +33,7 @@
 #define DEBUG_TIMESTAMP 0
 #define DEBUG_RTYP 0
 #define DEBUG_DELAY 0
+#define DEBUG_ACCESS 0
 
 #include <stdio.h>
 #include <string.h>
@@ -104,10 +105,16 @@ void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 // removes it from its chan_list in the casPv destructor.  This
 // prevents anyone, including the server, from calling removeChan when
 // the casPv is gone.
+
+// The caller must provide storage for user and host in asAddClient in
+// gateAsClient::gateAsClient.  We assume this storage is in the
+// server and just keep pointers to it.
 gateChan::gateChan(const casCtx &ctx, casPV *casPvIn, gateAsEntry *asentry,
-  const char * const user, const char * const host) :
+  const char * const userIn, const char * const hostIn) :
 	casChannel(ctx),
-	casPv(casPvIn)
+	casPv(casPvIn),
+	user(userIn),
+	host(hostIn)
 {
 	
 	asclient=new gateAsClient(asentry,user,host);
@@ -119,33 +126,75 @@ gateChan::~gateChan(void)
 	deleteAsClient();
 }
 
-#if 0
-// KE: Unused
+#ifdef SUPPORT_OWNER_CHANGE
+// Virtual function from casChannel, not called from Gateway.  It is a
+// security hole to support this, and it is no longer implemented in
+// base.
 void gateChan::setOwner(const char* const u, const char* const h)
-	{ asclient->changeInfo(u,h); }
+{
+	asclient->changeInfo(u,h);
+}
 #endif
 
-const char* gateChan::getUser(void) { return asclient->user(); }
-const char* gateChan::getHost(void) { return asclient->host(); }
-
-void gateChan::post_rights(void* v)
+// Access security userFunc that calls postAccessRightsEvent in the
+// server.  The server then notifies its clients.  With MEDM, for
+// example, if there is no write access, it would then display a
+// circle with a bar.  The values of read and write access are not
+// stored in the server, but rather readAcess() or writeAcccess() is
+// called before each operation.
+void gateChan::post_rights(void* userPvt)
 {
-	gateChan *p = (gateChan *)v;
+#if DEBUG_ACCESS
+	printf("gateChan::post_rights:\n");
+#endif
+	gateChan *pChan = (gateChan *)userPvt;
 	// Do not post the event if the casPv is NULL, which means the
 	// gateChan has been removed from the gateVcData::chan_list which
 	// means the gateChan is not relevant anymore, even though it may
 	// not yet have been destroyed.  Actually, post_rights should not
 	// be called if casPv is NULL since the asclient should also have
 	// been destroyed in that event, but it is a safety feature.
-	if(p && p->getCasPv()) {
-		p->postAccessRightsEvent();
+	if(pChan && pChan->getCasPv()) {
+		pChan->postAccessRightsEvent();
 	}
 }
 
-void gateChan::report(void)
+void gateChan::report(FILE *fp)
 {
-	printf("  %s@%s (%s access)\n",getUser(),getHost(),
+	fprintf(fp,"  %s@%s (%s access)\n",getUser(),getHost(),
 	  readAccess()?(writeAccess()?"read/write":"read only"):"no");
+}
+
+void gateChan::resetAsClient(gateAsEntry *asentry)
+{
+#if DEBUG_ACCESS
+	printf("gateChan::addAsClient asentry=%p asclient=%p\n",
+	  asentry,asclient);
+#endif
+
+	if(asclient) {
+		delete asclient;
+		asclient=NULL;
+	}
+
+    // Don't do anything else if the casPv is NULL, indicating it is
+	// being destroyed or if the asentry is NULL
+	if(!casPv || !asentry) return;
+	
+	asclient=new gateAsClient(asentry,user,host);
+	if(asclient) {
+		asclient->setUserFunction(post_rights,this);
+	}
+#if DEBUG_ACCESS
+	printf("user=%s host=%s asentry=%p asclient=%p\n",
+	  user,host,asclient);
+	report(stdout);
+#endif
+	// Notify the server.  postAccessRightsEvent() just causes the
+	// server to notify its clients.  The access is not stored in the
+	// server, but rather readAcess() or writeAcccess() is called
+	// before each operation.
+	postAccessRightsEvent();
 }
 
 void gateChan::deleteAsClient(void)
@@ -187,8 +236,8 @@ caStatus gateVcChan::write(const casCtx &ctx, const gdd &value)
 		if(fp) {
 			fprintf(fp,"%s %s@%s %s\n",
 			  timeStamp(),
-			  asclient->user()?asclient->user():"Unknown",
-			  asclient->host()?asclient->host():"Unknown",
+			  user?user:"Unknown",
+			  host?host:"Unknown",
 			  vc && vc->getName()?vc->getName():"Unknown");
 			fflush(fp);
 		}
@@ -199,17 +248,31 @@ caStatus gateVcChan::write(const casCtx &ctx, const gdd &value)
 	else return S_casApp_noSupport;
 }
 
+// Called from the server to determine access before each read
 bool gateVcChan::readAccess(void) const
 {
 	gateVcData *vc=(gateVcData *)casPv;
+
+#if DEBUG_ACCESS && 0
+	printf("gateVcChan::readAccess: %s asclient=%p ret=%d\n",
+	  vc?vc->getName():"NULL VC",asclient,
+	  (asclient && asclient->readAccess() && vc && vc->readAccess())?1:0);
+#endif
 
 	return (asclient && asclient->readAccess() && vc && vc->readAccess())?
 	  true:false;
 }
 
+// Called from the server to determine access before each write
 bool gateVcChan::writeAccess(void) const
 {
 	gateVcData *vc=(gateVcData *)casPv;
+
+#if DEBUG_ACCESS && 0
+	printf("gateVcChan::writeAccess: %s asclient=%p ret=%d\n",
+	  vc?vc->getName():"NULL VC",asclient,
+	  (asclient && asclient->writeAccess() && vc && vc->writeAccess())?1:0);
+#endif
 
 	return (asclient && asclient->writeAccess() && vc && vc->writeAccess())?
 	  true:false;
@@ -225,8 +288,11 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	event_count(0),
 #endif
 	read_access(aitTrue),
+#if 0
+	//KE: Unused
 	time_last_trans(0),
 	time_last_alh_trans(0),
+#endif
 	status(0),
 	asentry(NULL),
 	pv_state(gateVcClear),
@@ -359,13 +425,13 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 	return chan;
 }
 
-void gateVcData::report(void)
+void gateVcData::report(FILE *fp)
 {
-	printf("%-30s event rate = %5.2f\n",pv_name,pv->eventRate());
+	fprintf(fp,"%-30s event rate = %5.2f\n",pv_name,pv->eventRate());
 
 	tsDLIter<gateVcChan> iter=chan_list.firstIter();
 	while(iter.valid()) {
-		iter->report();
+		iter->report(fp);
 		iter++;
 	}
 }
@@ -734,7 +800,8 @@ void gateVcData::flushAsyncReadQueue(void)
 	gateAsyncR* asyncr;
 
 	while((asyncr=rio.first()))	{
-		gateDebug2(5,"gateVcData::flushAsyncReadQueue() posting asyncr %p (DD at %p)\n",
+		gateDebug2(5,"gateVcData::flushAsyncReadQueue() "
+		  "posting asyncr %p (DD at %p)\n",
 		  (void *)asyncr,(void *)&asyncr->DD());
 		asyncr->removeFromQueue();
 		
@@ -806,10 +873,6 @@ void gateVcData::vcPostEvent(void)
 		  (void *)event_data);
 		if(event_data->isAtomic())
 		{
-			//t=timeLastTrans();
-			// hardcoded to 1 second for monitor updates
-			//if(t>=1)
-			//{
 #if DEBUG_EVENT_DATA
 			if(pv->fieldType() == DBF_ENUM) {
 				heading("gateVcData::vcPostEvent",name());
@@ -823,8 +886,6 @@ void gateVcData::vcPostEvent(void)
 #ifdef RATE_STATS
 			mrg->post_event_count++;
 #endif
-			//setTransTime();
-			//}
 		}
 		else
 		{
@@ -844,9 +905,6 @@ void gateVcData::vcPostEvent(void)
 #ifdef RATE_STATS
 				mrg->post_event_count++;
 #endif
-			// if(t>=1)
-			// 	event_count=0;
-			// setTransTime();
 		}
 	}
 }
@@ -1174,6 +1232,40 @@ aitIndex gateVcData::maximumElements(void) const
 	return pv?pv->maxElements():0;
 }
 
+void gateVcData::removeEntry(void)
+{
+#if DEBUG_ACCESS
+	printf("gateVcData::removeEntry %s asentry=%p\n",
+	  getName(),asentry);
+#endif
+	// Replace the pointer in the gateVcData
+	asentry=NULL;
+
+	// Loop over gateVcChan's and delete the client
+	tsDLIter<gateVcChan> iter=chan_list.firstIter();
+	while(iter.valid()) {
+		iter->deleteAsClient();
+		iter++;
+	}
+}
+
+void gateVcData::resetEntry(gateAsEntry *asentryIn)
+{
+#if DEBUG_ACCESS
+	printf("gateVcData::resetEntry %s asentry=%p asentryIn=%p\n",
+	  getName(),asentry,asentryIn);
+#endif
+	// Replace the pointer in the gateVcData
+	asentry=asentryIn;
+
+	// Loop over gateVcChan's
+	tsDLIter<gateVcChan> iter=chan_list.firstIter();
+	while(iter.valid()) {
+		iter->resetAsClient(asentry);
+		iter++;
+	}
+}
+
 void gateVcData::setReadAccess(aitBool b)
 {
 	read_access=b;
@@ -1190,6 +1282,7 @@ void gateVcData::setWriteAccess(aitBool b)
 	postAccessRights();
 }
 
+// Loops over all channels and calls their postAccessRights event
 void gateVcData::postAccessRights(void)
 {
 	gateDebug0(5,"gateVcData::postAccessRights() posting access rights\n");

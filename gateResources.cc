@@ -81,6 +81,7 @@ gateResources::gateResources(void)
 	// Miscellaneous initializations
 	putlog_file=NULL;
 	putlogFp=NULL;
+	report_file=strDup(GATE_REPORT_FILE);
     debug_level=0;
     ro=0;
 	serverMode=false;
@@ -116,6 +117,7 @@ gateResources::~gateResources(void)
 	if(pvlist_file)	delete [] pvlist_file;
 	if(command_file) delete [] command_file;
 	if(putlog_file) delete [] putlog_file;
+	if(report_file) delete [] report_file;
 }
 
 int gateResources::appValue=0;
@@ -152,6 +154,13 @@ int gateResources::setPutlogFile(const char* file)
 {
 	if(putlog_file) delete [] putlog_file;
 	putlog_file=strDup(file);
+	return 0;
+}
+
+int gateResources::setReportFile(const char* file)
+{
+	if(report_file) delete [] report_file;
+	report_file=strDup(file);
 	return 0;
 }
 

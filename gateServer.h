@@ -191,17 +191,21 @@ public:
 	gateServer(char *prefix=NULL);
 	virtual ~gateServer(void);
 
-	// CAS virtual overloads
+	// caServer virtual overloads
 	virtual pvExistReturn pvExistTest(const casCtx& ctx, const caNetAddr& netAddr,
 	  const char* pvname);
 	virtual pvExistReturn pvExistTest(const casCtx& ctx, const char* pvname);
 	virtual pvCreateReturn createPV(const casCtx& ctx, const char* pvname);
+
+	// caServer overwrite
+    void generateBeaconAnomaly();
 
 	void mainLoop(void);
 	void gateCommands(const char* cfile);
 	void newAs(void);
 	void report1(void);
 	void report2(void);
+	void report3(void);
 	gateAs* getAs(void) { return as; }
 	casEventMask select_mask;
 	casEventMask alh_mask;
@@ -270,7 +274,7 @@ public:
 	time_t timeDeadCheck(void) const;
 	time_t timeInactiveCheck(void) const;
 	time_t timeConnectCleanup(void) const;
-	time_t timeFirstReconnect(void) const;
+	time_t timeSinceLastBeacon(void) const;
 
 	tsDLHashList<gateVcData>* vcList(void)		{ return &vc_list; }
 	tsDLHashList<gatePvNode>* pvList(void)		{ return &pv_list; }
@@ -290,7 +294,7 @@ private:
 	time_t last_dead_cleanup;		// checked dead PVs for cleanup here
 	time_t last_inactive_cleanup;	// checked inactive PVs for cleanup here
 	time_t last_connect_cleanup;	// cleared out connect pending list here
-	time_t first_reconnect_time;	// first timestamp of a reconnect storm
+	time_t last_beacon_time;	    // last time a beacon was sent
 
 	int suppressed_refresh_flag;	// flag to remember suppressed beacons
 
@@ -325,16 +329,17 @@ inline time_t gateServer::timeInactiveCheck(void) const
 	{ return time(NULL)-last_inactive_cleanup; }
 inline time_t gateServer::timeConnectCleanup(void) const
 	{ return time(NULL)-last_connect_cleanup; }
-inline time_t gateServer::timeFirstReconnect(void) const
-	{ return time(NULL)-first_reconnect_time; }
+inline time_t gateServer::timeSinceLastBeacon(void) const
+	{ return time(NULL)-last_beacon_time; }
+
 inline void gateServer::setDeadCheckTime(void)
-	{ time(&last_dead_cleanup); }
+    { time(&last_dead_cleanup); }
 inline void gateServer::setInactiveCheckTime(void)
 	{ time(&last_inactive_cleanup); }
 inline void gateServer::setConnectCheckTime(void)
 	{ time(&last_connect_cleanup); }
 inline void gateServer::setFirstReconnectTime(void)
-	{ time(&first_reconnect_time); }
+	{ time(&last_beacon_time); }
 
 inline void gateServer::markRefreshSuppressed(void)
 	{ suppressed_refresh_flag = 1; }

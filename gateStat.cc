@@ -20,6 +20,7 @@
 
 #define DEBUG_UMR 0
 #define DEBUG_POST_DATA 0
+#define DEBUG_ACCESS 0
 
 #define USE_OSI_TIME 1
 
@@ -100,12 +101,25 @@ caStatus gateStatChan::write(const casCtx &ctx, const gdd &value)
 
 bool gateStatChan::readAccess(void) const
 {
-	return (asclient->readAccess())?true:false;
+#if DEBUG_ACCESS && 0
+	gateStat *pStat=(gateStat *)getCasPv();
+	printf("gateStatChan::readAccess: %s asclient=%p ret=%d\n",
+	  pStat?pStat->getName():"NULL casPV",
+	  asclient,(asclient->readAccess())?1:0);
+#endif
+
+	return (asclient && asclient->readAccess())?true:false;
 }
 
 bool gateStatChan::writeAccess(void) const
 {
-	return (asclient->writeAccess())?true:false;
+#if DEBUG_ACCESS && 0
+	gateStat *pStat=(gateStat *)getCasPv();
+	printf("gateStatChan::writeAccess: %s asclient=%p ret=%d\n",
+	  pStat?pStat->getName():"NULL casPV",
+	  asclient,(asclient->writeAccess())?1:0);
+#endif
+	return (asclient && asclient->writeAccess())?true:false;
 }
 
 //////// gateStat (derived from casPV)
@@ -167,6 +181,16 @@ gateStat::~gateStat(void)
 	if(value) value->unreference();
 	if(attr) attr->unreference();
 	if(name) delete [] name;
+
+	// Clear the chan_list to insure the gateChan's do not call the
+	// gateStat to remove them after the gateStat is gone. removeChan
+	// also sets the pChan->vc to NULL, the only really necessary
+	// thing to do.
+	gateStatChan *pChan;
+	while((pChan=chan_list.first()))	{
+		removeChan(pChan);
+		pChan->deleteAsClient();
+	}
 }
 
 const char *gateStat::getName() const
@@ -274,13 +298,47 @@ caStatus gateStat::read(const casCtx & /*ctx*/, gdd &dd)
 	return retVal;
 }
 
-void gateStat::report(void)
+void gateStat::removeEntry(void)
 {
-	printf("%-30s\n",getName());
+#if DEBUG_ACCESS
+	printf("gateStat::removeEntry %s asentry=%p\n",
+	  getName(),asentry);
+#endif
+	// Replace the pointer in the gateVcData
+	asentry=NULL;
+
+	// Loop over gateChan's
+	tsDLIter<gateStatChan> iter=chan_list.firstIter();
+	while(iter.valid()) {
+		iter->deleteAsClient();
+		iter++;
+	}
+}
+
+void gateStat::resetEntry(gateAsEntry *asentryIn)
+{
+#if DEBUG_ACCESS
+	printf("gateStat::resetEntry %s asentry=%p asentryIn=%p\n",
+	  getName(),asentry,asentryIn);
+#endif
+	// Replace the pointer in the gateVcData
+	asentry=asentryIn;
+
+	// Loop over gateChan's
+	tsDLIter<gateStatChan> iter=chan_list.firstIter();
+	while(iter.valid()) {
+		iter->resetAsClient(asentry);
+		iter++;
+	}
+}
+
+void gateStat::report(FILE *fp)
+{
+	fprintf(fp,"%-30s\n",getName());
 
 	tsDLIter<gateStatChan> iter=chan_list.firstIter();
 	while(iter.valid()) {
-		iter->report();
+		iter->report(fp);
 		iter++;
 	}
 }

@@ -59,6 +59,9 @@ public:
 	
 	caStatus write(const casCtx &ctx, const gdd &value, gateChan &chan);
 
+    gateAsEntry* getEntry(void) const { return asentry; }
+	void removeEntry(void);
+	void resetEntry(gateAsEntry *asentryIn);
 	void addChan(gateStatChan *chan) { chan_list.add(*chan); }
 	void removeChan(gateStatChan *chan) {
 		chan_list.remove(*chan); chan->setCasPv(NULL); }
@@ -67,8 +70,7 @@ public:
 	void postData(unsigned long val);
 	void postData(double val);
 	
-    gateAsEntry* getEntry(void) const { return asentry; }
-	void report(void);
+	void report(FILE *fp);
 
 private:
 	gdd *value;

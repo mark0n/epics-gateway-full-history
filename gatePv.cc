@@ -196,6 +196,10 @@ gatePvData::~gatePvData(void)
 	printf("~gatePvdata: name=%s total_pv=%ld total_alive=%ld\n",
 	  name(),mrg->total_pv),mrg->total_alive;
 #endif
+	if(vc) {
+		delete vc;
+		vc=NULL;
+	}
 	unmonitor();
 	alhUnmonitor();
 	status=ca_clear_channel(chID);
@@ -470,6 +474,9 @@ int gatePvData::life(void)
 		mrg->setStat(statInactive,++mrg->total_inactive);
 		mrg->setStat(statAlive,++mrg->total_alive);
 #endif
+		// Generate a beacon anomaly.  Rely on the gateServer to prevent
+		// this from happening too frequently.
+		mrg->generateBeaconAnomaly();
 		break;
 	case gatePvDead:
 		gateDebug1(3,"gatePvData::life() %s PV\n",getStateName());
@@ -516,7 +523,11 @@ int gatePvData::death(void)
 	switch(getState())
 	{
 	case gatePvActive:
-		if(vc) delete vc; // get rid of VC
+		// Get rid of VC
+		if(vc) {
+			delete vc;
+			vc=NULL;
+		}
 		setState(gatePvDisconnect);
 #ifdef STAT_PVS
 		mrg->setStat(statActive,--mrg->total_active);
@@ -538,7 +549,11 @@ int gatePvData::death(void)
 		// Flush any accumulated exist tests
 		if(eio.count()) flushAsyncETQueue(pverDoesNotExistHere);
 
-		if(needAddRemove() && vc) delete vc; // should never be the case
+		if(needAddRemove() && vc) {
+			// Should never be the case
+			delete vc;
+			vc=NULL;
+		}
 
 		// Leave PV on connecting list, add to the PV list as dead
 		// Server's connectCleanup() will remove the PV from the
@@ -884,21 +899,6 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 				   (void *)asynce);
 		asynce->removeFromQueue();
 		asynce->postIOCompletion(pvExistReturn(er));
-	}
-}
-
-void gatePvData::setReconnectTime(void)
-{
-	time(&dead_alive_time);
-	if(!mrg->timeFirstReconnect()
-	   || (dead_alive_time - mrg->timeFirstReconnect()
-		   >= global_resources->reconnectInhibit()))
-	{
-		mrg->generateBeaconAnomaly();
-		mrg->setFirstReconnectTime();
-		mrg->markNoRefreshSuppressed();
-	} else {
-		mrg->markRefreshSuppressed();
 	}
 }
 

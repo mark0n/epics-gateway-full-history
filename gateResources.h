@@ -21,6 +21,7 @@
 #define GATE_PV_ACCESS_FILE "gateway.access"
 #define GATE_COMMAND_FILE   "gateway.command"
 #define GATE_PUTLOG_FILE    "gateway.putlog"
+#define GATE_REPORT_FILE    "gateway.report"
 #ifdef RESERVE_FOPEN_FD
 # define GATE_RESERVE_FILE  "gateway.reserve"
 #endif
@@ -66,6 +67,7 @@ public:
 	int setAccessFile(const char* file);
 	int setCommandFile(const char* file);
 	int setPutlogFile(const char* file);
+	int setReportFile(const char* file);
 	int setUpAccessSecurity(void);
 	int setDebugLevel(int level);
 
@@ -106,6 +108,7 @@ public:
 	const char* accessFile(void) const	{ return access_file?access_file:"NULL"; }
 	const char* commandFile(void) const	{ return command_file?command_file:"NULL"; }
 	const char* putlogFile(void) const	{ return putlog_file?putlog_file:"NULL"; }
+	const char* reportFile(void) const	{ return report_file?report_file:"NULL"; }
 
 	void setPutlogFp(FILE* fp) { putlogFp = fp; }
 	FILE* getPutlogFp(void) const { return putlogFp; }
@@ -114,6 +117,7 @@ public:
 	bool getServerMode(void) const       { return serverMode; }
 
 	gateAs* getAs(void);
+	bool isAsSetUp(void) const { return as?true:false; }
 
 	// here for convenience
 	static int appValue;
@@ -126,7 +130,7 @@ public:
 	static int appSTSAckString;
 
 private:
-	char *access_file, *pvlist_file, *command_file, *putlog_file;
+	char *access_file, *pvlist_file, *command_file, *putlog_file, *report_file;
 	int debug_level, ro;
 	bool serverMode;
 	unsigned long event_mask;

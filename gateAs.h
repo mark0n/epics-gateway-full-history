@@ -34,6 +34,7 @@
 extern "C" {
 #include <ellLib.h>
 #include "asLib.h"
+#include "errMdef.h"
 #include "gpHash.h"
 #include "asTrapWrite.h"	
 }
@@ -73,17 +74,22 @@ extern "C" {
 #define GATE_DENY_FIRST 0
 #define GATE_ALLOW_FIRST 1
 
+// Function prototypes
+void gateAsCa(void);
+void gateAsCaClear(void);
+
 class gateVcData;
 class gateAsEntry;
-class gateAsHost;
 class gateAsLine;
 
 typedef tsSLList<gateAsEntry> gateAsList;
-typedef tsSLList<gateAsHost> gateHostList;
 typedef tsSLList<gateAsLine> gateLineList;
 
 //  ----------------- AS host (to build up host list) ------------------ 
 
+#ifdef USE_DENYFROM
+class gateAsHost;
+typedef tsSLList<gateAsHost> gateHostList;
 class gateAsHost : public tsSLNode<gateAsHost>
 {
 public:
@@ -92,58 +98,23 @@ public:
 	gateAsHost(void) : host(NULL) { }
 	gateAsHost(const char* name) : host(name) { }
 };
+#endif
 
 //  ------------ AS entry (deny or deny from or alias or allow) ------------ 
 
 class gateAsEntry : public tsSLNode<gateAsEntry>
 {
 public:
-	gateAsEntry(void) :
-	  pattern(NULL), alias(NULL), group(NULL), level(1), asmemberpvt(NULL) { }
-	
-	// ALLOW / ALIAS
-	gateAsEntry(const char* pat, //   PV name pattern (regex)
-	  const char* rname,         //   Real name substitution pattern
-	  const char* g,             //   ASG
-	  int l) :                   //   ASL
-	  pattern(pat), alias(rname), group(g), level(l), asmemberpvt(NULL) { }
-	
+	gateAsEntry(const char* pattern=NULL, const char* realname=NULL,
+	  const char* asg=NULL, int asl=1);
+	~gateAsEntry(void);
+
+	aitBool init(gateAsList& n, int line);
 #ifdef USE_DENYFROM
-	// DENY / DENY FROM
-#else
-	// DENY
+	aitBool init(const char* host, tsHash<gateAsList>& h, gateHostList& hl,
+	  int line);
 #endif
-	gateAsEntry(const char* pat) :	//   PV name pattern (regex)
-	  pattern(pat), alias(NULL), group(NULL), level(1), asmemberpvt(NULL) { }
-	
-	aitBool init(gateAsList& n, int line) {
-		if (compilePattern(line)==aitFalse) return aitFalse;
-		n.add(*this);
-		if (group == NULL || asAddMember(&asmemberpvt,(char*)group) != 0) asmemberpvt = NULL;
-		else asPutMemberPvt(asmemberpvt,this);
-		return aitTrue;
-	}
-	
-#ifdef USE_DENYFROM
-	aitBool init(const char* host,	// Host name to deny
-	  tsHash<gateAsList>& h,        // Where this entry is added to
-	  gateHostList& hl,				// Where a new key should be added
-	  int line) {					// Line number
-		gateAsList* l;
-		
-		if(compilePattern(line)==aitFalse) return aitFalse;
-		if(h.find(host,l)==0)
-		  l->add(*this);
-		else
-		{
-			l = new gateAsList;
-			l->add(*this);
-			h.add(host,*l);
-			hl.add(*(new gateAsHost(host)));
-		}
-		return aitTrue;
-	}
-#endif
+	long removeMember(void);
 	
 	void getRealName(const char* pv, char* real, int len);
 	
@@ -157,18 +128,7 @@ public:
 	struct re_registers regs;
 	
 private:
-	aitBool compilePattern(int line) {
-		const char *err;
-		pat_buff.translate=0; pat_buff.fastmap=0;
-		pat_buff.allocated=0; pat_buff.buffer=0;
-		
-		if((err = re_compile_pattern(pattern, strlen(pattern), &pat_buff)))
-		{
-			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, pattern, err);
-			return aitFalse;
-		}
-		return aitTrue;
-	}
+	aitBool compilePattern(int line);
 };
 
 //  -------------- AS node (information for CAS Channels) --------------
@@ -187,8 +147,11 @@ public:
 	
 	gateAsEntry* getEntry(void)
 	  { return asentry; }
-#if 0
-	// KE: Not used
+
+#ifdef SUPPORT_OWNER_CHANGE
+    // Used in virtual function setOwner from casChannel, not called
+    // from Gateway.  It is a security hole to support this, and it is
+    // no longer implemented in base.
 	long changeInfo(const char* user, const char* host)
 	  { return asChangeClient(asclientpvt,asentry->level,(char*)user,(char*)host);}
 #endif
@@ -230,8 +193,7 @@ public:
 class gateAs
 {
 public:
-	gateAs(const char* pvlist_file, const char* as_file_name);
-	gateAs(const char* pvlist_file);
+	gateAs(const char* pvlist_file, const char* as_file=NULL);
 	~gateAs(void);
 
 #ifdef USE_DENYFROM
@@ -243,8 +205,9 @@ public:
 	
 	int readPvList(const char* pvlist_file);
 	void report(FILE*);
-	static long reInitialize(const char* as_file_name);
+	long reInitialize(const char* as_file, const char* pvlist_file);
 
+	// These are static only so they can be used in readFunc callback
 	static const char* default_group;
 	static const char* default_pattern;
 
@@ -252,42 +215,22 @@ private:
 #ifdef USE_DENYFROM
 	bool denyFromListUsed;
 	tsHash<gateAsList> deny_from_table;
+	gateHostList host_list;
 #endif
 	gateAsList deny_list;
 	gateAsList allow_list;
-	gateHostList host_list;
 	gateLineList line_list;
 
+	long initialize(const char* as_file);
+	void clearAsList(gateAsList& list);
+	void clearAsList(gateLineList& list);
+	gateAsEntry* findEntryInList(const char* pv, gateAsList& list) const;
 
+	// These are static only so they can be used in readFunc callback
 	static unsigned char eval_order;
-
-	// only one set of access security rules allowed in a program
 	static aitBool rules_installed;
 	static aitBool use_default_rules;
 	static FILE* rules_fd;
-	static long initialize(const char* as_file_name);
-
-	void deleteAsList(gateAsList& list)
-	{
-		while(list.first()) list.get();
-	}
-
-	void deleteAsList(tsSLList<gateAsLine>& list)
-    {
-		while(list.first()) list.get();
-	}
-
-	gateAsEntry* findEntryInList(const char* pv, gateAsList& list) const
-	{
-		tsSLIter<gateAsEntry> pi = list.firstIter();
-
-		while(pi.pointer()) {
-			if(re_match(&pi->pat_buff,pv,strlen(pv),0,&pi->regs) ==
-			  (int)strlen(pv)) break;
-			pi++;
-		}
-		return pi.pointer();
-	}
 
 public:
 	static int readFunc(char* buf, int max_size);

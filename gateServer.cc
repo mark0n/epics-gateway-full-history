@@ -24,7 +24,7 @@
  *
  *********************************************************************-*/
 
-#define DEBUG_FD 1
+#define DEBUG_FD 0
 #define DEBUG_SET_STAT 0
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
@@ -32,6 +32,7 @@
 #define DEBUG_EXIST 0
 #define DEBUG_DELAY 0
 #define DEBUG_CLOCK 0
+#define DEBUG_ACCESS 0
 
 #ifdef __linux__
 #undef USE_LINUX_PROC_FOR_CPU
@@ -95,7 +96,6 @@
 // Function Prototypes
 void gatewayServer(char *prefix);
 void printRecentHistory(void);
-void gateAsCa(void);
 
 #ifdef __linux__
 # ifdef USE_LINUX_PROC_FOR_CPU
@@ -207,8 +207,14 @@ void gateServer::mainLoop(void)
 	// Establish an errorLog listener
 	errlogAddListener(::errlogCB,NULL);
 
+	// This should create as since this is the first call to getAs()
 	as=global_resources->getAs();
-	gateAsCa(); // putrid hack for access security calculation rules
+	if(!as) {
+		printf("%s gateServer::mainLoop: Failed to set up access security\n",
+		  timeStamp());
+		exit(-1);
+	}
+	gateAsCa();
 	// as->report(stdout);
 
 #ifndef WIN32
@@ -224,7 +230,6 @@ void gateServer::mainLoop(void)
 #endif
 	time(&start_time);
 
-	first_reconnect_time = 0;
 	markNoRefreshSuppressed();
 
 #ifdef USE_LINUX_PROC_FOR_CPU
@@ -337,7 +342,7 @@ void gateServer::mainLoop(void)
 			setStat(statReport2Flag,0ul);
 		}
 		if(report3_flag) {
-			as->report(stdout);
+			report3();
 			report3_flag=0;
 			setStat(statReport3Flag,0ul);
 		}
@@ -382,6 +387,26 @@ void gateServer::mainLoop(void)
 # endif
 #endif
 
+	}
+}
+
+// This is a wrapper around caServer::generateBeaconAnomaly.  Generate
+// a beacon anomaly as long as the time since the last one exceeds the
+// reconnect inhibit time.  (The server may also prevent too frequent
+// beacon anomalies.)  If it is not generated, mark it as suppressed,
+// but suppressed is not currently used.  Note that one beacon anomaly
+// causes the clients to reissue search request sequences consisting
+// of 100 searches over a period of about 8 min.  It is not necessary
+// to generate beacon anomalies much more frequently than this.
+void gateServer::generateBeaconAnomaly ()
+{
+	if(timeSinceLastBeacon() >= global_resources->reconnectInhibit()) {
+		caServer::generateBeaconAnomaly();
+		setFirstReconnectTime();
+		markNoRefreshSuppressed();
+	} else {
+		// KE: Not used
+		markRefreshSuppressed();
 	}
 }
 
@@ -430,7 +455,7 @@ void gateServer::gateCommands(const char* cfile)
 	}
 
 	// Free the reserved file descriptor before we read access
-	// security
+	// security or write reports
 #ifdef RESERVE_FOPEN_FD
 	global_resources->fclose(fp);
 #else
@@ -453,63 +478,261 @@ void gateServer::gateCommands(const char* cfile)
 	}
 	// Do the report after the new access security
 	if(r3Flag) {
-		as->report(stdout);
+		report3();
 		fflush(stdout);
 	}
 	
 	return;
 }
 
+// We rely on CAS being non-threaded and CAC not calling our callbacks
+// while this routine completes, otherwise it should be locked
 void gateServer::newAs(void)
 {
-	if (as && global_resources->accessFile())
-	{
-		as->reInitialize(global_resources->accessFile());
+	gateAsEntry *pEntry;
+	int i;
+
+#if DEBUG_ACCESS
+	printf("gateServer::newAs pv_list: %d con_list: %d\n",
+	  (int)pv_list.count(),(int)pv_con_list.count());
+	int count=0;
+#endif	
+
+	// We need to eliminate all the members (gateAsEntry's) and
+	// clients (gateAsClient's).  The clients must be removed before
+	// the members can be.  This has to be done because the base
+	// access security assumes the members (PVs in an IOC) do not
+	// change and asInitialize copies the old members back into the
+	// new ASBASE.  Out members do change.
+
+	// gatePVData's, gateVCData's, and gateChan's have pointers to
+	// gateAsEntry's and gateChan's have gateAsClient's.  First NULL
+	// the pointers and delete the gateAsClients.  These items are in
+	// the pv_list, pv_con_list, and statTable array.
+
+	//  Treat the pv_list and pv_con_list the same way.  i=0 is
+	// pv_list and i=1 is the pv_con_list.
+	for(i=0; i < 2; i++) {
+		tsDLHashList<gatePvNode> *list;
+		if(i == 0) list=&pv_list;
+		else list=&pv_con_list;
+		tsDLIter<gatePvNode> iter=list->firstIter();
+		while(iter.valid())	{
+			gatePvNode *pNode=iter.pointer();
+			gatePvData *pv=pNode->getData();
+			// NULL the entry
+			pv->removeEntry();
+			// NULL the entry in the gateVcData and its channels and
+			// delete the gateAsClients
+			gateVcData *vc=pv->VC();
+			if(vc) {
+				vc->removeEntry();
+			}
+			iter++;
+		}
 	}
+
+#if statCount
+	// Do the statTable
+	for(i=0; i < statCount; i++) {
+		// See if it has been created
+		if(!stat_table[i].pv) {
+#if DEBUG_ACCESS
+			printf("  i=%d No pv for %s\n",i,stat_table[i].name);
+#endif	
+			continue;
+		}
+		// NULL the entry in the gateStat and its channels and delete
+		// the gateAsClients
+#if DEBUG_ACCESS
+		printf("  i=%d %s %s\n",i,
+		  stat_table[i].name,stat_table[i].pv->getName());
+#endif
+		stat_table[i].pv->removeEntry();
+	}
+#endif // #if statCount
+
+	// Reinitialize access security
+	long rc=as->reInitialize(global_resources->accessFile(),
+	  global_resources->listFile());
+	if(rc) {
+		printf("%s gateServer::newAs Failed to remove old entries\n",
+		  timeStamp());
+		printf("  Suggest restarting this Gateway\n");
+	}
+
+	// Now check the access and reinstall all the gateAsEntry's and
+	// gateAsClient's.  Remove the PVs if they are now DENY'ed.
+
+	// pv_list and pv_con_list
+	for(i=0; i < 2; i++) {
+		tsDLHashList<gatePvNode> *list;
+		if(i == 0) list=&pv_list;
+		else list=&pv_con_list;
+		tsDLIter<gatePvNode> iter=list->firstIter();
+		while(iter.valid())	{
+			gatePvNode *pNode=iter.pointer();
+			gatePvData *pv=pNode->getData();
+			tsDLIter<gatePvNode> tmpIter = iter;
+			tmpIter++;
+			
+#if DEBUG_ACCESS
+			printf("  i=%d count=%d %s\n",i,count,pv->name()?pv->name():"NULL");
+#endif	
+			// See if it is allowed
+			pEntry=getAs()->findEntry(pv->name());
+			if(!pEntry) {
+#if DEBUG_ACCESS
+				printf("    Not allowed\n");
+#endif	
+				// Denied, kill it (handles statistics) then remove it
+				// now, rather than leaving it for inactiveDeadCleanup
+				pv->death();
+				int status=list->remove(pv->name(),pNode);
+				if(status) printf("%s gateServer::newAs: "
+				  "Could not remove denied pv: %s.\n",timeStamp(),pv->name());
+				pNode->destroy();
+
+			} else {
+#if DEBUG_ACCESS
+				printf("    Allowed\n");
+#endif	
+				// Allowed, replace gateAsEntry
+				pv->resetEntry(pEntry);
+				// Replace the entry in the gateVcData and its channels
+				gateVcData *vc=pv->VC();
+				if(vc) {
+					vc->resetEntry(pEntry);
+				}
+			}
+			iter=tmpIter;
+		}
+	}
+
+#if statCount
+	// Do internal PVs.
+	for(i=0; i < statCount; i++) {
+		// See if it has been created
+		if(!stat_table[i].pv) {
+#if DEBUG_ACCESS
+			printf("  i=%d No pv for %s\n",i,stat_table[i].name);
+#endif	
+			continue;
+		}
+		// Replace the entry in the gateStat and its channels
+#if DEBUG_ACCESS
+		printf("  i=%d %s %s\n",i,
+		  stat_table[i].name,stat_table[i].pv->getName());
+#endif
+		pEntry=getAs()->findEntry(stat_table[i].pv->getName());
+		if(!pEntry) {
+			// Denied, uncreate it
+			delete stat_table[i].pv;
+			stat_table[i].pv=NULL;
+		} else {
+			// Allowed, replace gateAsEntry
+			stat_table[i].pv->resetEntry(pEntry);
+		}
+	}
+#endif // #if statCount
+
+	// Generate a beacon anomaly since new PVs may have become
+	// available
+	generateBeaconAnomaly();
 }
 
 void gateServer::report1(void)
 {
+	FILE* fp;
 	time_t t;
+
+	printf("%s Starting Report1 (Active Virtual Connection Report)\n",
+	  timeStamp());
+
 	time(&t);
 
-	printf("---------------------------------------------------------------------------\n"
+	// Open the report file
+	const char *filename=global_resources->reportFile();
+	if(!filename || !*filename || !strcmp(filename,"NULL")) {
+		printf("  Report1: Bad report filename\n");
+		return;
+	}
+#ifdef RESERVE_FOPEN_FD
+	fp=global_resources->fopen(filename,"a");
+#else
+	fp=fopen(filename,"a");
+#endif
+	if(!fp) {
+		printf("  Report1: Cannot open %s for appending\n",filename);
+		return;
+	}
+
+	fprintf(fp,"---------------------------------------"
+	  "------------------------------------\n"
 	  "Active Virtual Connection Report: %s",ctime(&t));
 
 #if statCount
 	// Stat PVs
 	for(int i=0; i < statCount; i++) {
-		if(stat_table[i].pv) stat_table[i].pv->report();
+		if(stat_table[i].pv) stat_table[i].pv->report(fp);
 	}
 #endif
 
 	// Virtual PVs
 	tsDLIter<gateVcData> iter=vc_list.firstIter();
 	while(iter.valid()) {
-		iter->report();
+		iter->report(fp);
 		iter++;
 	}
-	printf("---------------------------------------------------------------------------\n");
-	fflush(stdout);
+	fprintf(fp,"---------------------------------------"
+	  "------------------------------------\n");
+#ifdef RESERVE_FOPEN_FD
+	global_resources->fclose(fp);
+#else
+	fclose(fp);
+#endif
+	
+	printf("  Report1 written to %s\n",filename);
 }
 
 void gateServer::report2(void)
 {
+	FILE* fp;
 	time_t t,diff;
 	double rate;
 	int tot_dead=0,tot_inactive=0,tot_active=0,tot_connect=0,tot_disconnect=0;
 	int tot_stat=0;
 
+	printf("%s Starting Report2 (PV Summary Report)\n",
+	  timeStamp());
+
 	time(&t);
 	diff=t-start_time;
 	rate=diff?(double)exist_count/(double)diff:0;
 
-	printf("---------------------------------------------------------------------------\n");
-	printf("PV Summary Report: %s\n",ctime(&t));
-	printf("Exist test rate = %f\n",rate);
-	printf("Total real PV count = %d\n",(int)pv_list.count());
-	printf("Total connecting PV count = %d\n",(int)pv_con_list.count());
-	printf("Total virtual PV count = %d\n",(int)vc_list.count());
+	// Open the report file
+	const char *filename=global_resources->reportFile();
+	if(!filename || !*filename || !strcmp(filename,"NULL")) {
+		printf("  Report2: Bad report filename\n");
+		return;
+	}
+#ifdef RESERVE_FOPEN_FD
+	fp=global_resources->fopen(filename,"a");
+#else
+	fp=fopen(filename,"a");
+#endif
+	if(!fp) {
+		printf("  Report2: Cannot open %s for appending\n",filename);
+		return;
+	}
+
+	fprintf(fp,"---------------------------------------"
+	  "------------------------------------\n");
+	fprintf(fp,"PV Summary Report: %s\n",ctime(&t));
+	fprintf(fp,"Exist test rate = %f\n",rate);
+	fprintf(fp,"Total real PV count = %d\n",(int)pv_list.count());
+	fprintf(fp,"Total virtual PV count = %d\n",(int)vc_list.count());
+	fprintf(fp,"Total connecting PV count = %d\n",(int)pv_con_list.count());
 
 	tsDLIter<gatePvNode> iter=pv_list.firstIter();
 	while(iter.valid())
@@ -525,69 +748,120 @@ void gateServer::report2(void)
 		iter++;
 	}
 
-	printf("Total dead PVs: %d\n",tot_dead);
-	printf("Total disconnected PVs: %d\n",tot_disconnect);
-	printf("Total inactive PVs: %d\n",tot_inactive);
-	printf("Total active PVs: %d\n",tot_active);
-	printf("Total connecting PVs: %d\n",tot_connect);
+	fprintf(fp,"Total connecting PVs: %d\n",tot_connect);
+	fprintf(fp,"Total dead PVs: %d\n",tot_dead);
+	fprintf(fp,"Total disconnected PVs: %d\n",tot_disconnect);
+	fprintf(fp,"Total inactive PVs: %d\n",tot_inactive);
+	fprintf(fp,"Total active PVs: %d\n",tot_active);
 
 #if statCount
 	// Stat PVs
 	for(int i=0; i < statCount; i++) {
 		if(stat_table[i].pv) tot_stat++;
 	}
-	printf("Total active stat PVs: %d [of %d]\n",tot_stat,statCount);
+	fprintf(fp,"Total active stat PVs: %d [of %d]\n",tot_stat,statCount);
 
-	printf("\nStat PVs:\n");
+	fprintf(fp,"\nStat PVs:\n");
 	for(int i=0; i < statCount; i++) {
 		if(stat_table[i].pv) {
-			printf(" %s\n",stat_table[i].pv->getName());
+			fprintf(fp," %s\n",stat_table[i].pv->getName());
 		}
 	}
 #endif
 
-	printf("\nDead PVs:\n");
-	iter=pv_list.firstIter();
-	while(iter.valid())
-	{
-		if(iter->getData()->getState()== gatePvDead &&
-		    iter->getData()->name())
-			printf(" %s\n",iter->getData()->name());
-		iter++;
-	}
-
-	printf("\nDisconnected PVs:\n");
-	iter=pv_list.firstIter();
-	while(iter.valid())
-	{
-		if(iter->getData()->getState()== gatePvDisconnect &&
-		    iter->getData()->name())
-			printf(" %s\n",iter->getData()->name());
-		iter++;
-	}
-
-	printf("\nConnecting PVs:\n");
+	fprintf(fp,"\nConnecting PVs:\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
 		if(iter->getData()->getState()== gatePvConnect &&
 		    iter->getData()->name())
-			printf(" %s\n",iter->getData()->name());
+			fprintf(fp," %s\n",iter->getData()->name());
 		iter++;
 	}
 
-	printf("\nInactive PVs:\n");
+	fprintf(fp,"\nDead PVs:\n");
+	iter=pv_list.firstIter();
+	while(iter.valid())
+	{
+		if(iter->getData()->getState()== gatePvDead &&
+		    iter->getData()->name())
+			fprintf(fp," %s\n",iter->getData()->name());
+		iter++;
+	}
+
+	fprintf(fp,"\nDisconnected PVs:\n");
+	iter=pv_list.firstIter();
+	while(iter.valid())
+	{
+		if(iter->getData()->getState()== gatePvDisconnect &&
+		    iter->getData()->name())
+			fprintf(fp," %s\n",iter->getData()->name());
+		iter++;
+	}
+
+	fprintf(fp,"\nInactive PVs:\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
 		if(iter->getData()->getState()== gatePvInactive &&
 		    iter->getData()->name())
-			printf(" %s\n",iter->getData()->name());
+			fprintf(fp," %s\n",iter->getData()->name());
 		iter++;
 	}
 
-	printf("---------------------------------------------------------------------------\n");
-	fflush(stdout);
+	fprintf(fp,"\nActive PVs:\n");
+	iter=pv_list.firstIter();
+	while(iter.valid())
+	{
+		if(iter->getData()->getState()== gatePvActive &&
+		    iter->getData()->name())
+			fprintf(fp," %s\n",iter->getData()->name());
+		iter++;
+	}
+
+	fprintf(fp,"---------------------------------------"
+	  "------------------------------------\n");
+#ifdef RESERVE_FOPEN_FD
+	global_resources->fclose(fp);
+#else
+	fclose(fp);
+#endif
+	
+	printf("  Report2 written to %s\n",filename);
+}
+
+void gateServer::report3(void)
+{
+	FILE* fp;
+
+	printf("%s Starting Report3 (Access Security Report)\n",
+	  timeStamp());
+
+	// Open the report file
+	const char *filename=global_resources->reportFile();
+	if(!filename || !*filename || !strcmp(filename,"NULL")) {
+		printf("  Report3: Bad report filename\n");
+		return;
+	}
+#ifdef RESERVE_FOPEN_FD
+	fp=global_resources->fopen(filename,"a");
+#else
+	fp=fopen(filename,"a");
+#endif
+	if(!fp) {
+		printf("  Report3: Cannot open %s for appending\n",filename);
+		return;
+	}
+
+	as->report(fp);
+
+#ifdef RESERVE_FOPEN_FD
+	global_resources->fclose(fp);
+#else
+	fclose(fp);
+#endif
+	
+	printf("  Report3 written to %s\n",filename);
 }
 
 #ifdef USE_FDS
@@ -640,8 +914,8 @@ int gateFd::count(0);
 // ----------------------- server methods --------------------
 
 gateServer::gateServer(char *prefix ) :
-#ifdef STAT_PVS
 	caServer(),
+#ifdef STAT_PVS
 	total_vc(0u),
 	total_pv(0u),
 	total_alive(0u),
@@ -650,15 +924,16 @@ gateServer::gateServer(char *prefix ) :
 	total_unconnected(0u),
 	total_dead(0u),
 	total_connecting(0u),
-# ifdef USE_FDS
 	total_disconnected(0u),
-	total_fd(0u)
-# else
-	total_disconnected(0u)
+# ifdef USE_FDS
+	total_fd(0u),
 # endif
-#else
-	caServer()
 #endif
+	last_dead_cleanup(time(NULL)),
+	last_inactive_cleanup(time(NULL)),
+	last_connect_cleanup(time(NULL)),
+	last_beacon_time(time(NULL)),
+	suppressed_refresh_flag(0)	
 {
 	gateDebug0(5,"gateServer()\n");
 
@@ -988,18 +1263,6 @@ void gateServer::inactiveDeadCleanup(void)
 	gateDebug0(51,"gateServer::inactiveDeadCleanup()\n");
 	gatePvData *pv;
 	int dead_check=0,in_check=0;
-
-#ifdef TODO
-	// Check for suppressed beacons (and send them if they're due)
-
-	if(refreshSuppressed() &&
-	   timeFirstReconnect() >= global_resources->reconnectInhibit())
-	{
-		generateBeaconAnomaly();
-		setFirstReconnectTime();
-		markNoRefreshSuppressed();
-	}
-#endif
 
 	if(timeDeadCheck() >= global_resources->deadTimeout())
 		dead_check=1;
@@ -1583,6 +1846,7 @@ void gateServer::initStats(char *prefix)
 	}
 }
 
+// KE: Not used
 void gateServer::clearStat(int type)
 {
 	stat_table[type].pv=NULL;

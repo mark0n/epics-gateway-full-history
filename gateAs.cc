@@ -25,6 +25,7 @@
 
 #define DEBUG_DELAY 0
 #define DEBUG_AS 0
+#define DEBUG_ACCESS 0
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -40,6 +41,7 @@
 #endif
 
 #include "tsSLList.h"
+#include <epicsVersion.h>
 
 #include "gateAs.h"
 #include "gateResources.h"
@@ -65,12 +67,58 @@ extern "C" {
 	}
 }
 
+// pattern  PV name pattern (regex)
+// realname Real name substitution pattern
+// asg      ASG
+// asl      ASL
+gateAsEntry::gateAsEntry(const char* pattern, const char* realname, const char* asg,
+  int asl) :
+	pattern(pattern),
+	alias(realname),
+	group(asg),
+	level(asl),
+	asmemberpvt(NULL)
+{
+	// Set pointers in the pattern buffer
+	pat_buff.buffer=NULL;
+	pat_buff.translate=NULL;
+	pat_buff.fastmap=NULL;
+
+	// Initialize registers
+	re_set_registers(&pat_buff,&regs,0,0,0);
+}
+
+gateAsEntry::~gateAsEntry(void)
+{
+	// Free allocated stuff in the pattern buffer
+	regfree(&pat_buff);
+
+	// Free allocted stuff in registers
+	if(regs.start) free(regs.start);
+	if(regs.end) free(regs.end);
+	regs.num_regs=0;
+}
+
+long gateAsEntry::removeMember(void)
+{
+	long rc=0;
+	if(asmemberpvt) {
+		rc=asRemoveMember(&asmemberpvt);
+		if(rc == S_asLib_clientsExist) {
+			printf("Cannot remove member because client exists for:\n");
+			printf(" %-30s %-16s %d ",pattern,group,level);
+		}
+		asmemberpvt=NULL;
+	}
+	return rc;
+}
+
 void gateAsEntry::getRealName(const char* pv, char* rname, int len)
 {
 	char c;
 	int in, ir, j, n;
 
-	if (alias) {                 // Build real name from substitution pattern
+	if (alias) {  // Build real name from substitution pattern
 		ir = 0;
 		for (in=0; ir<len; in++) {
 			if ((c = alias[in]) == '\\') {
@@ -105,6 +153,49 @@ void gateAsEntry::getRealName(const char* pv, char* rname, int len)
     return;
 }
 
+aitBool gateAsEntry::init(gateAsList& n, int line) {
+	if (compilePattern(line)==aitFalse) return aitFalse;
+	n.add(*this);
+	if (group == NULL || asAddMember(&asmemberpvt,(char*)group) != 0) {
+		asmemberpvt = NULL;
+	} else {
+		asPutMemberPvt(asmemberpvt,this);
+	}
+	return aitTrue;
+}
+	
+#ifdef USE_DENYFROM
+aitBool gateAsEntry::init(const char* host,	// Host name to deny
+  tsHash<gateAsList>& h,                // Where this entry is added to
+  gateHostList& hl,				        // Where a new key should be added
+  int line) {					        // Line number
+	gateAsList* l;
+	
+	if(compilePattern(line)==aitFalse) return aitFalse;
+	if(h.find(host,l)==0) {
+		l->add(*this);
+	} else {
+		l = new gateAsList;
+		l->add(*this);
+		h.add(host,*l);
+		hl.add(*(new gateAsHost(host)));
+	}
+	return aitTrue;
+}
+#endif
+
+aitBool gateAsEntry::compilePattern(int line) {
+	const char *err;
+	pat_buff.translate=0; pat_buff.fastmap=0;
+	pat_buff.allocated=0; pat_buff.buffer=0;
+	
+	if((err = re_compile_pattern(pattern, strlen(pattern), &pat_buff)))	{
+		fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, pattern, err);
+		return aitFalse;
+	}
+	return aitTrue;
+}
+
 gateAsClient::gateAsClient(void) :
 	asclientpvt(NULL),
 	asentry(NULL),
@@ -113,20 +204,18 @@ gateAsClient::gateAsClient(void) :
 {
 }
 
-gateAsClient::gateAsClient(gateAsEntry *pase, const char *user,
+gateAsClient::gateAsClient(gateAsEntry *pEntry, const char *user,
   const char *host) :
 	asclientpvt(NULL),
-	asentry(pase),
+	asentry(pEntry),
 	user_arg(NULL),
 	user_func(NULL)
 {
-	if(pase&&asAddClient(&asclientpvt,pase->asmemberpvt,pase->level,
-		 (char*)user,(char*)host) == 0)
-	  asPutClientPvt(asclientpvt,this);
-	// Callback is called if rights are changed by rereading the
-	// access file, etc.  Callback will be called once right now, but
-	// won't do anything since the user_func is NULL.  The user_func
-	// is set in gateChan::gateChan.
+	if(pEntry&&asAddClient(&asclientpvt,pEntry->asmemberpvt,pEntry->level,
+		 (char*)user,(char*)host) == 0) {
+		asPutClientPvt(asclientpvt,this);
+	}
+
 #if DEBUG_DELAY
 	gateAsClient *v=this;
 	printf("%s gateAsClient::gateAsClient pattern=%s user_func=%d\n",
@@ -134,8 +223,13 @@ gateAsClient::gateAsClient(gateAsEntry *pase, const char *user,
 	  v->asentry?(v->asentry->pattern?v->asentry->pattern:"[NULL pattern]"):"[NULL entry]",
 	  v->user_func);
 #endif
-	// Register the client callback
+
+	// Callback is called if rights are changed by rereading the
+	// access file, etc.  Callback will be called once right now, but
+	// won't do anything since the user_func is NULL.  The user_func
+	// is set in gateChan::gateChan.
 	asRegisterClientCallback(asclientpvt,::clientCallback);
+
 #if DEBUG_DELAY
 	printf("%s gateAsClient::gateAsClient finished\n",
 	  timeStamp());
@@ -151,15 +245,15 @@ gateAsClient::~gateAsClient(void)
 
 void gateAsClient::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
 {
-	gateAsClient* asc = (gateAsClient*)asGetClientPvt(p);
+	gateAsClient* pClient = (gateAsClient*)asGetClientPvt(p);
 #if DEBUG_DELAY
 	printf("%s gateAsClient::clientCallback pattern=%s user_func=%d\n",
 	  timeStamp(),
-	  asc->asentry?(asc->asentry->pattern?
-		asc->asentry->pattern:"[NULL pattern]"):"[NULL entry]",
-	  asc->user_func);
+	  pClient->asentry?(pClient->asentry->pattern?
+		pClient->asentry->pattern:"[NULL pattern]"):"[NULL entry]",
+	  pClient->user_func);
 #endif
-	if(asc->user_func) asc->user_func(asc->user_arg);
+	if(pClient->user_func) pClient->user_func(pClient->user_arg);
 }
 
 gateAs::gateAs(const char* lfile, const char* afile)
@@ -167,23 +261,31 @@ gateAs::gateAs(const char* lfile, const char* afile)
 	: denyFromListUsed(false)
 #endif
 {
-	if(initialize(afile))
-	  fprintf(stderr,"Failed to install access security file %s\n",afile);
-	
-	readPvList(lfile);
-}
+	// These are static only so they can be used in readFunc.  Be
+	// careful about having two instances of this class as when
+	// rereading access security.  These variables will be valid for
+	// the last instance only.
+	default_group = "DEFAULT";
+	default_pattern = "*";
+	eval_order = GATE_ALLOW_FIRST;
+	rules_installed = aitFalse;
+	use_default_rules = aitFalse;
+	rules_fd = NULL;
 
-gateAs::gateAs(const char* lfile)
-#ifdef USE_DENYFROM
-	: denyFromListUsed(false)
-#endif
-{
+	if(afile) {
+		if(initialize(afile))
+		  fprintf(stderr,"Failed to install access security file %s\n",afile);
+	}
+	
 	readPvList(lfile);
 }
 
 gateAs::~gateAs(void)
 {
 #ifdef USE_DENYFROM
+// Probably OK but not checked for reinitializing all of access
+// security including the pvlist.
+# error DENY FROM implementation should be checked here
 	tsSLIter<gateAsHost> pi = host_list.firstIter();
 	gateAsList* l;
 	
@@ -195,9 +297,43 @@ gateAs::~gateAs(void)
 	}
 #endif
 	
-	deleteAsList(deny_list);
-	deleteAsList(allow_list);
-	deleteAsList(line_list);
+	clearAsList(deny_list);
+	clearAsList(allow_list);
+	clearAsList(line_list);
+}
+
+// Remove the items from the list and delete them
+void gateAs::clearAsList(gateAsList& list)
+{
+	while(list.first()) {
+		gateAsEntry *pe=list.get();
+		if(pe) {
+			// Remove the member from access security
+			pe->removeMember();
+			delete pe;
+		}
+	}
+}
+
+// Remove the items from the list and delete them
+void gateAs::clearAsList(gateLineList& list)
+{
+	while(list.first()) {
+		gateAsLine *pl=list.get();
+		if(pl) delete pl;
+	}
+}
+
+gateAsEntry* gateAs::findEntryInList(const char* pv, gateAsList& list) const
+{
+	tsSLIter<gateAsEntry> pi = list.firstIter();
+	
+	while(pi.pointer()) {
+		if(re_match(&pi->pat_buff,pv,strlen(pv),0,&pi->regs) ==
+		  (int)strlen(pv)) break;
+		pi++;
+	}
+	return pi.pointer();
 }
 
 int gateAs::readPvList(const char* lfile)
@@ -406,13 +542,41 @@ long gateAs::initialize(const char* afile)
 	return rc;
 }
 
-long gateAs::reInitialize(const char* afile)
+long gateAs::reInitialize(const char* afile, const char* lfile)
 {
-
-	rules_installed=aitFalse;
+	// Stop in INP PV clients
 	gateAsCaClear();
-	initialize(afile);
+
+	// Cleanup
+#ifdef USE_DENYFROM
+	// There should be no reason to use DENY FROM , but if it is
+	// desired, it needs to be implemented here.
+# error DENY FROM is not implemented here
+#endif
+	clearAsList(deny_list);
+	clearAsList(allow_list);
+	clearAsList(line_list);
+
+	// Reset defaults
+	default_group = "DEFAULT";
+	default_pattern = "*";
+	eval_order = GATE_ALLOW_FIRST;
+	rules_installed = aitFalse;
+	use_default_rules = aitFalse;
+	rules_fd = NULL;
+
+	// Reread the access file
+	if(afile) {
+		if(initialize(afile))
+		  fprintf(stderr,"Failed to install access security file %s\n",afile);
+	}
+	
+	// Restart INP PV clients
 	gateAsCa();
+
+	// Reread the pvlist file (Will use defaults if lfile is NULL)
+	readPvList(lfile);
+
 	return 0;
 }
 
@@ -462,40 +626,40 @@ void gateAs::report(FILE* fd)
 	fprintf(fd,"\n============================ Allowed PV Report ============================\n");
 	fprintf(fd," Pattern                        ASG             ASL Alias\n");
 	tsSLIter<gateAsEntry> pi1 = allow_list.firstIter();
-	gateAsEntry *pNode1;
+	gateAsEntry *pEntry1;
 	while(pi1.pointer()) {
-		pNode1=pi1.pointer();
-		fprintf(fd," %-30s %-16s %d ",pNode1->pattern,pNode1->group,pNode1->level);
-		if(pNode1->alias) fprintf(fd," %s\n",pNode1->alias);
+		pEntry1=pi1.pointer();
+		fprintf(fd," %-30s %-16s %d ",pEntry1->pattern,pEntry1->group,pEntry1->level);
+		if(pEntry1->alias) fprintf(fd," %s\n",pEntry1->alias);
 		else fprintf(fd,"\n");
 		pi1++;
 	}
 	
 	fprintf(fd,"\n============================ Denied PV Report  ============================\n");
 	tsSLIter<gateAsEntry> pi2 = deny_list.firstIter();
-	gateAsEntry *pNode2;
+	gateAsEntry *pEntry2;
 	if(pi2.pointer()) {
 		fprintf(fd,"\n==== Denied from ALL Hosts:\n");
 		while(pi2.pointer()) {
-			pNode2=pi2.pointer();
-			fprintf(fd," %s\n",pNode2->pattern);
+			pEntry2=pi2.pointer();
+			fprintf(fd," %s\n",pEntry2->pattern);
 			pi2++;
 		}
 	}
 	
 #ifdef USE_DENYFROM
 	tsSLIter<gateAsHost> pi3 = host_list.firstIter();
-	gateAsHost *pNode3;
+	gateAsHost *pEntry3;
 	while(pi3.pointer()) {
-		pNode3=pi3.pointer();
-		fprintf(fd,"\n==== Denied from Host %s:\n",pNode3->host);
+		pEntry3=pi3.pointer();
+		fprintf(fd,"\n==== Denied from Host %s:\n",pEntry3->host);
 		gateAsList* pl=NULL;
-		if(deny_from_table.find(pNode3->host,pl)==0) {
+		if(deny_from_table.find(pEntry3->host,pl)==0) {
 			tsSLIter<gateAsEntry> pi4 = pl->firstIter();
-			gateAsEntry *pNode4;
+			gateAsEntry *pEntry4;
 			while(pi4.pointer()) {
-				pNode4=pi4.pointer();
-				fprintf(fd," %s\n",pNode4->pattern);
+				pEntry4=pi4.pointer();
+				fprintf(fd," %s\n",pEntry4->pattern);
 			}
 		}
 		pi3++;
@@ -510,9 +674,14 @@ void gateAs::report(FILE* fd)
 	if(rules_installed==aitTrue) fprintf(fd,"Access Rules are installed.\n");
 	if(use_default_rules==aitTrue) fprintf(fd,"Using default access rules.\n");
 	
-#if DEBUG_AS
+#if (EPICS_REVISION == 14 && EPICS_MODIFICATION >= 5) || EPICS_REVISION > 14
+	// Dumping to a file pointer became available sometime during 3.14.5.
+	// KE: Change this from 5 to 6 when 3.14.6 comes out
 	fprintf(fd,"\n============================ Access Security Dump =========================\n");
-	asDump(NULL,NULL,TRUE);
+	asDumpFP(fd,NULL,NULL,TRUE);
+#else
+	// KE: Could use asDump, but it would go to stdout, probably
+	// gateway.log, and not be in gateway.report
 #endif
 	fprintf(fd,"-----------------------------------------------------------------------------\n");
 }

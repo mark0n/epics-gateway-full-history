@@ -67,26 +67,32 @@ public:
 	  const char * const user, const char * const host);
 	~gateChan(void);
 
-#if 0
-	// KE: Unused
+#ifdef SUPPORT_OWNER_CHANGE
+    // Virtual function from casChannel, not called from Gateway.  It
+    // is a security hole to support this, and it is no longer
+    // implemented in base.
 	virtual void setOwner(const char * const user, const char * const host);
 #endif
-	void report(void);
+	
+	void report(FILE *fp);
 
-	const char *getUser(void);
-	const char *getHost(void);
+	const char *getUser(void) const { return user; };
+	const char *getHost(void) const { return host; }
 	casPV *getCasPv(void) const { return casPv; }
 
 	gateAsClient *getAsClient(void) const { return asclient; }
 	void deleteAsClient(void);
+	void resetAsClient(gateAsEntry *asentry);
 	
 	void setCasPv(casPV *casPvIn) { casPv=casPvIn; }
 
-	static void post_rights(void *);
+	static void post_rights(void *userPvt);
 
 protected:	
 	casPV *casPv;
 	gateAsClient *asclient; // Must be deleted when done using it
+	const char *user;
+	const char *host;
 };
 
 class gateVcChan : public gateChan, public tsDLNode<gateVcChan>
@@ -129,7 +135,7 @@ public:
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }
 	int ready(void)				{ return (pv_state==gateVcReady)?1:0; }
 
-	void report(void);
+	void report(FILE *fp);
     const char* name(void) const { return pv_name; }  // KE: Duplicates getName
     void* PV(void) const { return pv; }
     void setPV(gatePvData* pvIn)  { pv=pvIn; }
@@ -139,6 +145,8 @@ public:
     gdd* attribute(int) const { return NULL; } // not done
     aitIndex maximumElements(void) const;
     gateAsEntry* getEntry(void) const { return asentry; }
+	void removeEntry(void);
+	void resetEntry(gateAsEntry *asentryIn);
     void addChan(gateVcChan*);
     void removeChan(gateVcChan*);
 
@@ -173,11 +181,14 @@ public:
 	void markNoList(void) { in_list_flag=0; }
 	void markInList(void) { in_list_flag=1; }
 
+#if 0
+	// KE: Unused
 	void setTransTime(void);
-	time_t timeLastTrans(void) const;
+	time_t timeSinceLastTrans(void) const;
 	void setAlhTransTime(void);
-	time_t timeLastAlhTrans(void) const;
-
+	time_t timeSinceLastAlhTrans(void) const;
+#endif
+	
 	int needPosting(void);
 	int needInitialPosting(void);
 	void markInterested(void);
@@ -196,8 +207,11 @@ private:
 	static unsigned long nextID;
 	unsigned long vcID;
 	aitBool read_access,write_access;
+#if 0
+	// KE: Unused
 	time_t time_last_trans;
 	time_t time_last_alh_trans;
+#endif
 	int status;
 	gateAsEntry* asentry;
 	gateVcState pv_state;
@@ -227,16 +241,19 @@ inline void gateVcData::markInterested(void)
 inline void gateVcData::markNotInterested(void)
 	{ prev_post_value_changes=post_value_changes; post_value_changes=0; }
 
+#if 0
+// KE: Unused
 inline void gateVcData::setTransTime(void) { time(&time_last_trans); }
-inline time_t gateVcData::timeLastTrans(void) const
+inline time_t gateVcData::timeSinceLastTrans(void) const
 	{ return time(NULL)-time_last_trans; }
 inline void gateVcData::setAlhTransTime(void) { time(&time_last_alh_trans); }
-inline time_t gateVcData::timeLastAlhTrans(void) const
+inline time_t gateVcData::timeSinceLastAlhTrans(void) const
 	{ return time(NULL)-time_last_alh_trans; }
+#endif
 
-inline void gateVcData::addChan(gateVcChan* c) { chan_list.add(*c); }
-inline void gateVcData::removeChan(gateVcChan* c) {
-	chan_list.remove(*c); c->setCasPv(NULL); }
+inline void gateVcData::addChan(gateVcChan* chan) { chan_list.add(*chan); }
+inline void gateVcData::removeChan(gateVcChan* chan) {
+	chan_list.remove(*chan); chan->setCasPv(NULL); }
 
 #endif
 
