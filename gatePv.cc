@@ -586,7 +586,7 @@ int gatePvData::unmonitor(void)
 			fprintf(stderr,"%s gatePvData::unmonitor: ca_clear_event failed "
 			  "for %s:\n"
 			  " %s\n",
-			  timeStamp(),name()?name():"Unknown",ca_message(status));
+			  timeStamp(),name()?name():"Unknown",ca_message(rc));
 		} else {
 			rc=0;
 		}
@@ -607,7 +607,7 @@ int gatePvData::alhUnmonitor(void)
 			fprintf(stderr,"%s gatePvData::alhUnmonitor: ca_clear_event failed "
 			  "for %s:\n"
 			  " %s\n",
-			  timeStamp(),name()?name():"Unknown",ca_message(status));
+			  timeStamp(),name()?name():"Unknown",ca_message(rc));
 		} else {
 			rc=0;
 		}
@@ -642,7 +642,7 @@ int gatePvData::monitor(void)
 				fprintf(stderr,"%s gatePvData::monitor: "
 				  "ca_add_masked_array_event failed for %s:\n"
 				  " %s\n",
-				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
 				rc=-1;
 			} else {
 				rc=0;
@@ -675,7 +675,7 @@ int gatePvData::alhMonitor(void)
 				fprintf(stderr,"%s gatePvData::alhMonitor: "
 				  "ca_add_masked_array_event failed for %s:\n"
 				  " %s\n",
-				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
 				rc=-1;
 			} else {
 				rc=0;
@@ -714,7 +714,7 @@ int gatePvData::get(void)
 				fprintf(stderr,"%s gatePvData::get: ca_array_get_callback "
 				  "failed for %s:\n"
 				  " %s\n",
-				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
 			}
 #if OMIT_CHECK_EVENT
 #else
@@ -837,14 +837,14 @@ int gatePvData::put(const gdd* dd, int docallback)
 				fprintf(stderr,"%s gatePvData::put ca_array_put_callback failed "
 				  "for %s:\n"
 				  " %s\n",
-				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				  timeStamp(),name()?name():"Unknown",ca_message(stat));
 			}
 		} else {
 			stat=ca_array_put(cht,count,chID,pValue);
 			if(stat != ECA_NORMAL) {
 				fprintf(stderr,"%s gatePvData::put ca_array_put failed for %s:\n"
 				  " %s\n",
-				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				  timeStamp(),name()?name():"Unknown",ca_message(stat));
 			}
 		}
 #if OMIT_CHECK_EVENT
