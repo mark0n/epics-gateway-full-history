@@ -28,6 +28,8 @@
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 #define DEBUG_PV_CONNNECT_CLEANUP 0
+#define DEBUG_EXIST 0
+
 #define DEBUG_TIMES 1
 #define DEBUG_FD 1
 
@@ -928,6 +930,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	char real_name[GATE_MAX_PVNAME_LENGTH];
 
 	++exist_count;
+
+#if DEBUG_EXIST
+	printf("%s pvExistTest: %s\n",timeStamp(),pvname?pvname:"NULL");
+#endif
 
 #ifdef USE_DENYFROM
 	// Getting the host name is expensive.  Only do it if the

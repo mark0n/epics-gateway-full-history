@@ -12,7 +12,7 @@
 #define _GATESERVER_H_
 
 // Define this to manage file descriptors
-#define USE_FDS
+//#define USE_FDS
 
 /*+*********************************************************************
  *
@@ -26,40 +26,6 @@
  *
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
- *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.31  2002/12/18 23:46:49  evans
- * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
- * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
- * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
- * flushAsyncETQueue to not malloc the pvExistReturn.
- *
- * Revision 1.30  2002/10/01 18:30:44  evans
- * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
- * instead.)  Added -signore command-line option to set
- * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
- * command-line strings in fixed-length variables.  Changed refreshBeacon
- * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
- * been fixed.  It appears to work but the performance is less than the
- * old Gateway.
- *
- * Revision 1.29  2002/08/16 16:23:25  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.28  2002/07/29 16:06:03  jba
- * Added license information.
- *
- * Revision 1.27  2002/07/24 15:17:21  evans
- * Added CPUFract stat PV.  Added GATEWAY_UPDATE_LEVEL to gateVersion.h.
- * Printed BASE_VERSION_STRING to header of gateway.log.
- *
- * Revision 1.26  2002/07/19 06:28:28  lange
- * Cosmetics.
  *
  *********************************************************************-*/
 

@@ -21,37 +21,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.20  2002/10/01 18:30:41  evans
- * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
- * instead.)  Added -signore command-line option to set
- * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
- * command-line strings in fixed-length variables.  Changed refreshBeacon
- * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
- * been fixed.  It appears to work but the performance is less than the
- * old Gateway.
- *
- * Revision 1.19  2002/08/16 16:23:23  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.17  2002/07/29 16:06:00  jba
- * Added license information.
- *
- * Revision 1.16  2002/07/18 15:07:38  lange
- * Optimisation (connect time): expression matching only once in pvExistTest()
- *
- * Revision 1.15  2000/05/03 17:08:30  lange
- * Minor Bugfix, enhanced report functions.
- *
- * Revision 1.14  2000/05/02 13:49:39  lange
- * Uses GNU regex library (0.12) for pattern matching;
- * Fixed some CAS beacon problems (reconnecting IOCs)
- *
  *********************************************************************-*/
 
 #include <stdio.h>

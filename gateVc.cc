@@ -23,47 +23,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.38  2002/12/18 23:46:50  evans
- * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
- * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
- * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
- * flushAsyncETQueue to not malloc the pvExistReturn.
- *
- * Revision 1.37  2002/10/09 21:55:49  evans
- * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
- * sigignore.
- *
- * Revision 1.36  2002/10/01 18:30:45  evans
- * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
- * instead.)  Added -signore command-line option to set
- * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
- * command-line strings in fixed-length variables.  Changed refreshBeacon
- * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
- * been fixed.  It appears to work but the performance is less than the
- * old Gateway.
- *
- * Revision 1.35  2002/08/16 16:23:26  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.34  2002/07/29 16:06:04  jba
- * Added license information.
- *
- * Revision 1.33  2002/07/18 13:19:03  lange
- * Small debug level issue fixed.
- *
- * Revision 1.32  2000/06/15 14:08:03  lange
- * -= ack/nak; -= update rate limit for atomic data
- *
- * Revision 1.31  2000/05/02 13:49:39  lange
- * Uses GNU regex library (0.12) for pattern matching;
- * Fixed some CAS beacon problems (reconnecting IOCs)
- *
  *********************************************************************-*/
 
 #define DEBUG_STATE 0
@@ -840,6 +799,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 	case gddAppType_ackt:
 	case gddAppType_acks:
 		docallback = GATE_NOCALLBACK;
+		// Fall through
 	default:
 		if(global_resources->isReadOnly()) return S_casApp_success;
 		if(!ready()) {
@@ -897,8 +857,8 @@ caStatus gateVcData::putCB(int putStatus)
 		pending_write->postIOCompletion(S_casApp_canceledAsyncIO);
 
 	else
-		// KE:  There is no S_casApp code for failure, return -1 for now
-		//   (J.Hill suggestion)
+		// KE: There is no S_casApp code for failure, return -1 for now
+		//   (J. Hill suggestion)
 		pending_write->postIOCompletion((unsigned long)-1);
 
 	// Set the pending_write pointer to NULL indicating the pending
@@ -924,14 +884,13 @@ unsigned gateVcData::maxDimension(void) const
 	// This information could be asked for very early, before the data
 	// gdd is ready.
 
-	if(pv_data)
+	if(pv_data) {
 		dim=pv_data->dimension();
-	else
-	{
+	} else {
 		if(maximumElements()>1)
-			dim=1;
+		  dim=1;
 		else
-			dim=0;
+		  dim=0;
 	}
 
 	gateDebug2(10,"gateVcData::maxDimension() %s %d\n",name(),(int)dim);

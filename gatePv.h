@@ -25,25 +25,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.14  2002/07/29 16:06:02  jba
- * Added license information.
- *
- * Revision 1.13  2000/10/18 16:06:28  lange
- * Bugfix in beacon relay mechanism
- *
- * Revision 1.12  2000/05/02 13:49:39  lange
- * Uses GNU regex library (0.12) for pattern matching;
- * Fixed some CAS beacon problems (reconnecting IOCs)
- *
- * Revision 1.11  2000/04/05 15:59:33  lange
- * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
- *
  *********************************************************************-*/
 
 // Used in put() to specify callback or not

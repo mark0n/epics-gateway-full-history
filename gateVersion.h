@@ -21,22 +21,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.11  2002/07/29 16:06:04  jba
- * Added license information.
- *
- * Revision 1.10  2002/07/24 15:17:22  evans
- * Added CPUFract stat PV.  Added GATEWAY_UPDATE_LEVEL to gateVersion.h.
- * Printed BASE_VERSION_STRING to header of gateway.log.
- *
- * Revision 1.9  2002/07/19 06:29:51  lange
- * 1.3.3 - Bugfix: double call to regexp match in pvExistTest() fixed.
- *
  *********************************************************************-*/
 
 #define GATEWAY_VERSION       2

@@ -21,22 +21,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.3  2002/08/16 16:23:23  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.2  2002/07/29 16:06:02  jba
- * Added license information.
- *
- * Revision 1.1  2000/04/05 15:59:32  lange
- * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
- *
- *
  *********************************************************************-*/
 
 #include "tsDLList.h"

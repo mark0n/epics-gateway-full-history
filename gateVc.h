@@ -25,25 +25,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.26  2002/08/16 16:23:26  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.25  2002/07/29 16:06:04  jba
- * Added license information.
- *
- * Revision 1.24  2000/06/15 14:08:22  lange
- * -= ack/nak; -= update rate limit for atomic data
- *
- * Revision 1.23  2000/05/02 13:49:39  lange
- * Uses GNU regex library (0.12) for pattern matching;
- * Fixed some CAS beacon problems (reconnecting IOCs)
- *
  *********************************************************************-*/
 
 #include <sys/types.h>

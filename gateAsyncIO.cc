@@ -19,23 +19,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.3  2002/10/09 21:55:47  evans
- * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
- * sigignore.
- *
- * Revision 1.2  2002/07/29 16:06:01  jba
- * Added license information.
- *
- * Revision 1.1  2000/04/05 15:59:32  lange
- * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
- *
- *
  *********************************************************************-*/
 
 #include "gateResources.h"

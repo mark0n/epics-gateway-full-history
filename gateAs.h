@@ -24,41 +24,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.20  2002/08/16 16:23:23  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.18  2002/07/29 16:06:01  jba
- * Added license information.
- *
- * Revision 1.17  2002/07/18 15:07:45  lange
- * Optimisation (connect time): expression matching only once in pvExistTest()
- *
- * Revision 1.16  2002/02/08 12:01:03  lange
- * Bugfix: NULL asg group when adding DENY entry.
- * (Reported and suggested by Stephanie Allison)
- *
- * Revision 1.15  2001/08/16 15:44:13  lange
- * Fixed timestamped connection loss messages (reported by Joan Sage)
- *
- * Revision 1.14  2001/03/15 19:11:13  lange
- * Fixed a few minor Solaris warnings
- *
- * Revision 1.13  2000/06/15 12:51:04  lange
- * Patch for using regex.h with the HP aCC Compiler.
- *
- * Revision 1.12  2000/05/03 17:08:30  lange
- * Minor Bugfix, enhanced report functions.
- *
- * Revision 1.11  2000/05/02 13:49:39  lange
- * Uses GNU regex library (0.12) for pattern matching;
- * Fixed some CAS beacon problems (reconnecting IOCs)
- *
  *********************************************************************-*/
 
 #include <stdio.h>

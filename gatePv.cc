@@ -23,57 +23,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.38  2003/02/24 19:04:15  evans
- * Fixed typo in if statement in gateVcData::write.  Fixed it to return
- * without doing anything if pending_write is NULL.
- *
- * Revision 1.37  2002/12/18 23:46:48  evans
- * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
- * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
- * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
- * flushAsyncETQueue to not malloc the pvExistReturn.
- *
- * Revision 1.36  2002/10/09 21:55:47  evans
- * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
- * sigignore.
- *
- * Revision 1.35  2002/10/01 18:30:42  evans
- * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
- * instead.)  Added -signore command-line option to set
- * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
- * command-line strings in fixed-length variables.  Changed refreshBeacon
- * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
- * been fixed.  It appears to work but the performance is less than the
- * old Gateway.
- *
- * Revision 1.34  2002/08/16 16:23:24  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.33  2002/07/29 16:06:02  jba
- * Added license information.
- *
- * Revision 1.32  2001/12/20 12:42:46  lange
- * fix for memory leak in flushAsyncETQueue() by Joan Sage
- *
- * Revision 1.31  2000/10/18 16:06:28  lange
- * Bugfix in beacon relay mechanism
- *
- * Revision 1.30  2000/06/15 12:53:08  lange
- * += "-mask" commandline option to specify CA event mask.
- *
- * Revision 1.29  2000/05/02 13:49:39  lange
- * Uses GNU regex library (0.12) for pattern matching;
- * Fixed some CAS beacon problems (reconnecting IOCs)
- *
- * Revision 1.28  2000/04/05 15:59:33  lange
- * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
- *
  *********************************************************************-*/
 
 #define DEBUG_TOTAL_PV 0
@@ -84,7 +33,6 @@
 #define DEBUG_PUT 0
 #define DEBUG_BEAM 0
 #define DEBUG_ENUM 0
-#define DEBUG_TIMESTAMP 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -1370,21 +1318,7 @@ gdd* gatePvData::eventStringCB(void *dbr)
 	// DBR_TIME_STRING response
 	str->copy(ts->value);
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventStringCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-	
-#endif
-#endif
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 
@@ -1401,21 +1335,7 @@ gdd* gatePvData::eventEnumCB(void *dbr)
 	// DBR_TIME_ENUM response
 	value->putConvert(ts->value);
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventEnumCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-#endif
-#endif
-
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 
@@ -1443,20 +1363,7 @@ gdd* gatePvData::eventLongCB(void *dbr)
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventLongCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-#endif
-#endif
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 
@@ -1484,20 +1391,7 @@ gdd* gatePvData::eventCharCB(void *dbr)
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventCharCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-#endif
-#endif
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 
@@ -1525,20 +1419,7 @@ gdd* gatePvData::eventFloatCB(void *dbr)
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventFloatCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-#endif
-#endif
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 
@@ -1567,19 +1448,6 @@ gdd* gatePvData::eventDoubleCB(void *dbr)
 	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp(&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventDoubleCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-#endif
-#endif
 	return value;
 }
 
@@ -1607,20 +1475,7 @@ gdd* gatePvData::eventShortCB(void *dbr)
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
-#if DEBUG_TIMESTAMP
-	fprintf(stderr,"eventShortCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
-	  ts->stamp.nsec);
-	{
-		TS_STAMP ts;
-		value->getTimeStamp(&ts);
-		fprintf(stderr,"  as set: %u %u\n",
-		  ts.secPastEpoch,ts.nsec);
-	}
-#if 0
-	value->dump();
-#endif
-#endif
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 
