@@ -90,11 +90,10 @@ int gateAs::initPvList(const char* lfile)
 
 int gateAs::readPvList(const char* lfile)
 {
-	int len,i,lev,line=0;
-	long rc;
+	int i,lev,line=0;
 	FILE* fd;
 	char inbuf[200];
-	char *name,*cmd,*asg,*asl,*rname,*pbuf,*ptr;
+	char *name,*cmd,*asg,*asl,*rname,*ptr;
 	gateAsEntry* pe;
 	gateAsAlias* pa;
 	gateAsDeny*  pd;
@@ -308,7 +307,7 @@ long gateAs::initialize(const char* afile)
 
 int gateAs::readFunc(char* buf, int max)
 {
-	int rc,l,n;
+	int l,n;
 	static aitBool one_pass=aitFalse;
 	static char rbuf[150];
 	static char* rptr=NULL;
