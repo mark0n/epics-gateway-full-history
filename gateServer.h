@@ -12,7 +12,7 @@
 #define _GATESERVER_H_
 
 // Define this to manage file descriptors
-#define USE_FDS 1
+#define USE_FDS
 
 /*+*********************************************************************
  *
@@ -33,6 +33,12 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.31  2002/12/18 23:46:49  evans
+ * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
+ * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
+ * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
+ * flushAsyncETQueue to not malloc the pvExistReturn.
+ *
  * Revision 1.30  2002/10/01 18:30:44  evans
  * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
  * instead.)  Added -signore command-line option to set
@@ -103,15 +109,7 @@ public:
 class gateFd : public fdReg
 {
 public:
-#if DEBUG_TIMES
-	gateFd(const int fdIn,const fdRegType typ,gateServer& s):
-	  fdReg(fdIn,typ),server(s) {
-	    printf("gateFd::gateFd: [%d] fd=%d\n",++count,fdIn);
-	}
-#else    
-	gateFd(const int fdIn,const fdRegType typ,gateServer& s):
-		fdReg(fdIn,typ),server(s) { }
-#endif	
+	gateFd(const int fdIn,const fdRegType typ,gateServer& s);
 	virtual ~gateFd(void);
 private:
 	virtual void callBack(void);

@@ -22,50 +22,6 @@
  * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
  *             R. Lange (BESSY)
  *
- * $Revision$
- * $Date$
- *
- * $Author$
- *
- * $Log$
- * Revision 1.48  2002/12/18 23:46:49  evans
- * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
- * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
- * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
- * flushAsyncETQueue to not malloc the pvExistReturn.
- *
- * Revision 1.47  2002/10/09 21:55:48  evans
- * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
- * sigignore.
- *
- * Revision 1.46  2002/10/01 18:30:43  evans
- * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
- * instead.)  Added -signore command-line option to set
- * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
- * command-line strings in fixed-length variables.  Changed refreshBeacon
- * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
- * been fixed.  It appears to work but the performance is less than the
- * old Gateway.
- *
- * Revision 1.45  2002/08/23 16:45:05  evans
- * Still not working.  Thread deadlock problem appears to be solved.
- * Enums are not working right.  Signals are not working right.
- * ClientHostName and Beacons are not implemented.  Has not been tested
- * extensively becasue of these problems.
- *
- * Revision 1.44  2002/08/16 16:23:25  evans
- * Initial files for Gateway 2.0 being developed to work with Base 3.14.
- *
- * Revision 1.42  2002/07/29 16:06:03  jba
- * Added license information.
- *
- * Revision 1.41  2002/07/24 15:17:21  evans
- * Added CPUFract stat PV.  Added GATEWAY_UPDATE_LEVEL to gateVersion.h.
- * Printed BASE_VERSION_STRING to header of gateway.log.
- *
- * Revision 1.40  2002/07/19 06:28:23  lange
- * Cosmetics.
- *
  *********************************************************************-*/
 
 #define DEBUG_SET_STAT 0
@@ -73,6 +29,7 @@
 #define DEBUG_PV_LIST 0
 #define DEBUG_PV_CONNNECT_CLEANUP 0
 #define DEBUG_TIMES 1
+#define DEBUG_FD 1
 
 // This causes the GATE_DEBUG_VERSION to be printed in the mainLoop
 #define DEBUG_ 0
@@ -502,12 +459,23 @@ void gateServer::report2(void)
 	fflush(stdout);
 }
 
-#if USE_FDS
+#ifdef USE_FDS
 // ------------------------- file descriptor servicing ----------------------
+
+gateFd::gateFd(const int fdIn,const fdRegType typ,gateServer& s) :
+	fdReg(fdIn,typ),server(s)
+{
+#if DEBUG_TIMES && DEBUG_FD
+	printf("%s gateFd::gateFd: fd=%d count=%d\n",timeStamp(),fdIn,++count);
+#endif
+}
 
 gateFd::~gateFd(void)
 {
 	gateDebug0(5,"~gateFd()\n");
+#if DEBUG_TIMES && DEBUG_FD
+	printf("%s gateFd::~gateFd: count=%d\n",timeStamp(),++count);
+#endif
 }
 
 void gateFd::callBack(void)
@@ -520,20 +488,22 @@ void gateFd::callBack(void)
 	// This causes too many calls to ca_poll, most of which are
 	// wasted.  Without it, fdManager exits when there is activity on
 	// a file descriptor.  If file descriptors are not managed
-	// (USE_FDS=0), fdManager continues when there is activity on a
-	// file descriptor
+	// (USE_FDS not defined), fdManager continues when there is
+	// activity on a file descriptor
 	ca_poll();
 #endif
 #if DEBUG_TIMES && 0
 	epicsTime end(epicsTime::getCurrent());
-	printf("  gateFd::callBack: pend: %.3f\n",
-	  (double)(end-begin));
+	printf("%s gateFd::callBack: pend: %.3f\n",
+	  timeStamp(),(double)(end-begin));
 #endif
 }
 #endif
 
+#ifdef USE_FDS
 #if DEBUG_TIMES
 int gateFd::count(0);
+#endif	
 #endif	
 
 // ----------------------- server methods --------------------
@@ -549,7 +519,12 @@ gateServer::gateServer(char *prefix ) :
 	total_unconnected(0u),
 	total_dead(0u),
 	total_connecting(0u),
+# ifdef USE_FDS
+	total_disconnected(0u),
+	total_fd(0u)
+# else
 	total_disconnected(0u)
+# endif
 #else
 	caServer()
 #endif
@@ -558,7 +533,7 @@ gateServer::gateServer(char *prefix ) :
 
 	// Initialize channel access
 	SEVCHK(ca_task_initialize(),"CA task initialize");
-#if USE_FDS
+#ifdef USE_FDS
 	SEVCHK(ca_add_fd_registration(::fdCB,this),"CA add fd registration");
 #endif
 	SEVCHK(ca_add_exception_event(::exCB,NULL),"CA add exception event");
@@ -640,7 +615,7 @@ void gateServer::checkEvent(void)
 	inactiveDeadCleanup();
 }
 
-#if USE_FDS
+#ifdef USE_FDS
 void gateServer::fdCB(void* ua, int fd, int opened)
 {
 	gateServer* s = (gateServer*)ua;
@@ -649,15 +624,12 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 	gateDebug3(5,"gateServer::fdCB(gateServer=%p,fd=%d,opened=%d)\n",
 		ua,fd,opened);
 
-	if((opened))
-	{
+	if((opened)) {
 #ifdef STAT_PVS
 		s->setStat(statFd,++(s->total_fd));
 #endif
 		reg=new gateFd(fd,fdrRead,*s);
-	}
-	else
-	{
+	} else {
 #ifdef STAT_PVS
 		s->setStat(statFd,--(s->total_fd));
 #endif
@@ -1275,7 +1247,7 @@ void gateServer::initStats(char *prefix)
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
-# if USE_FDS
+# ifdef USE_FDS
 		case statFd:
 			stat_table[i].name="fd";
 			stat_table[i].init_value=&total_fd;
