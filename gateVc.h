@@ -31,6 +31,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.26  2002/08/16 16:23:26  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.25  2002/07/29 16:06:04  jba
  * Added license information.
  *
@@ -157,6 +160,7 @@ public:
 	caStatus putCB(int status);
 	unsigned long getVcID(void) const { return vcID; }
 	gatePendingWrite *pendingWrite() const { return pending_write; }
+	void cancelPendingWrite(void) { pending_write=NULL; }
 	void flushAsyncReadQueue(void);
 	void flushAsyncWriteQueue(int docallback);
 

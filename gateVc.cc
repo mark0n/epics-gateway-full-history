@@ -29,6 +29,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.37  2002/10/09 21:55:49  evans
+ * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
+ * sigignore.
+ *
  * Revision 1.36  2002/10/01 18:30:45  evans
  * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
  * instead.)  Added -signore command-line option to set
@@ -270,6 +274,8 @@ const char* gateVcData::getName() const
 	return name();
 }
 
+// This is called whenever a client of casPV with asynchronous io
+// disconnects
 void gateVcData::destroy(void)
 {
 	gateDebug0(1,"gateVcData::destroy()\n");
@@ -838,21 +844,19 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 			caStatus stat = pv->put(&dd, docallback);
 			if(stat != S_casApp_success) return stat;
 
-			if(docallback)
-			{
-				
+			if(docallback) {
 				// Start a pending write
 #if DEBUG_GDD
 				fflush(stderr);
 				printf("pending_write\n");
 				fflush(stdout);
 #endif
-				pending_write = new gatePendingWrite(ctx,dd);
+				pending_write = new gatePendingWrite(*this,ctx,dd);
 				if(!pending_write) return S_casApp_noMemory;
 				else return S_casApp_asyncCompletion;
-			}
-			else
+			} else {
 				return S_casApp_success;
+			}
 		}
 	}
 }

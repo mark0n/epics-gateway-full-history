@@ -11,6 +11,9 @@
 #ifndef _GATESERVER_H_
 #define _GATESERVER_H_
 
+// Define this to manage file descriptors
+#define USE_FDS 1
+
 /*+*********************************************************************
  *
  * File:       gateServer.h
@@ -30,6 +33,15 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.30  2002/10/01 18:30:44  evans
+ * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
+ * instead.)  Added -signore command-line option to set
+ * EPICS_CAS_IGNORE_ADDR_LIST.  Fixed it so it wasn't (quietly) storing
+ * command-line strings in fixed-length variables.  Changed refreshBeacon
+ * to generateBeaconAnomaly and enabled it.  Most of CAS problems have
+ * been fixed.  It appears to work but the performance is less than the
+ * old Gateway.
+ *
  * Revision 1.29  2002/08/16 16:23:25  evans
  * Initial files for Gateway 2.0 being developed to work with Base 3.14.
  *
@@ -85,6 +97,7 @@ public:
 	void destroy(void) { delete pvd; delete this; }
 };
 
+#ifdef USE_FDS
 // ---------------------- fd manager ------------------------
 
 class gateFd : public fdReg
@@ -109,55 +122,62 @@ private:
 #endif	
 
 };
+#endif
 
 // ---------------------- stats -----------------------------
 
 // server stats definitions
 #ifdef STAT_PVS
-#define statVcTotal      0
-#define statPvTotal      1
+# define statVcTotal      0
+# define statPvTotal      1
 // This should be connected, but left for backward compatibility
-#define statAlive        2
-#define statActive       3
-#define statInactive     4
-#define statUnconnected  5
-#define statDead         6
-#define statConnecting   7
-#define statDisconnected 8
-#define NEXT_STAT_PV     9
-#else		     
-#define NEXT_STAT_PV   0
+# define statAlive        2
+# define statActive       3
+# define statInactive     4
+# define statUnconnected  5
+# define statDead         6
+# define statConnecting   7
+# define statDisconnected 8
+# ifdef USE_FDS
+#  define statFd          9
+#  define NEXT_STAT_PV   10
+# else		     
+#  define NEXT_STAT_PV    9
+# endif
+#else
+# define NEXT_STAT_PV     0
 #endif
 
+
 #ifdef RATE_STATS
-#define statClientEventRate NEXT_STAT_PV
-#define statPostEventRate   NEXT_STAT_PV+1
-#define statExistTestRate   NEXT_STAT_PV+2
-#define statLoopRate        NEXT_STAT_PV+3
-#define statCPUFract        NEXT_STAT_PV+4
-#define NEXT_RATE_STAT      NEXT_STAT_PV+5
+# define statClientEventRate NEXT_STAT_PV
+# define statPostEventRate   NEXT_STAT_PV+1
+# define statExistTestRate   NEXT_STAT_PV+2
+# define statLoopRate        NEXT_STAT_PV+3
+# define statCPUFract        NEXT_STAT_PV+4
+# define NEXT_RATE_STAT      NEXT_STAT_PV+5
 #else
-#define NEXT_RATE_STAT      NEXT_STAT_PV
+# define NEXT_RATE_STAT      NEXT_STAT_PV
 #endif
 
 #ifdef CAS_DIAGNOSTICS
-#define statServerEventRate        NEXT_RATE_STAT
-#define statServerEventRequestRate NEXT_RATE_STAT+1
-#define NEXT_CONTROL_PV            NEXT_RATE_STAT+2
+# define statServerEventRate        NEXT_RATE_STAT
+# define statServerEventRequestRate NEXT_RATE_STAT+1
+# define NEXT_CONTROL_PV            NEXT_RATE_STAT+2
 #else
-#define NEXT_CONTROL_PV            NEXT_RATE_STAT
+# define NEXT_CONTROL_PV            NEXT_RATE_STAT
 #endif
 
 #ifdef CONTROL_PVS
-#define statCommandFlag            NEXT_CONTROL_PV
-#define statReport1Flag            NEXT_CONTROL_PV+1
-#define statReport2Flag            NEXT_CONTROL_PV+2
-#define statReport3Flag            NEXT_CONTROL_PV+3
-#define statNewAsFlag              NEXT_CONTROL_PV+4
-#define statQuitFlag               NEXT_CONTROL_PV+5
-#define NEXT_CAS_STAT              NEXT_CONTROL_PV+6
+# define statCommandFlag            NEXT_CONTROL_PV
+# define statReport1Flag            NEXT_CONTROL_PV+1
+# define statReport2Flag            NEXT_CONTROL_PV+2
+# define statReport3Flag            NEXT_CONTROL_PV+3
+# define statNewAsFlag              NEXT_CONTROL_PV+4
+# define statQuitFlag               NEXT_CONTROL_PV+5
+# define NEXT_CAS_STAT              NEXT_CONTROL_PV+6
 #else
-#define NEXT_CAS_STAT              NEXT_CONTROL_PV
+# define NEXT_CAS_STAT              NEXT_CONTROL_PV
 #endif
 
 // Number of server stats definitions
@@ -241,6 +261,9 @@ public:
 	unsigned long total_dead;
 	unsigned long total_connecting;
 	unsigned long total_disconnected;
+# ifdef USE_FDS
+	unsigned long total_fd;
+# endif
 #endif
 #ifdef RATE_STATS
 	unsigned long client_event_count;
@@ -319,6 +342,9 @@ private:
 	static void sig_usr2(int);
 
 public:
+#ifdef USE_FDS
+	static void fdCB(void* ua, int fd, int opened);
+#endif
 	static void exCB(EXCEPT_ARGS args);
 	static void errlogCB(void *userData, const char *message);
 };

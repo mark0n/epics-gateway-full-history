@@ -29,6 +29,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.36  2002/10/09 21:55:47  evans
+ * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
+ * sigignore.
+ *
  * Revision 1.35  2002/10/01 18:30:42  evans
  * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
  * instead.)  Added -signore command-line option to set
@@ -856,16 +860,12 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 {
 	gateDebug1(10,"gatePvData::flushAsyncETQueue() name=%s\n",name());
 	gateAsyncE* asynce;
-	pvExistReturn* pPver;
 
 	while((asynce=eio.first()))	{
 		gateDebug1(1,"gatePvData::flushAsyncETQueue() posting %p\n",
 				   asynce);
 		asynce->removeFromQueue();
-		
-		pPver = new pvExistReturn(er);
-		asynce->postIOCompletion(*pPver);
-        delete pPver;
+		asynce->postIOCompletion(pvExistReturn(er));
 	}
 }
 

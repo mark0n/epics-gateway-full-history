@@ -25,6 +25,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.3  2002/10/09 21:55:47  evans
+ * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
+ * sigignore.
+ *
  * Revision 1.2  2002/07/29 16:06:01  jba
  * Added license information.
  *
@@ -35,7 +39,8 @@
  *********************************************************************-*/
 
 #include "gateResources.h"
-#include "gateAsyncIO.h"
+#include "gateServer.h"
+#include "gateVc.h"
 
 // ------------------------------- async exist test methods
 
@@ -72,6 +77,7 @@ gatePendingWrite::~gatePendingWrite(void)
 {
 	gateDebug0(10,"~gatePendingWrite()\n");
 	dd.unreference();
+    owner.cancelPendingWrite();
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

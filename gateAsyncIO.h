@@ -27,6 +27,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.3  2002/08/16 16:23:23  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.2  2002/07/29 16:06:02  jba
  * Added license information.
  *
@@ -38,6 +41,8 @@
 
 #include "tsDLList.h"
 #include "casdef.h"
+
+class gateVcData;
 
 // ---------------------- async exist test pending
 
@@ -113,13 +118,17 @@ private:
 class gatePendingWrite : public casAsyncWriteIO
 {
 public:
-	gatePendingWrite(const casCtx &ctx, const gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
-		{ dd.reference(); }
-
+	gatePendingWrite(gateVcData &wowner, const casCtx &ctx, const gdd& wdd) :
+	  casAsyncWriteIO(ctx),
+	  owner(wowner),
+	  dd(wdd)
+	  { dd.reference(); }
+	
 	virtual ~gatePendingWrite(void);
-
+	
 	const gdd &DD(void) const { return dd; }
 private:
+	gateVcData &owner;
 	const gdd &dd;
 };
 

@@ -28,6 +28,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.47  2002/10/09 21:55:48  evans
+ * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
+ * sigignore.
+ *
  * Revision 1.46  2002/10/01 18:30:43  evans
  * Removed DENY FROM capability.  (Use EPICS_CAS_IGNORE_ADDR_LIST
  * instead.)  Added -signore command-line option to set
@@ -104,6 +108,12 @@ void gateAsCa(void);
 
 // extern "C" wrappers needed by CA routines for callbacks
 extern "C" {
+#ifdef USE_FDS
+    // file descriptor callback
+	static void fdCB(void* ua, int fd, int opened) {
+		gateServer::fdCB(ua, fd, opened);
+	}
+#endif
 	// exception callback
 	static void exCB(EXCEPT_ARGS args) {
 		gateServer::exCB(args);
@@ -486,6 +496,7 @@ void gateServer::report2(void)
 	fflush(stdout);
 }
 
+#if USE_FDS
 // ------------------------- file descriptor servicing ----------------------
 
 gateFd::~gateFd(void)
@@ -499,14 +510,21 @@ void gateFd::callBack(void)
     epicsTime begin(epicsTime::getCurrent());
 #endif
 	gateDebug0(51,"gateFd::callback()\n");
-	// server.checkEvent();  old way
+#if 0
+	// This causes too many calls to ca_poll, most of which are
+	// wasted.  Without it, fdManager exits when there is activity on
+	// a file descriptor.  If file descriptors are not managed
+	// (USE_FDS=0), fdManager continues when there is activity on a
+	// file descriptor
 	ca_poll();
+#endif
 #if DEBUG_TIMES
 	epicsTime end(epicsTime::getCurrent());
 	printf("  gateFd::callBack: pend: %.3f\n",
 	  (double)(end-begin));
 #endif
 }
+#endif
 
 #if DEBUG_TIMES
 int gateFd::count(0);
@@ -534,6 +552,9 @@ gateServer::gateServer(char *prefix ) :
 
 	// Initialize channel access
 	SEVCHK(ca_task_initialize(),"CA task initialize");
+#if USE_FDS
+	SEVCHK(ca_add_fd_registration(::fdCB,this),"CA add fd registration");
+#endif
 	SEVCHK(ca_add_exception_event(::exCB,NULL),"CA add exception event");
 
 	select_mask|=(alarmEventMask()|valueEventMask()|logEventMask());
@@ -612,6 +633,34 @@ void gateServer::checkEvent(void)
 	connectCleanup();
 	inactiveDeadCleanup();
 }
+
+#if USE_FDS
+void gateServer::fdCB(void* ua, int fd, int opened)
+{
+	gateServer* s = (gateServer*)ua;
+	fdReg* reg;
+
+	gateDebug3(5,"gateServer::fdCB(gateServer=%p,fd=%d,opened=%d)\n",
+		ua,fd,opened);
+
+	if((opened))
+	{
+#ifdef STAT_PVS
+		s->setStat(statFd,++(s->total_fd));
+#endif
+		reg=new gateFd(fd,fdrRead,*s);
+	}
+	else
+	{
+#ifdef STAT_PVS
+		s->setStat(statFd,--(s->total_fd));
+#endif
+		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
+		reg=fileDescriptorManager.lookUpFD(fd,fdrRead);
+		delete reg;
+	}
+}
+#endif
 
 double gateServer::delay_quick=.001; // 1 ms
 double gateServer::delay_normal=1.0; // 1 sec
