@@ -423,12 +423,11 @@ static int startEverything(char *prefix)
 		fprintf(fp,"# Gateway running in read-only mode.\n");
 	}
 
+	// Print command-line arguments to script file
 	if(client_ip_addr) {
 		fprintf(fp,"# %s\n",gate_ca_list);
 		fprintf(fp,"# %s\n",gate_ca_auto_list);
 	}
-
-	// Print command-line arguments to script file
 	if(server_ip_addr) fprintf(fp,"# %s\n",gate_cas_addr);
 	if(server_ignore_ip_addr) fprintf(fp,"# %s\n",gate_cas_ignore_addr);
 	if(client_port) fprintf(fp,"# %s\n",gate_ca_port);
@@ -546,6 +545,7 @@ static int startEverything(char *prefix)
 #endif
 
 	// Write file headers
+	// Output
 	printf("%s %s [%s %s]\n",
 	  timeStamp(),GATEWAY_VERSION_STRING,__DATE__,__TIME__);
 #ifndef WIN32
@@ -558,6 +558,16 @@ static int startEverything(char *prefix)
 #else
 	printf("%s PID=%d\n",EPICS_VERSION_STRING,sid);
 #endif
+	if(client_ip_addr) {
+		printf("%s\n",gate_ca_list);
+		printf("%s\n",gate_ca_auto_list);
+	}
+	if(server_ip_addr) printf("%s\n",gate_cas_addr);
+	if(server_ignore_ip_addr) printf("%s\n",gate_cas_ignore_addr);
+	if(client_port) printf("%s\n",gate_ca_port);
+	if(server_port) printf("%s\n",gate_cas_port);
+
+	// Put log
 	FILE *putFp=global_resources->getPutlogFp();
 	if(putFp) {
 		fprintf(putFp,"%s %s [%s %s]\n",
