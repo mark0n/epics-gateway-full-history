@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.13  1997/02/21 17:31:21  jbk
+ * many many bug fixes and improvements
+ *
  * Revision 1.11  1996/12/17 14:32:37  jbk
  * Updates for access security
  *
@@ -180,10 +183,12 @@ public:
 	int getStatus(void) { return status; }
 
 	casEventMask select_mask;
+	static long total_vc;
 protected:
 	void setState(gateVcState s)	{ pv_state=s; }
 	gatePvData* pv;
 private:
+	int event_count;
 	aitBool read_access,write_access;
 	time_t time_last_trans;
 	int status;

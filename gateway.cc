@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.13  1997/02/21 17:31:22  jbk
+// many many bug fixes and improvements
+//
 // Revision 1.12  1997/02/11 21:47:08  jbk
 // Access security updates, bug fixes
 //
@@ -98,9 +101,9 @@ void operator delete(void* x)
 //
 // Defaults:
 //	Home directory = .
-//	Access security file = GATEWAY.access
-//	process variable list file = GATEWAY.pvlist
-//	log file = GATEWAY.log
+//	Access security file = gateway.access
+//	process variable list file = gateway.pvlist
+//	log file = gateway.log
 //	debug level = 0 (none)
 //  connect_timeout = 1 second
 //  inactive_timeout = 60*60*2 seconds (2 hours)
@@ -133,7 +136,7 @@ void operator delete(void* x)
 #define PARM_UID			17
 
 #define HOME_DIR_SIZE 300
-#define GATE_LOG      "GATEWAY.log"
+#define GATE_LOG      "gateway.log"
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
@@ -596,33 +599,38 @@ int main(int argc, char** argv)
 	// ----------------------------------------
 	// change stderr and stdout to the log file
 
-	if(log_file==NULL) log_file=GATE_LOG;
-	time(&t);
-
-	if(stat(log_file,&sbuf)==0)
+	if(log_file || make_server)
 	{
-		if(sbuf.st_size>0)
+		if(log_file==NULL) log_file=GATE_LOG;
+		time(&t);
+
+		if(stat(log_file,&sbuf)==0)
 		{
-			sprintf(cur_time,"%s.%lu",log_file,(unsigned long)t);
-			if(link(log_file,cur_time)<0)
+			if(sbuf.st_size>0)
 			{
-				fprintf(stderr,"Failure to move old log file to new name %s",
-					cur_time);
+				sprintf(cur_time,"%s.%lu",log_file,(unsigned long)t);
+				if(link(log_file,cur_time)<0)
+				{
+					fprintf(stderr,"Failure to move old log to new name %s",
+						cur_time);
+				}
+				else
+					unlink(log_file);
 			}
-			else
-				unlink(log_file);
+		}
+		if( (freopen(log_file,"w",stderr))==NULL )
+		{
+			fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
+			fflush(stderr);
+		}
+		if( (freopen(log_file,"a",stdout))==NULL )
+		{
+			fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
+			fflush(stderr);
 		}
 	}
-	if( (freopen(log_file,"w",stderr))==NULL )
-	{
-		fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
-		fflush(stderr);
-	}
-	if( (freopen(log_file,"a",stdout))==NULL )
-	{
-		fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
-		fflush(stderr);
-	}
+	else
+		log_file="<terminal>";
 
 	// ----------------------------------------
 	// set up gateway resources
@@ -697,7 +705,7 @@ void print_instructions(void)
   pr(stderr," info, 1 gives small amount.\n\n");
 
   pr(stderr,"-pvlist file_name: Name of file with all the allowed PVs in it\n");
-  pr(stderr," See the sample file GATEWAY.pvlist in the source distribution\n");
+  pr(stderr," See the sample file gateway.pvlist in the source distribution\n");
   pr(stderr," for a description of how to create this file.\n");
 
   pr(stderr,"-access file_name: Name of file with all the EPICS access\n");

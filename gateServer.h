@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.12  1997/02/21 17:31:19  jbk
+ * many many bug fixes and improvements
+ *
  * Revision 1.11  1997/02/11 21:47:06  jbk
  * Access security updates, bug fixes
  *
@@ -45,6 +48,7 @@
 
 #include <sys/types.h>
 #include <sys/time.h>
+#include <sys/utsname.h>
 
 #include "casdef.h"
 #include "tsHash.h"
@@ -58,6 +62,7 @@ class gateServer;
 class gatePvData;
 class gateVcData;
 class gateAs;
+class gateStat;
 class gdd;
 
 typedef struct exception_handler_args       EXCEPT_ARGS;
@@ -93,6 +98,22 @@ private:
 
 // ---------------------------- server -------------------------------
 
+#define statActive	0
+#define statAlive	1
+#define statVcTotal	2
+#define statFd		3
+#define statPvTotal	4
+#define statCount	5
+
+struct gateServerStats
+{
+	char* name;
+	char* pvname;
+	gateStat* pv;
+	long* init_value;
+};
+typedef struct gateServerStats;
+
 class gateServer : public caServer
 {
 public:
@@ -107,6 +128,13 @@ public:
 	void report(void);
 	void report2(void);
 	gateAs* getAs(void) { return as_rules; }
+	casEventMask select_mask;
+	gateStat* getStat(int type);
+	void setStat(int type,double);
+	void setStat(int type,long);
+	void clearStat(int type);
+	long initStatValue(int type);
+	void initStats(void);
 
 	// CAS application management functions
 	void checkEvent(void);
@@ -156,6 +184,17 @@ private:
 	gateAs* as_rules;
 	unsigned long exist_count;
 	time_t start_time;
+	char* host_name;
+	int host_len;
+
+	gateStat* pv_alive;		// <host>.alive
+	gateStat* pv_active;	// <host>.active
+	gateStat* pv_total;		// <host>.total
+	gateStat* pv_fd;		// <host>.total
+	char* name_alive;
+	char* name_active;
+	char* name_total;
+	char* name_fd;
 
 	static void exCB(EXCEPT_ARGS args);
 	static void fdCB(void* ua, int fd, int opened);
@@ -163,11 +202,15 @@ private:
 	static osiTime delay_quick;
 	static osiTime delay_normal;
 	static osiTime* delay_current;
+	static long total_fd;
+	static gateServerStats stat_table[];
 
 	static volatile int report_flag1,report_flag2;
 	static void sig_usr1(int);
 	static void sig_usr2(int);
 };
+
+inline gateStat* gateServer::getStat(int type) { return stat_table[type].pv; }
 
 inline time_t gateServer::timeDeadCheck(void) const
 	{ return time(NULL)-last_dead_cleanup; }

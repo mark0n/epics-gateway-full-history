@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.14  1997/02/21 17:31:15  jbk
+// many many bug fixes and improvements
+//
 // Revision 1.13  1997/02/11 21:47:04  jbk
 // Access security updates, bug fixes
 //
@@ -92,6 +95,7 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 	initClear();
+	m->setStat(statPvTotal,++total_pv);
 	init(m,e,name);
 }
 
@@ -99,6 +103,7 @@ gatePvData::gatePvData(gateServer* m,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 	initClear();
+	m->setStat(statPvTotal,++total_pv);
 	init(m,m->getAs()->findEntry(name),name);
 }
 
@@ -107,6 +112,7 @@ gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateVcData=%8.8x,name=%s)\n",
 		(int)m,(int)d,name);
 	initClear();
+	m->setStat(statPvTotal,++total_pv);
 	setVC(d);
 	markAddRemoveNeeded();
 	init(m,m->getAs()->findEntry(name),name);
@@ -117,6 +123,7 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateExistData=%8.8x,name=%s)\n",
 		(int)m,(int)d,name);
 	initClear();
+	m->setStat(statPvTotal,++total_pv);
 	markAckNakNeeded();
 	addET(d);
 	init(m,m->getAs()->findEntry(name),name);
@@ -125,11 +132,16 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 gatePvData::~gatePvData(void)
 {
 	gateDebug1(5,"~gatePvData() name=%s\n",name());
+	mrg->setStat(statPvTotal,--total_pv);
 	unmonitor();
 	status=ca_clear_channel(chan);
 	SEVCHK(status,"clear channel");
 	delete [] pv_name;
 }
+
+long gatePvData::total_alive=0;
+long gatePvData::total_active=0;
+long gatePvData::total_pv=0;
 
 void gatePvData::initClear(void)
 {
@@ -196,6 +208,7 @@ int gatePvData::activate(gateVcData* vcd)
 {
 	gateDebug2(5,"gatePvData::activate(gateVcData=%8.8x) name=%s\n",
 		(int)vcd,name());
+	mrg->setStat(statActive,++total_active);
 
 	int rc=0;
 
@@ -231,6 +244,7 @@ int gatePvData::activate(gateVcData* vcd)
 int gatePvData::deactivate(void)
 {
 	gateDebug1(5,"gatePvData::deactivate() name=%s\n",name());
+	mrg->setStat(statActive,--total_active);
 
 	int rc=0;
 
@@ -314,11 +328,13 @@ int gatePvData::life(void)
 			}
 			markAckNakNotNeeded();
 		}
+		mrg->setStat(statAlive,++total_alive);
 		break;
 	case gatePvDead:
 		gateDebug0(3,"gatePvData::life() dead PV\n");
 		setAliveTime();
 		setState(gatePvInactive);
+		mrg->setStat(statAlive,++total_alive);
 		break;
 	case gatePvInactive:
 		gateDebug0(3,"gatePvData::life() inactive PV\n");
@@ -345,10 +361,12 @@ int gatePvData::death(void)
 	{
 	case gatePvInactive:
 		gateDebug0(3,"gatePvData::death() inactive PV\n");
+		mrg->setStat(statAlive,--total_alive);
 		break;
 	case gatePvActive:
 		gateDebug0(3,"gatePvData::death() active PV\n");
 		if(vc) delete vc; // get rid of VC
+		mrg->setStat(statAlive,--total_alive);
 		break;
 	case gatePvConnect:
 		gateDebug0(3,"gatePvData::death() connecting PV\n");
@@ -412,6 +430,7 @@ int gatePvData::monitor(void)
 
 		if(ca_read_access(chan))
 		{
+			gateDebug1(5,"gatePvData::monitor() type=%d\n",eventType());
 			rc=ca_add_array_event(eventType(),0,chan,eventCB,this,
 				0.0,0.0,0.0,&event);
 			SEVCHK(rc,"gatePvData::Monitor() add event");
@@ -676,7 +695,8 @@ void gatePvData::putCB(EVENT_ARGS args)
 void gatePvData::eventCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
-	gateDebug1(5,"gatePvData::eventCB(gatePvData=%8.8x)\n",pv);
+	gateDebug2(5,"gatePvData::eventCB(gatePvData=%8.8x) type=%d\n",
+		pv,args.type);
 	gdd* dd;
 
 	if(args.status==ECA_NORMAL)

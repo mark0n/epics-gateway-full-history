@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.19  1997/02/21 17:31:18  jbk
+// many many bug fixes and improvements
+//
 // Revision 1.18  1997/02/11 21:47:06  jbk
 // Access security updates, bug fixes
 //
@@ -64,6 +67,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <time.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
@@ -75,8 +79,7 @@
 #include "gateAs.h"
 #include "gateVc.h"
 #include "gatePv.h"
-
-#include <signal.h>
+#include "gateStat.h"
 
 void gateAsCa(void);
 
@@ -217,12 +220,27 @@ gateServer::gateServer(unsigned namelen,unsigned pvcount,unsigned simio):
 	caServer(namelen, pvcount, simio)
 {
 	unsigned i;
+	struct utsname ubuf;
 	gateDebug0(5,"gateServer()\n");
 	// this is a CA client, initialize the library
 	SEVCHK(ca_task_initialize(),"CA task initialize");
 	SEVCHK(ca_add_fd_registration(fdCB,this),"CA add fd registration");
 	SEVCHK(ca_add_exception_event(exCB,NULL),"CA add exception event");
 
+	pv_alive=NULL;
+	pv_active=NULL;
+	pv_total=NULL;
+	pv_fd=NULL;
+
+	select_mask|=(alarmEventMask|valueEventMask|logEventMask);
+
+	if(uname(&ubuf)<0)
+		host_name=strDup("gateway");
+	else
+		host_name=strDup(ubuf.nodename);
+
+	host_len=strlen(host_name);
+	initStats();
 	setDeadCheckTime();
 	setInactiveCheckTime();
 	setConnectCheckTime();
@@ -235,6 +253,12 @@ gateServer::~gateServer(void)
 	gateVcData *vc,*old_vc,*save_vc;
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
+
+	delete [] name_alive;
+	delete [] name_active;
+	delete [] name_total;
+	delete [] name_fd;
+	delete [] host_name;
 
 	while((pv_node=pv_list.first()))
 	{
@@ -278,14 +302,20 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 		(int)ua,fd,opened);
 
 	if((opened))
+	{
+		s->setStat(statFd,++total_fd);
 		reg=new gateFd(fd,fdrRead,*s);
+	}
 	else
 	{
+		s->setStat(statFd,--total_fd);
 		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
 		reg=fileDescriptorManager.lookUpFD(fd,fdrRead);
 		delete reg;
 	}
 }
+
+long gateServer::total_fd=0;
 
 osiTime gateServer::delay_quick(0u,100000u);
 osiTime gateServer::delay_normal(1u,0u);
@@ -404,8 +434,19 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	caStatus rc;
 	const char* real_name;
 	gateAsEntry* node;
+	char* stat_name=NULL;
+	int i;
 
 	++exist_count;
+
+	// trap PVs that start with hostname here
+	for(i=0;i<statCount;i++)
+	{
+		if(strcmp(pvname,stat_table[i].pvname)==0)
+		{
+			return pvExistReturn(S_casApp_success,stat_table[i].pvname);
+		}
+	}
 
 	if((real_name=as_rules->getAlias(pvname))==NULL)
 		real_name=pvname;
@@ -487,6 +528,16 @@ casPV* gateServer::createPV(const casCtx& c,const char* pvname)
 {
 	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
 	gateVcData* rc;
+	int i;
+
+	for(i=0;i<statCount;i++)
+	{
+		if(strcmp(pvname,stat_table[i].pvname)==0)
+		{
+			stat_table[i].pv=new gateStat(c,this,pvname,i);
+			return stat_table[i].pv;
+		}
+	}
 
 	rc=new gateVcData(c,this,pvname);
 
@@ -499,4 +550,42 @@ casPV* gateServer::createPV(const casCtx& c,const char* pvname)
 
 	return rc;
 }
+
+void gateServer::setStat(int type,double x)
+{
+	if(stat_table[type].pv) stat_table[type].pv->postData(x);
+}
+
+void gateServer::setStat(int type,long x)
+{
+	if(stat_table[type].pv) stat_table[type].pv->postData(x);
+}
+
+void gateServer::initStats(void)
+{
+	int i;
+	for(i=0;i<statCount;i++)
+	{
+		stat_table[i].pvname=new char[host_len+1+strlen(stat_table[i].name)+1];
+		sprintf(stat_table[i].pvname,"%s.%s",host_name,stat_table[i].name);
+	}
+}
+
+long gateServer::initStatValue(int type)
+{
+	return *stat_table[type].init_value;
+}
+
+void gateServer::clearStat(int type)
+{
+	stat_table[type].pv=NULL;
+}
+
+gateServerStats gateServer::stat_table[] = {
+	{ "active",NULL,NULL,&gatePvData::total_active },
+	{ "alive",NULL,NULL,&gatePvData::total_alive },
+	{ "vctotal",NULL,NULL,&gateVcData::total_vc },
+	{ "fd",NULL,NULL,&gateServer::total_fd },
+	{ "pvtotal",NULL,NULL,&gatePvData::total_pv },
+};
 

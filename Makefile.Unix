@@ -5,6 +5,9 @@
 # $Id$
 #
 # $Log$
+# Revision 1.8  1997/02/11 21:47:02  jbk
+# Access security updates, bug fixes
+#
 # Revision 1.7  1996/12/11 13:03:58  jbk
 # All the changes needed to implement access security.
 # Bug fixes for createChannel and access security stuff
@@ -39,10 +42,10 @@ USR_LDLIBS = -lgate -lca -lcas -lAs -lCom -lgdd
 
 SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc ../gateAs.cc \
 	      ../gateVc.cc ../gateway.cc ../gateExist.cc ../strmatch.cc \
-		  ../gateAsCa.cc
+		  ../gateAsCa.cc ../gateStat.cc
 
 LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o \
-		  strmatch.o gateAs.o gateAsCa.o
+		  strmatch.o gateAs.o gateAsCa.o gateStat.o
 
 LIBNAME = libgate.a
 

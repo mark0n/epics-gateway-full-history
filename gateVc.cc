@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.15  1997/02/21 17:31:20  jbk
+// many many bug fixes and improvements
+//
 // Revision 1.13  1997/02/11 21:47:07  jbk
 // Access security updates, bug fixes
 //
@@ -124,6 +127,7 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	else
 		write_access=aitTrue;
 
+	event_count=0;
 	time_last_trans=0;
 	read_access=aitTrue;
 	mrg=m;
@@ -165,7 +169,7 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	else
 		status=1;
 
-
+	mrg->setStat(statVcTotal,++total_vc);
 }
 
 gateVcData::~gateVcData(void)
@@ -178,7 +182,10 @@ gateVcData::~gateVcData(void)
 	delete [] pv_name;
 	pv_name="Error";
 	pv->setVC(NULL);
+	mrg->setStat(statVcTotal,--total_vc);
 }
+
+long gateVcData::total_vc=0 ;
 
 void gateVcData::destroy(void)
 {
@@ -460,8 +467,8 @@ void gateVcData::vcNew(void)
 			else
 #endif
 			{
-				if(value())			table.smartCopy(&asyncr->DD(),value());
 				if(attributes())	table.smartCopy(&asyncr->DD(),attributes());
+				if(value())			table.smartCopy(&asyncr->DD(),value());
 			}
 
 			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
@@ -475,13 +482,16 @@ void gateVcData::vcNew(void)
 void gateVcData::vcEvent(void)
 {
 	gateDebug1(10,"gateVcData::vcEvent() name=%s\n",name());
+	time_t t;
+
 	if(needPosting())
 	{
 		gateDebug0(2,"gateVcData::vcEvent() posting event\n");
 		if(event_data->isAtomic())
 		{
+			t=timeLastTrans();
 			// hardcoded to 1 second for monitor updates
-			if(timeLastTrans()>=1)
+			if(t>=1)
 			{
 				postEvent(select_mask,*event_data);
 				setTransTime();
@@ -489,8 +499,12 @@ void gateVcData::vcEvent(void)
 		}
 		else
 		{
-			postEvent(select_mask,*event_data);
-			setTransTime();
+			// no more than 4 events per second
+			// if(++event_count<4)
+				postEvent(select_mask,*event_data);
+			// if(t>=1)
+			// 	event_count=0;
+			// setTransTime();
 		}
 	}
 }
@@ -570,8 +584,8 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 		else
 #endif
 		{
-			if(value())			table.smartCopy(&dd,value());
 			if(attributes())	table.smartCopy(&dd,attributes());
+			if(value())			table.smartCopy(&dd,value());
 		}
 	}
 

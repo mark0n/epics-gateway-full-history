@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.4  1997/02/21 17:31:16  jbk
+ * many many bug fixes and improvements
+ *
  * Revision 1.3  1996/12/17 14:32:24  jbk
  * Updates for access security
  *
@@ -114,6 +117,10 @@ public:
 	void setVC(gateVcData* t)	{ vc=t; }
 	void setTransTime(void);
 	void addET(gateExistData*);
+
+	static long total_alive;
+	static long total_active;
+	static long total_pv;
 
 protected:
 	gatePvData(void) { }

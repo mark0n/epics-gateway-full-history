@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.11  1997/02/21 17:31:18  jbk
+ * many many bug fixes and improvements
+ *
  * Revision 1.10  1996/12/11 13:04:05  jbk
  * All the changes needed to implement access security.
  * Bug fixes for createChannel and access security stuff
@@ -35,9 +38,9 @@
  *
  */
 
-#define GATE_SCRIPT_FILE    "GATEWAY.killer"
-#define GATE_PV_LIST_FILE   "GATEWAY.pvlist"
-#define GATE_PV_ACCESS_FILE "GATEWAY.access"
+#define GATE_SCRIPT_FILE    "gateway.killer"
+#define GATE_PV_LIST_FILE   "gateway.pvlist"
+#define GATE_PV_ACCESS_FILE "gateway.access"
 
 #define GATE_CONNECT_TIMEOUT  0
 #define GATE_INACTIVE_TIMEOUT (60*60*2)
