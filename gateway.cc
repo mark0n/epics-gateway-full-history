@@ -103,6 +103,7 @@ void operator delete(void* x)
 #define PARM_GID         19
 #define PARM_RECONNECT   20
 #define PARM_DISCONNECT  21
+#define PARM_MASK        22
 
 #define HOME_DIR_SIZE    300
 #define GATE_LOG         "gateway.log"
@@ -147,7 +148,8 @@ static PARM_STUFF ptable[] = {
     { "-uid",                 4, PARM_UID,         "user_id_number" },
     { "-gid",                 4, PARM_GID,         "group_id_number" },
     { "-ro",                  3, PARM_RO,          NULL },
-    { "-prefix",              7, PARM_PREFIX,      "statistics prefix" },
+    { "-prefix",              7, PARM_PREFIX,      "statistics_prefix" },
+    { "-mask",                5, PARM_MASK,        "event_mask" },
     { "-help",                5, PARM_HELP,        NULL },
     { NULL,                  -1, -1,               NULL }
 };
@@ -265,6 +267,7 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# disconnect timeout=%ld\n",global_resources->disconnectTimeout());
 	fprintf(fd,"# reconnect inhibit time=%ld\n",global_resources->reconnectInhibit());
 	fprintf(fd,"# inactive timeout=%ld\n",global_resources->inactiveTimeout());
+	fprintf(fd,"# event mask=%s\n",global_resources->eventMaskString());
 	fprintf(fd,"# user id=%d\n",getuid());
 	fprintf(fd,"# group id=%d\n",getgid());
 	fprintf(fd,"# \n");
@@ -276,7 +279,7 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# \n");
 
 	if(global_resources->isReadOnly())
-		fprintf(fd,"# Gateway running in read-only mode\n");
+		fprintf(fd,"# Gateway running in read-only mode.\n");
 
 	if(client_ip_addr)
 	{
@@ -364,13 +367,14 @@ static int startEverything(char *prefix)
 
 int main(int argc, char** argv)
 {
-	int i,j;
+	int i,j,k;
 	uid_t uid;
 	gid_t gid;
 	int not_done=1;
 	int no_error=1;
 	int level=0;
 	int read_only=0;
+	unsigned long mask=0;
 	int connect_tout=-1;
 	int inactive_tout=-1;
 	int dead_tout=-1;
@@ -407,6 +411,35 @@ int main(int argc, char** argv)
 								no_error=0;
 							else
 								not_done=0;
+						}
+					}
+					break;
+				case PARM_MASK:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							for (k=0; argv[i][k]; k++) {
+								switch (argv[i][k]) {
+								case 'a' :
+								case 'A' :
+									mask |= DBE_ALARM;
+									break;
+								case 'v' :
+								case 'V' :
+									mask |= DBE_VALUE;
+									break;
+								case 'l' :
+								case 'L' :
+									mask |= DBE_LOG;
+									break;
+								default :
+									break;
+								}
+							}
+							not_done=0;
 						}
 					}
 					break;
@@ -743,6 +776,7 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tdisconnect=%ld\n",gr->disconnectTimeout());
 		fprintf(stderr,"\treconnect=%ld\n",gr->reconnectInhibit());
 		fprintf(stderr,"\tinactive=%ld\n",gr->inactiveTimeout());
+		fprintf(stderr,"\tmask=%s\n",gr->eventMaskString());
 		fprintf(stderr,"\tuser id=%d\n",getuid());
 		fprintf(stderr,"\tgroup id=%d\n",getgid());
 		if(gr->isReadOnly())
@@ -753,6 +787,7 @@ int main(int argc, char** argv)
 	// order is somewhat important
 	if(level)				gr->setDebugLevel(level);
 	if(read_only)			gr->setReadOnly();
+	if(mask)				gr->setEventMask(mask);
 	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
 	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
 	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
@@ -778,6 +813,7 @@ int main(int argc, char** argv)
 		fprintf(stderr," reconnect inhibit time = %ld\n",gr->reconnectInhibit());
 		fprintf(stderr," inactive timeout = %ld\n",gr->inactiveTimeout());
 		fprintf(stderr," dead timeout = %ld\n",gr->deadTimeout());
+		fprintf(stderr," event mask = %s\n",gr->eventMaskString());
 		fprintf(stderr," user id= %d\n",getuid());
 		fprintf(stderr," group id= %d\n",getgid());
 		if(gr->isReadOnly())
@@ -859,6 +895,10 @@ void print_instructions(void)
 	pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
 	pr(stderr," and start a daemon that watches the gateway and automatically\n");
 	pr(stderr," restarted it if it dies.\n");
+	
+	pr(stderr,"-mask event_mask: Event mask that is used for connections on the\n");
+	pr(stderr," real network: use any combination of v (value), a (alarm), l (log).\n");
+	pr(stderr," Default is va (forward value and alarm change events).\n");
 	
 	pr(stderr,"-prefix string: Set the prefix for the gateway statistics PVs.\n");
 	pr(stderr," Defaults to the hostname the gateway is running on.\n");

@@ -13,6 +13,8 @@
 #include <unistd.h>
 #include <time.h>
 
+#include "cadef.h"
+
 #include "gateResources.h"
 #include "gateAs.h"
 #include "gddAppTable.h"
@@ -40,6 +42,7 @@ gateResources::gateResources(void)
 
 	debug_level=0;
 	ro=0;
+	setEventMask(DBE_VALUE | DBE_ALARM);
 
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
 	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);

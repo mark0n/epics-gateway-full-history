@@ -20,6 +20,10 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.29  2000/05/02 13:49:39  lange
+ * Uses GNU regex library (0.12) for pattern matching;
+ * Fixed some CAS beacon problems (reconnecting IOCs)
+ *
  * Revision 1.28  2000/04/05 15:59:33  lange
  * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
  *
@@ -504,8 +508,8 @@ int gatePvData::monitor(void)
 		if(ca_read_access(chID))
 		{
 			gateDebug1(5,"gatePvData::monitor() type=%ld\n",eventType());
-			rc=ca_add_array_event(eventType(),0,chID,eventCB,this,
-				0.0,0.0,0.0,&evID);
+			rc=ca_add_masked_array_event(eventType(),0,chID,eventCB,this,
+				0.0,0.0,0.0,&evID,GR->eventMask());
 			SEVCHK(rc,"gatePvData::Monitor() add event");
 
 			if(rc==ECA_NORMAL)

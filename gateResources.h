@@ -24,6 +24,9 @@
 #define GATE_MAX_PVLIST_LINE_LENGTH 1024u
 
 #include <sys/time.h>
+#include <string.h>
+
+#include "cadef.h"
 
 #include "gateVersion.h"
 
@@ -47,22 +50,33 @@ public:
 	void setReadOnly(void)		{ ro=1; }
 	int isReadOnly(void)		{ return ro; }
 
-	void setConnectTimeout(time_t sec)	{ connect_timeout=sec; }
-	void setInactiveTimeout(time_t sec)	{ inactive_timeout=sec; }
-	void setDeadTimeout(time_t sec)		{ dead_timeout=sec; }
+	void setEventMask(unsigned long mask)
+		{
+			event_mask=mask;
+			event_mask_string[0]='\0';
+			if (event_mask & DBE_VALUE) strcat(event_mask_string, "v");
+			if (event_mask & DBE_ALARM) strcat(event_mask_string, "a");
+			if (event_mask & DBE_LOG)   strcat(event_mask_string, "l");
+		}
+	unsigned long eventMask(void) const		{ return event_mask; }
+	const char* eventMaskString(void) const	{ return event_mask_string; }
+
+	void setConnectTimeout(time_t sec)		{ connect_timeout=sec; }
+	void setInactiveTimeout(time_t sec)		{ inactive_timeout=sec; }
+	void setDeadTimeout(time_t sec)			{ dead_timeout=sec; }
 	void setDisconnectTimeout(time_t sec)	{ disconnect_timeout=sec; }
 	void setReconnectInhibit(time_t sec)	{ reconnect_inhibit=sec; }
 
-	int debugLevel(void) const		{ return debug_level; }
+	int debugLevel(void) const			{ return debug_level; }
 	time_t connectTimeout(void) const	{ return connect_timeout; }
 	time_t inactiveTimeout(void) const	{ return inactive_timeout; }
 	time_t deadTimeout(void) const		{ return dead_timeout; }
 	time_t disconnectTimeout(void) const	{ return disconnect_timeout; }
 	time_t reconnectInhibit(void) const	{ return reconnect_inhibit; }
 
-	const char* listFile(void) const { return pvlist_file?pvlist_file:"NULL"; }
-	const char* accessFile(void) const { return access_file?access_file:"NULL"; }
-	const char* commandFile(void) const { return command_file?command_file:"NULL"; }
+	const char* listFile(void) const	{ return pvlist_file?pvlist_file:"NULL"; }
+	const char* accessFile(void) const	{ return access_file?access_file:"NULL"; }
+	const char* commandFile(void) const	{ return command_file?command_file:"NULL"; }
 
 	gateAs* getAs(void);
 
@@ -77,8 +91,10 @@ public:
 	static int appSTSAckString;
 
 private:
-	char *access_file,*pvlist_file,*command_file;
-	int debug_level,ro;
+	char *access_file, *pvlist_file, *command_file;
+	int debug_level, ro;
+	unsigned long event_mask;
+	char event_mask_string[4];
 	time_t connect_timeout,inactive_timeout,dead_timeout;
 	time_t disconnect_timeout,reconnect_inhibit;
 	gateAs* as;
