@@ -131,7 +131,8 @@ void gateAsCa(void)
 	
 	// CA must be initialized by this time - hackery
 	if(!pasbase) {
-		fprintf(stderr,"gateAsCa: Invalid access security\n");
+		fprintf(stderr,"%s gateAsCa: Invalid access security\n",
+		  timeStamp());
 		return;
 	}
 	pasg=(ASG*)ellFirst(&pasbase->asgList);
@@ -147,18 +148,25 @@ void gateAsCa(void)
 			gateDebug1(11,"Access security searching for %s\n",pasginp->inp);
 			
 			// Note calls gateAsCB immediately called for local Pvs
-			SEVCHK(ca_search_and_connect(pasginp->inp,&pcapvt->ch_id,
-			  connectCB,pasginp),"ca_search_and_connect (gateAsCa)");
+			int status=ca_search_and_connect(pasginp->inp,&pcapvt->ch_id,
+			  connectCB,pasginp);
+			if(status != ECA_NORMAL) {
+				fprintf(stderr,"%s gateAsCa: ca_search_and_connect failed:\n"
+				  " %s\n",timeStamp(),ca_message(status));
+			}
 			
 			// Note calls eventCB immediately called for local Pvs
-			SEVCHK(ca_add_event(DBR_STS_DOUBLE,pcapvt->ch_id,
-			  eventCB,pasginp,0), "ca_add_event (gateAsCa)");
+			status=ca_add_event(DBR_STS_DOUBLE,pcapvt->ch_id,
+			  eventCB,pasginp,0);
+			if(status != ECA_NORMAL) {
+				fprintf(stderr,"%s gateAsCa: ca_add_event failed:\n"
+				  " %s\n",timeStamp(),ca_message(status));
+			}
 			
 			pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
 		}
 		pasg=(ASG*)ellNext((ELLNODE*)pasg);
 	}
-	// SEVCHK(ca_pend_event(0.0),"ca_pend_event (gateAsCa)");
 	time(&cur_time);
 	
 	while(count>0 && (cur_time-start_time)<4)
@@ -226,9 +234,16 @@ void gateAsCaClear(void)
 			pcapvt=(CAPVT*)pasginp->capvt;
 			
 			gateDebug1(11,"Access security clearing channel %s\n",pasginp->inp);
-			if (pcapvt->ch_id)
-			  SEVCHK(ca_clear_channel(pcapvt->ch_id),
-				"ca_clear_channel (gateAsCaClear)");
+			if (pcapvt->ch_id) {
+				int status=ca_clear_channel(pcapvt->ch_id);
+				if(status != ECA_NORMAL) {
+					fprintf(stderr,"%s gateAsCaClear: ca_clear_channel failed"
+					  " for %s:\n"
+					  " %s\n",
+					  timeStamp(),
+					  pasginp->inp?pasginp->inp:"Unknown",ca_message(status));
+				}
+			}
 			pcapvt->ch_id = NULL;
 			free(pasginp->capvt);
 			pasginp->capvt = NULL;
@@ -236,8 +251,11 @@ void gateAsCaClear(void)
 		}
 		pasg=(ASG*)ellNext((ELLNODE*)pasg);
 	}
-	SEVCHK(ca_pend_io(1.0),"ca_pend_io (gateAsCaClear)");
-	
+	int status=ca_pend_io(1.0);
+	if(status != ECA_NORMAL) {
+		fprintf(stderr,"%s gateAsCaClear: ca_pend_io failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

@@ -359,7 +359,8 @@ void gateServer::gateCommands(const char* cfile)
 		fp=fopen(cfile,"r");
 #endif
 		if(fp == NULL)	{
-			fprintf(stderr,"Failed to open command file: %s\n",cfile);
+			fprintf(stderr,"%s Failed to open command file: %s\n",
+			  timeStamp(),cfile);
 			fflush(stderr);
 			perror("Reason");
 			fflush(stderr);
@@ -619,11 +620,23 @@ gateServer::gateServer(char *prefix ) :
 	gateDebug0(5,"gateServer()\n");
 
 	// Initialize channel access
-	SEVCHK(ca_task_initialize(),"CA task initialize");
+	int status=ca_task_initialize();
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s gateServer::gateServer: ca_task_initialize failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
 #ifdef USE_FDS
-	SEVCHK(ca_add_fd_registration(::fdCB,this),"CA add fd registration");
+	status=ca_add_fd_registration(::fdCB,this);
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s gateServer::gateServer: ca_add_fd_registration failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
 #endif
-	SEVCHK(ca_add_exception_event(::exCB,NULL),"CA add exception event");
+	status=ca_add_exception_event(::exCB,NULL);
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s gateServer::gateServer: ca_add_exception_event failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
 
 	select_mask|=(alarmEventMask()|valueEventMask()|logEventMask());
 	alh_mask|=alarmEventMask();
@@ -690,8 +703,16 @@ gateServer::~gateServer(void)
 		delete stat_table[i].pv;
 #endif
 
-	SEVCHK(ca_flush_io(),"CA flush io");
-	SEVCHK(ca_task_exit(),"CA task exit");
+	int status=ca_flush_io();
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s gateServer::~gateServer: ca_flush_io failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
+	status=ca_task_exit();
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s gateServer::~gateServer: ca_task_exit failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
 }
 
 void gateServer::checkEvent(void)
@@ -884,8 +905,8 @@ void gateServer::connectCleanup(void)
 			  pv->timeConnecting(),pv->totalElements(),pv->getStateName());
 #endif
 			int status = pv_con_list.remove(pv->name(),pNode);
-			if(status) printf("Clean from connecting PV list failed for pvname=%s.\n",
-				pv->name());
+			if(status) printf("%s Clean from connecting PV list failed for pvname=%s.\n",
+				timeStamp(),pv->name());
 
 			delete pNode;
 			if(pv->pendingConnect()) pv->death();
@@ -969,8 +990,8 @@ void gateServer::inactiveDeadCleanup(void)
 			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeDead(),pv->totalElements(),pv->getStateName());
 #endif
-			if(status) printf("Clean dead from PV list failed for pvname=%s.\n",
-				pv->name());
+			if(status) printf("%s Clean dead from PV list failed for pvname=%s.\n",
+				timeStamp(),pv->name());
 			pNode->destroy();
 		}
 		else if(in_check && pv->inactive() &&
@@ -991,8 +1012,8 @@ void gateServer::inactiveDeadCleanup(void)
 			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeInactive(),pv->totalElements(),pv->getStateName());
 #endif
-			if(status) printf("Clean inactive from PV list failed for pvname=%s.\n",
-				pv->name());
+			if(status) printf("%s Clean inactive from PV list failed for pvname=%s.\n",
+				timeStamp(),pv->name());
 			pNode->destroy();
 		}
 

@@ -199,7 +199,12 @@ gatePvData::~gatePvData(void)
 	unmonitor();
 	alhUnmonitor();
 	status=ca_clear_channel(chID);
-	SEVCHK(status,"clear channel");
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s ~gatePvData: ca_clear_channel failed for %s:\n"
+		  " %s\n",
+		  timeStamp(),
+	      name()?name():"Unknown",ca_message(status));
+	}
 	delete [] pv_name;
 
 	// Clear the callback_list;
@@ -244,7 +249,11 @@ void gatePvData::init(gateServer* m,gateAsEntry* pase, const char* name)
 	else
 	{
 		status=ca_search_and_connect(pv_name,&chID,::connectCB,this);
-		SEVCHK(status,"gatePvData::init() - search and connect");
+		if(status != ECA_NORMAL) {
+			fprintf(stderr,"gatePvData::init: ca_search_and_connect for %s:\n"
+			  " %s\n",
+			  this->name()?this->name():"Unknown",ca_message(status));
+		}
 	}
 
 	if(status==ECA_NORMAL)
@@ -279,7 +288,8 @@ void gatePvData::init(gateServer* m,gateAsEntry* pase, const char* name)
 	{
 		// Put PV into connecting list
 		status = mrg->conAdd(pv_name,*this);
-		if(status) printf("Put into connecting list failed for %s\n",pv_name);
+		if(status) printf("%s Put into connecting list failed for %s\n",
+		  timeStamp(),pv_name);
 
 #if DEBUG_PV_CON_LIST
 		printf("%s gatePvData::init: [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: name=%s\n",
@@ -572,8 +582,14 @@ int gatePvData::unmonitor(void)
 	if(monitored())
 	{
 		rc=ca_clear_event(evID);
-		SEVCHK(rc,"gatePvData::Unmonitor(): clear event");
-		if(rc==ECA_NORMAL) rc=0;
+		if(rc != ECA_NORMAL) {
+			fprintf(stderr,"%s gatePvData::unmonitor: ca_clear_event failed "
+			  "for %s:\n"
+			  " %s\n",
+			  timeStamp(),name()?name():"Unknown",ca_message(status));
+		} else {
+			rc=0;
+		}
 		markNotMonitored();
 	}
 	return rc;
@@ -587,8 +603,14 @@ int gatePvData::alhUnmonitor(void)
 	if(alhMonitored())
 	{
 		rc=ca_clear_event(alhID);
-		SEVCHK(rc,"gatePvData::alhUnmonitor(): clear alh event");
-		if(rc==ECA_NORMAL) rc=0;
+		if(rc != ECA_NORMAL) {
+			fprintf(stderr,"%s gatePvData::alhUnmonitor: ca_clear_event failed "
+			  "for %s:\n"
+			  " %s\n",
+			  timeStamp(),name()?name():"Unknown",ca_message(status));
+		} else {
+			rc=0;
+		}
 		markAlhNotMonitored();
 	}
 	return rc;
@@ -612,15 +634,17 @@ int gatePvData::monitor(void)
 		// rc=ca_add_event(eventType(),chID,eventCB,this,&event);
 		// gets native element count number of elements:
 
-		if(ca_read_access(chID))
-		{
+		if(ca_read_access(chID)) {
 			gateDebug1(5,"gatePvData::monitor() type=%ld\n",eventType());
 			rc=ca_add_masked_array_event(eventType(),0,chID,::eventCB,this,
-				0.0,0.0,0.0,&evID,GR->eventMask());
-			SEVCHK(rc,"gatePvData::Monitor() add event");
-
-			if(rc==ECA_NORMAL)
-			{
+			  0.0,0.0,0.0,&evID,GR->eventMask());
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::monitor: "
+				  "ca_add_masked_array_event failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				rc=-1;
+			} else {
 				rc=0;
 				markMonitored();
 #if OMIT_CHECK_EVENT
@@ -628,11 +652,9 @@ int gatePvData::monitor(void)
 				checkEvent();
 #endif
 			}
-			else
-				rc=-1;
-		}
-		else
+		} else {
 			rc=-1;
+		}
 	}
 	return rc;
 }
@@ -649,10 +671,13 @@ int gatePvData::alhMonitor(void)
 			gateDebug1(5,"gatePvData::alhMonitor() type=%d\n",DBR_STSACK_STRING);
 			rc=ca_add_masked_array_event(DBR_STSACK_STRING,0,chID,::alhCB,this,
 				0.0,0.0,0.0,&alhID,DBE_ALARM);
-			SEVCHK(rc,"gatePvData::alhMonitor() add event");
-
-			if(rc==ECA_NORMAL)
-			{
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::alhMonitor: "
+				  "ca_add_masked_array_event failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(status));
+				rc=-1;
+			} else {
 				rc=0;
 				markAlhMonitored();
 #if OMIT_CHECK_EVENT
@@ -660,11 +685,9 @@ int gatePvData::alhMonitor(void)
 				checkEvent();
 #endif
 			}
-			else
-				rc=-1;
-		}
-		else
+		} else {
 			rc=-1;
+		}
 	}
 	return rc;
 }
@@ -687,7 +710,12 @@ int gatePvData::get(void)
 			// all the rest of the elements
 			rc=ca_array_get_callback(dataType(),1 /*totalElements()*/,
 				chID,::getCB,this);
-			SEVCHK(rc,"get with callback bad");
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::get: ca_array_get_callback "
+				  "failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(status));
+			}
 #if OMIT_CHECK_EVENT
 #else
 			checkEvent();
@@ -805,10 +833,19 @@ int gatePvData::put(const gdd* dd, int docallback)
 			if(!cbid) return S_casApp_noMemory;
 			callback_list.add(*cbid);
 			stat=ca_array_put_callback(cht,count,chID,pValue,::putCB,(void *)cbid);
-			SEVCHK(stat,"put callback bad");
+			if(stat != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::put ca_array_put_callback failed "
+				  "for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(status));
+			}
 		} else {
 			stat=ca_array_put(cht,count,chID,pValue);
-			SEVCHK(stat,"put bad");
+			if(stat != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::put ca_array_put failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(status));
+			}
 		}
 #if OMIT_CHECK_EVENT
 #else
