@@ -50,8 +50,8 @@ public:
 
 	static void post_rights(void*);
 private:
-	gateAsNode* node; // I must delete this when done using it
 	gateVcData& vc;
+	gateAsNode* node; // I must delete this when done using it
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -164,7 +164,7 @@ private:
 	gateAsEntry* entry;
 	gateVcState pv_state;
 	gateServer* mrg;     // The gateServer that manages this gateVcData
-	char* pv_name;     // The name of the process variable
+	const char* pv_name;     // The name of the process variable
 	aitString pv_string;
 	int in_list_flag;
 	int prev_post_value_changes;
@@ -174,8 +174,8 @@ private:
 	tsDLList<gateAsyncW> wio;	// Queue for write's received when not ready
 	gatePendingWrite *pending_write;  // NULL unless a write (put) is in progress
 	// The state of the process variable is kept in these two gdd's
-	gdd* pv_data;     // Filled in by gatePcData::getCB on activation
-	gdd* event_data;  // Filled in by vatePvData::eventCB on channel change
+	gdd* pv_data;     // Filled in by gatePvData::getCB on activation
+	gdd* event_data;  // Filled in by gatePvData::eventCB on channel change
 };
 
 inline int gateVcData::pending(void) { return (pv_state==gateVcConnect)?1:0; }
@@ -217,8 +217,8 @@ public:
 		}
 	}
 private:
-	tsDLList<gateAsyncR> *rio;
 	gdd& dd;
+	tsDLList<gateAsyncR> *rio;
 };
 
 class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
@@ -240,8 +240,8 @@ public:
 		}
 	}
 private:
-	tsDLList<gateAsyncW> *wio;
 	gdd& dd;
+	tsDLList<gateAsyncW> *wio;
 };
 
 class gatePendingWrite : public casAsyncWriteIO

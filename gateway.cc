@@ -113,15 +113,15 @@ static int server_port=0;
 static int client_port=0;
 static int make_server=0;
 static char* home_directory;
-static char* log_file=NULL;
+static const char* log_file=NULL;
 static pid_t parent_pid;
 
 struct parm_stuff
 {
-	char* parm;
+	const char* parm;
 	int len;
 	int id;
-	char* desc;
+	const char* desc;
 };
 typedef struct parm_stuff PARM_STUFF;
 
@@ -256,9 +256,9 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# pvlist file=<%s>\n",global_resources->listFile());
 	fprintf(fd,"# command file=<%s>\n",global_resources->commandFile());
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
-	fprintf(fd,"# dead timeout=%d\n",global_resources->deadTimeout());
-	fprintf(fd,"# connect timeout=%d\n",global_resources->connectTimeout());
-	fprintf(fd,"# inactive timeout=%d\n",global_resources->inactiveTimeout());
+	fprintf(fd,"# dead timeout=%ld\n",global_resources->deadTimeout());
+	fprintf(fd,"# connect timeout=%ld\n",global_resources->connectTimeout());
+	fprintf(fd,"# inactive timeout=%ld\n",global_resources->inactiveTimeout());
 	fprintf(fd,"# user id=%d\n",getuid());
 	fprintf(fd,"# group id=%d\n",getgid());
 	fprintf(fd,"# \n");
@@ -702,9 +702,9 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\taccess=%s\n",gr->accessFile());
 		fprintf(stderr,"\tpvlist=%s\n",gr->listFile());
 		fprintf(stderr,"\tcommand=%s\n",gr->commandFile());
-		fprintf(stderr,"\tdead=%d\n",gr->deadTimeout());
-		fprintf(stderr,"\tconnect=%d\n",gr->connectTimeout());
-		fprintf(stderr,"\tinactive=%d\n",gr->inactiveTimeout());
+		fprintf(stderr,"\tdead=%ld\n",gr->deadTimeout());
+		fprintf(stderr,"\tconnect=%ld\n",gr->connectTimeout());
+		fprintf(stderr,"\tinactive=%ld\n",gr->inactiveTimeout());
 		fprintf(stderr,"\tuser id=%d\n",getuid());
 		fprintf(stderr,"\tgroup id=%d\n",getgid());
 		if(gr->isReadOnly())
@@ -733,9 +733,9 @@ int main(int argc, char** argv)
 		fprintf(stderr," list file=<%s>\n",gr->listFile());
 		fprintf(stderr," command file=<%s>\n",gr->commandFile());
 		fprintf(stderr," debug level=%d\n",gr->debugLevel());
-		fprintf(stderr," connect timeout =%d\n",gr->connectTimeout());
-		fprintf(stderr," inactive timeout =%d\n",gr->inactiveTimeout());
-		fprintf(stderr," dead timeout =%d\n",gr->deadTimeout());
+		fprintf(stderr," connect timeout =%ld\n",gr->connectTimeout());
+		fprintf(stderr," inactive timeout =%ld\n",gr->inactiveTimeout());
+		fprintf(stderr," dead timeout =%ld\n",gr->deadTimeout());
 		fprintf(stderr," user id=%d\n",getuid());
 		fprintf(stderr," group id=%d\n",getgid());
 		if(gr->isReadOnly())
@@ -855,7 +855,7 @@ int manage_gateway(void)
 		perror("Cannot create gateway processes");
 		return -1;
 	case 0: // child
-#if defined linux || defined SOLARIS
+#if defined UNIX
 		setpgrp();
 #else
 		setpgrp(0,0);
