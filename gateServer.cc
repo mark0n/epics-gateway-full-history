@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.21  1997/05/20 15:48:26  jbk
+// changes for the latest CAS library in EPICS 3.13.beta9
+//
 // Revision 1.20  1997/03/17 16:01:01  jbk
 // bug fixes and additions
 //
@@ -221,7 +224,6 @@ void gateFd::callBack(void)
 
 gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 {
-	unsigned i;
 	struct utsname ubuf;
 	gateDebug0(5,"gateServer()\n");
 	// this is a CA client, initialize the library
@@ -252,15 +254,15 @@ gateServer::~gateServer(void)
 {
 	gateDebug0(5,"~gateServer()\n");
 	// remove all PVs from my lists
-	gateVcData *vc,*old_vc,*save_vc;
+	gateVcData *vc,*old_vc;
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
 
-	delete [] name_alive;
-	delete [] name_active;
-	delete [] name_total;
-	delete [] name_fd;
-	delete [] host_name;
+	free(name_alive);
+	free(name_active);
+	free(name_total);
+	free(name_fd);
+	free(host_name);
 
 	while((pv_node=pv_list.first()))
 	{
@@ -381,7 +383,7 @@ void gateServer::inactiveDeadCleanup(void)
 {
 	gateDebug0(51,"gateServer::inactiveDeadCleanup()\n");
 	gatePvNode *node,*cnode;
-	gatePvData *pv,*dpv;
+	gatePvData *pv;
 	int dead_check=0,in_check=0;
 
 	if(timeDeadCheck()>=global_resources->deadTimeout())
