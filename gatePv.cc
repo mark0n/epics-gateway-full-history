@@ -6,6 +6,7 @@
 #define DEBUG_VC_DELETE 0
 #define DEBUG_GDD 0
 #define DEBUG_PUT 0
+#define DEBUG_BEAM 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -912,6 +913,12 @@ void gatePvData::eventCB(EVENT_ARGS args)
 	++pv->mrg->client_event_count;
 #endif
 
+#if DEBUG_BEAM
+	printf("gatePvData::eventCB: status=%d %s\n",
+	  args.status,
+	  pv->name());
+#endif
+
 	if(args.status==ECA_NORMAL)
 	{
 		// only sends event_data and does ADD transactions
@@ -919,6 +926,11 @@ void gatePvData::eventCB(EVENT_ARGS args)
 		{
 			gateDebug0(5,"gatePvData::eventCB() active pv\n");
 			if(dd=pv->runEventCB((void *)(args.dbr)))
+#if DEBUG_BEAM
+			  printf("  dd=%x needAddRemove=%d\n",
+				dd,
+				pv->needAddRemove());
+#endif
 			{
 				if(pv->needAddRemove())
 				{

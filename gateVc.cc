@@ -581,6 +581,7 @@ void gateVcData::vcPostEvent(void)
 				heading("gateVcData::vcPostEvent(1)",name());
 				dumpdd(1,"event_data",name(),event_data);
 #endif
+				postEvent(select_mask,*event_data);
 #ifdef RATE_STATS
 				mrg->post_event_count++;
 #endif
@@ -591,7 +592,6 @@ void gateVcData::vcPostEvent(void)
 		{
 			// no more than 4 events per second
 			// if(++event_count<4)
-				postEvent(select_mask,*event_data);
 #if DEBUG_EVENT_DATA
 				if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
 					heading("gateVcData::vcPostEvent",name());
@@ -602,6 +602,7 @@ void gateVcData::vcPostEvent(void)
 				heading("gateVcData::vcPostEvent(2)",name());
 				dumpdd(1,"event_data",name(),event_data);
 #endif
+				postEvent(select_mask,*event_data);
 #ifdef RATE_STATS
 				mrg->post_event_count++;
 #endif
