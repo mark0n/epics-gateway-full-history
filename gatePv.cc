@@ -29,6 +29,12 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.37  2002/12/18 23:46:48  evans
+ * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
+ * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
+ * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
+ * flushAsyncETQueue to not malloc the pvExistReturn.
+ *
  * Revision 1.36  2002/10/09 21:55:47  evans
  * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
  * sigignore.
@@ -74,6 +80,7 @@
 #define DEBUG_PUT 0
 #define DEBUG_BEAM 0
 #define DEBUG_ENUM 0
+#define DEBUG_TIMESTAMP 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -1360,6 +1367,20 @@ gdd* gatePvData::eventStringCB(void *dbr)
 	str->copy(ts->value);
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventStringCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+	
+#endif
+#endif
 	return value;
 }
 
@@ -1377,6 +1398,19 @@ gdd* gatePvData::eventEnumCB(void *dbr)
 	value->putConvert(ts->value);
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventEnumCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+#endif
+#endif
 
 	return value;
 }
@@ -1406,6 +1440,19 @@ gdd* gatePvData::eventLongCB(void *dbr)
 	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventLongCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+#endif
+#endif
 	return value;
 }
 
@@ -1434,6 +1481,19 @@ gdd* gatePvData::eventCharCB(void *dbr)
 	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventCharCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+#endif
+#endif
 	return value;
 }
 
@@ -1462,6 +1522,19 @@ gdd* gatePvData::eventFloatCB(void *dbr)
 	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventFloatCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+#endif
+#endif
 	return value;
 }
 
@@ -1490,6 +1563,19 @@ gdd* gatePvData::eventDoubleCB(void *dbr)
 	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventDoubleCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+#endif
+#endif
 	return value;
 }
 
@@ -1518,6 +1604,19 @@ gdd* gatePvData::eventShortCB(void *dbr)
 	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+#if DEBUG_TIMESTAMP
+	fprintf(stderr,"eventShortCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
+	  ts->stamp.nsec);
+	{
+		TS_STAMP ts;
+		value->getTimeStamp(&ts);
+		fprintf(stderr,"  as set: %u %u\n",
+		  ts.secPastEpoch,ts.nsec);
+	}
+#if 0
+	value->dump();
+#endif
+#endif
 	return value;
 }
 

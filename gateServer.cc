@@ -480,7 +480,7 @@ gateFd::~gateFd(void)
 
 void gateFd::callBack(void)
 {
-#if DEBUG_TIMES
+#if DEBUG_TIMES && 0
     epicsTime begin(epicsTime::getCurrent());
 #endif
 	gateDebug0(51,"gateFd::callback()\n");

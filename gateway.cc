@@ -373,8 +373,8 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# reconnect inhibit time=%ld\n",global_resources->reconnectInhibit());
 	fprintf(fd,"# inactive timeout=%ld\n",global_resources->inactiveTimeout());
 	fprintf(fd,"# event mask=%s\n",global_resources->eventMaskString());
-	fprintf(fd,"# user id=%d\n",getuid());
-	fprintf(fd,"# group id=%d\n",getgid());
+	fprintf(fd,"# user id=%ld\n",(long)getuid());
+	fprintf(fd,"# group id=%ld\n",(long)getgid());
 	fprintf(fd,"# \n");
 	fprintf(fd,"# use the following to execute commands in command file:\n");
 	fprintf(fd,"#    kill -USR1 %d\n",sid);
@@ -398,8 +398,8 @@ static int startEverything(char *prefix)
 	if(client_port) fprintf(fd,"# %s\n",gate_ca_port);
 	if(server_port) fprintf(fd,"# %s\n",gate_cas_port);
 
-	fprintf(fd,"\n kill %d # to kill everything\n\n",parent_pid);
-	fprintf(fd,"\n # kill %d # to kill off this gateway\n\n",sid);
+	fprintf(fd,"\n kill %ld # to kill everything\n\n",parent_pid);
+	fprintf(fd,"\n # kill %u # to kill off this gateway\n\n",sid);
 	fflush(fd);
 	
 	if(fd!=stderr) fclose(fd);
@@ -943,8 +943,8 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tinactive=%ld\n",gr->inactiveTimeout());
 		fprintf(stderr,"\tmask=%s\n",gr->eventMaskString());
 #ifndef WIN32
-		fprintf(stderr,"\tuser id=%d\n",getuid());
-		fprintf(stderr,"\tgroup id=%d\n",getgid());
+		fprintf(stderr,"\tuser id=%ld\n",(long)getuid());
+		fprintf(stderr,"\tgroup id=%ld\n",(long)getgid());
 #endif
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
@@ -982,8 +982,8 @@ int main(int argc, char** argv)
 		fprintf(stderr," dead timeout = %ld\n",gr->deadTimeout());
 		fprintf(stderr," event mask = %s\n",gr->eventMaskString());
 #ifndef WIN32
-		fprintf(stderr," user id= %d\n",getuid());
-		fprintf(stderr," group id= %d\n",getgid());
+		fprintf(stderr," user id= %ld\n",(long)getuid());
+		fprintf(stderr," group id= %ld\n",(long)getgid());
 #endif
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");

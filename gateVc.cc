@@ -29,6 +29,12 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.38  2002/12/18 23:46:50  evans
+ * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
+ * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
+ * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
+ * flushAsyncETQueue to not malloc the pvExistReturn.
+ *
  * Revision 1.37  2002/10/09 21:55:49  evans
  * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
  * sigignore.
@@ -65,6 +71,7 @@
 #define DEBUG_GDD 0
 #define DEBUG_EVENT_DATA 0
 #define DEBUG_ENUM 0
+#define DEBUG_TIMESTAMP 0
 
 #include <stdio.h>
 #include <string.h>
@@ -740,6 +747,9 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	heading("gateVcData::read",name());
 	dumpdd(1,"dd(incoming)",name(),&dd);
 #endif
+#if DEBUG_TIMESTAMP
+	heading("gateVcData::read",name());
+#endif
 
 	// Branch on application type
 	unsigned at=dd.applicationType();
@@ -789,6 +799,17 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			fflush(stderr);
 			printf("gateVcData::read: return S_casApp_success\n");
 			fflush(stdout);
+#endif
+#if DEBUG_TIMESTAMP
+			{
+				TS_STAMP ts;
+				dd.getTimeStamp(&ts);
+				fprintf(stderr,"gateVcData::read %s %u %u\n",
+				  name(),ts.secPastEpoch,ts.nsec);
+#if 0
+				dd.dump();
+#endif
+			}
 #endif
 			return S_casApp_success;
 		}
@@ -865,10 +886,13 @@ caStatus gateVcData::putCB(int putStatus)
 {
 	gateDebug2(10,"gateVcData::putCB() status=%d name=%s\n",status,name());
 
+	// If the pending_write is gone, do nothing
+	if(!pending_write) return putStatus;
+
 	if(putStatus == ECA_NORMAL)
 		pending_write->postIOCompletion(S_casApp_success);
 
-	else if(putStatus == ECA_DISCONNCHID || ECA_DISCONN)
+	else if(putStatus == ECA_DISCONNCHID || putStatus == ECA_DISCONN)
 		// IOC disconnected has a meaningful code
 		pending_write->postIOCompletion(S_casApp_canceledAsyncIO);
 
