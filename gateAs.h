@@ -19,6 +19,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.15  2001/08/16 15:44:13  lange
+ * Fixed timestamped connection loss messages (reported by Joan Sage)
+ *
  * Revision 1.14  2001/03/15 19:11:13  lange
  * Fixed a few minor Solaris warnings
  *
@@ -127,9 +130,9 @@ public:
 	aitBool init(gateAsList& n,                 // Where this entry is added to
 				 int line)						// Line number
 	{
-		if(compilePattern(line)==aitFalse) return aitFalse;
+		if (compilePattern(line)==aitFalse) return aitFalse;
 		n.add(*this);
-		if(asAddMember(&as,(char*)group) != 0) as=NULL;
+		if (group == NULL || asAddMember(&as,(char*)group) != 0) as = NULL;
 		else asPutMemberPvt(as,this);
 		return aitTrue;
 	}
