@@ -8,27 +8,25 @@
 # This file is distributed subject to a Software License Agreement found
 # in the file LICENSE that is included with this distribution. 
 #*************************************************************************
+
 # Makefile.Host for Gateway
 
 TOP = ../../..
 include $(TOP)/config/CONFIG_EXTENSIONS
 
-# The following pointers should be defined in $(TOP)/config/RELEASE
-# They can be specified at this point, though
-
-# EPICS_BASE = /home/phoebus/EVANS/epics/baseLatest
-# EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
-# EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
-
 # Use of GNU regex library (version 0.12) for patterns and aliasing
-# GNU_REGEX_INC = ../../../../regex-0.12
-# GNU_REGEX_LIB = ../../../../regex-0.12
+GNU_REGEX_INC = ../../../../regex-0.12
+GNU_REGEX_LIB = ../../../../regex-0.12
+# GNU_REGEX_INC = /home/phoebus/EVANS/src/regexp/regex-0.12
+# GNU_REGEX_LIB = /home/phoebus/EVANS/src/regexp/regex-0.12
 
 # Optimization
 OPTIMIZE = YES
 ifeq ($(OPTIMIZE),YES)
+#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGWANJ
   HOST_OPT = YES
 else
+#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGWANJDebug
   HOST_OPT = NO
 endif
 
