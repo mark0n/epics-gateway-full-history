@@ -1,4 +1,0 @@
-
-
-/opt/gnu/bin/tar zcvf /tmp/gateway.tgz *.cc *.h Makefile* MAKE* GATEWAY.* 
-
