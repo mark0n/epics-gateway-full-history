@@ -443,6 +443,27 @@ void gateServer::report2(void)
 			printf(" %s\n",iter->getData()->name());
 		iter++;
 	}
+
+	printf("\nConnecting PVs:\n");
+	iter=pv_list.firstIter();
+	while(iter.valid())
+	{
+		if(iter->getData()->getState()== gatePvConnect &&
+		    iter->getData()->name())
+			printf(" %s\n",iter->getData()->name());
+		iter++;
+	}
+
+	printf("\nInactive PVs:\n");
+	iter=pv_list.firstIter();
+	while(iter.valid())
+	{
+		if(iter->getData()->getState()== gatePvInactive &&
+		    iter->getData()->name())
+			printf(" %s\n",iter->getData()->name());
+		iter++;
+	}
+
 	printf("---------------------------------------------------------------------------\n");
 	fflush(stdout);
 }

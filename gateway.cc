@@ -85,9 +85,10 @@ void operator delete(void* x)
 // The parameters passed in from the user are:
 //	-debug ? = set debug level, ? is the integer level to set
 //	-pvlist file_name = process variable list file
-//	-log file_name = log file name
+//	-log
 //	-access file_name = access security file
 //	-command file_name = USR1 command list file
+//	-putlog file_name = putlog file
 //	-home directory = the program's home directory
 //	-connect_timeout number = clear PV connect requests every number seconds
 //	-inactive_timeout number = Hold inactive PV connections for number seconds
@@ -107,6 +108,7 @@ void operator delete(void* x)
 //	Access security file = gateway.access
 //	process variable list file = gateway.pvlist
 //	USR1 command list file = gateway.command
+//	putlog file = gateway.putlog
 //	log file = gateway.log
 //	debug level = 0 (none)
 //  connect_timeout = 1 second
@@ -127,28 +129,27 @@ void operator delete(void* x)
 #define PARM_ACCESS            3
 #define PARM_HOME              4
 #define PARM_COMMAND           5
-#define PARM_CONNECT           6
-#define PARM_INACTIVE          7
-#define PARM_DEAD              8
-#define PARM_USAGE             9
-#define PARM_SERVER_IP        10
-#define PARM_CLIENT_IP        11
-#define PARM_SERVER_PORT      12
-#define PARM_CLIENT_PORT      13
-#define PARM_HELP             14
-#define PARM_SERVER           15
-#define PARM_RO               16
-#define PARM_UID              17
-#define PARM_PREFIX           18
-#define PARM_GID              19
-#define PARM_RECONNECT        20
-#define PARM_DISCONNECT       21
-#define PARM_MASK             22
-#define PARM_SERVER_IGNORE_IP 23
+#define PARM_PUTLOG            6
+#define PARM_CONNECT           7
+#define PARM_INACTIVE          8
+#define PARM_DEAD              9
+#define PARM_USAGE            10
+#define PARM_SERVER_IP        11
+#define PARM_CLIENT_IP        12
+#define PARM_SERVER_PORT      13
+#define PARM_CLIENT_PORT      14
+#define PARM_HELP             15
+#define PARM_SERVER           16
+#define PARM_RO               17
+#define PARM_UID              18
+#define PARM_PREFIX           19
+#define PARM_GID              20
+#define PARM_RECONNECT        21
+#define PARM_DISCONNECT       22
+#define PARM_MASK             23
+#define PARM_SERVER_IGNORE_IP 24
 
 #define HOME_DIR_SIZE    300
-#define GATE_LOG         "gateway.log"
-#define GATE_COMMAND     "gateway.command"
 
 static char *gate_ca_auto_list=NULL;
 static char *server_ip_addr=NULL;
@@ -159,6 +160,7 @@ static int client_port=0;
 static int make_server=0;
 static char *home_directory;
 static const char *log_file=NULL;
+static const char *putlog_file=NULL;
 #ifndef WIN32
 static pid_t parent_pid;
 #endif
@@ -179,6 +181,7 @@ static PARM_STUFF ptable[] = {
     { "-pvlist",              7, PARM_PVLIST,      "file_name" },
     { "-access",              7, PARM_ACCESS,      "file_name" },
     { "-command",             8, PARM_COMMAND,     "file_name" },
+    { "-putlog",              7, PARM_PUTLOG,      "file_name" },
     { "-home",                5, PARM_HOME,        "directory" },
     { "-sip",                 4, PARM_SERVER_IP,   "IP_address" },
     { "-cip",                 4, PARM_CLIENT_IP,   "IP_address_list" },
@@ -370,6 +373,7 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# access file=<%s>\n",global_resources->accessFile());
 	fprintf(fd,"# pvlist file=<%s>\n",global_resources->listFile());
 	fprintf(fd,"# command file=<%s>\n",global_resources->commandFile());
+	fprintf(fd,"# putlog file=<%s>\n",global_resources->putlogFile());
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
 	fprintf(fd,"# dead timeout=%ld\n",global_resources->deadTimeout());
 	fprintf(fd,"# connect timeout=%ld\n",global_resources->connectTimeout());
@@ -500,12 +504,21 @@ static int startEverything(char *prefix)
 	long now;
 	struct tm *tblock;
 	
+	// Write file headers
 	time(&now);
 	tblock=localtime(&now);
 	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 	printf("%s %s [%s %s]\n",
 	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__);	  
 	printf("%s PID=%d\n",EPICS_VERSION_STRING,sid);
+	FILE *fp=global_resources->getPutlogFp();
+	if(fp) {
+		fprintf(fp,"%s %s [%s %s]\n",
+		  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__);	  
+		fprintf(fp,"%s PID=%d\n",EPICS_VERSION_STRING,sid);
+		fprintf(fp,"Attempted Writes:\n");
+		fflush(fp);
+	}
 
 #if DEBUG_ENV
 	system("printenv | grep EPICS");
@@ -673,6 +686,18 @@ int main(int argc, char** argv)
 						else
 						{
 							command_file=argv[i];
+							not_done=0;
+						}
+					}
+					break;
+				case PARM_PUTLOG:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							putlog_file=argv[i];
 							not_done=0;
 						}
 					}
@@ -891,7 +916,7 @@ int main(int argc, char** argv)
 
 	if(log_file || make_server)
 	{
-		if(log_file==NULL) log_file=GATE_LOG;
+		if(log_file==NULL) log_file=GATE_LOG_FILE;
 		time(&t);
 
 #ifndef WIN32
@@ -934,7 +959,9 @@ int main(int argc, char** argv)
 		}
 	}
 	else
+	{
 		log_file="<terminal>";
+	}
 
 	// ----------------------------------------
 	// set up gateway resources
@@ -960,6 +987,7 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\taccess=%s\n",gr->accessFile());
 		fprintf(stderr,"\tpvlist=%s\n",gr->listFile());
 		fprintf(stderr,"\tcommand=%s\n",gr->commandFile());
+		fprintf(stderr,"\tputlog=%s\n",gr->putlogFile());
 		fprintf(stderr,"\tdead=%ld\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%ld\n",gr->connectTimeout());
 		fprintf(stderr,"\tdisconnect=%ld\n",gr->disconnectTimeout());
@@ -987,6 +1015,7 @@ int main(int argc, char** argv)
 	if(access_file)			gr->setAccessFile(access_file);
 	if(pvlist_file)			gr->setListFile(pvlist_file);
 	if(command_file)		gr->setCommandFile(command_file);
+	if(putlog_file)	    	gr->setPutlogFile(putlog_file);
 
 	gr->setUpAccessSecurity();
 
@@ -998,6 +1027,7 @@ int main(int argc, char** argv)
 		fprintf(stderr," access file = <%s>\n",gr->accessFile());
 		fprintf(stderr," list file = <%s>\n",gr->listFile());
 		fprintf(stderr," command file = <%s>\n",gr->commandFile());
+		fprintf(stderr," putlog file = <%s>\n",gr->putlogFile());
 		fprintf(stderr," debug level = %d\n",gr->debugLevel());
 		fprintf(stderr," connect timeout = %ld\n",gr->connectTimeout());
 		fprintf(stderr," disconnect timeout = %ld\n",gr->disconnectTimeout());
@@ -1012,6 +1042,41 @@ int main(int argc, char** argv)
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
 		fflush(stderr);
+	}
+
+	// Open putlog file.  This could be done the first time it is
+	// used, but we want to open it and keep it open because of
+	// possible problems with FOPEN_MAX.
+	if(putlog_file)
+	{
+		time(&t);
+
+#ifndef WIN32
+		// Save putlog file if it exists
+		if(stat(putlog_file,&sbuf)==0)
+		{
+			if(sbuf.st_size>0)
+			{
+				sprintf(cur_time,"%s.%lu",putlog_file,(unsigned long)t);
+				if(link(putlog_file,cur_time)<0)
+				{
+					fprintf(stderr,"Failure to move old putlog to new name %s",
+						cur_time);
+				}
+				else
+					unlink(putlog_file);
+			}
+		}
+#endif
+
+		// Open it
+		FILE *fp=fopen(putlog_file,"w");
+		if(fp == NULL) {
+			fprintf(stderr,"Cannot open %s\n",putlog_file);
+			fflush(stderr);
+		} else {
+			gr->setPutlogFp(fp);
+		}
 	}
 
 	startEverything(stat_prefix);
@@ -1039,6 +1104,9 @@ void print_instructions(void)
 	
 	pr(stderr,"-command file_name: Name of file where gateway command(s) go\n");
 	pr(stderr," Commands are executed when a USR1 signal is sent to gateway.\n\n");
+	
+	pr(stderr,"-putlog file_name: Name of file where gateway put logging goes.\n");
+	pr(stderr," Put logging is specified with TRAPWRITE in the access file.\n\n");
 	
 	pr(stderr,"-home directory: Home directory where all your gateway\n");
 	pr(stderr," configuration files are kept where log and command files go.\n\n");

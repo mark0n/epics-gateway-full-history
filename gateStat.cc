@@ -54,7 +54,7 @@ static struct timespec *timeSpec(void)
 
 #if statCount
 
-gateStat::gateStat(gateServer* s,const char* n,int t) :
+gateStat::gateStat(gateServer *s,const char *n,int t) :
 	casPV(*s),post_data(0),type(t),serv(s),name(strDup(n))
 {
 
@@ -106,7 +106,7 @@ gateStat::~gateStat(void)
 	if(name) delete [] name;
 }
 
-const char* gateStat::getName() const
+const char *gateStat::getName() const
 {
 	return name; 
 }

@@ -14,11 +14,13 @@
 #ifndef __GATE_RESOURCES_H
 #define __GATE_RESOURCES_H
 
+#define GATE_LOG_FILE       "gateway.log"
 #define GATE_SCRIPT_FILE    "gateway.killer"
 #define GATE_RESTART_FILE   "gateway.restart"
 #define GATE_PV_LIST_FILE   "gateway.pvlist"
 #define GATE_PV_ACCESS_FILE "gateway.access"
 #define GATE_COMMAND_FILE   "gateway.command"
+#define GATE_PUTLOG_FILE    "gateway.putlog"
 
 #define GATE_CONNECT_TIMEOUT      1
 #define GATE_INACTIVE_TIMEOUT   (60*60*2)
@@ -56,10 +58,10 @@ public:
 	gateResources(void);
 	~gateResources(void);
 
-	int setHome(char* dir);
-	int setListFile(char* file);
-	int setAccessFile(char* file);
-	int setCommandFile(char* file);
+	int setListFile(const char* file);
+	int setAccessFile(const char* file);
+	int setCommandFile(const char* file);
+	int setPutlogFile(const char* file);
 	int setUpAccessSecurity(void);
 	int setDebugLevel(int level);
 
@@ -93,6 +95,10 @@ public:
 	const char* listFile(void) const	{ return pvlist_file?pvlist_file:"NULL"; }
 	const char* accessFile(void) const	{ return access_file?access_file:"NULL"; }
 	const char* commandFile(void) const	{ return command_file?command_file:"NULL"; }
+	const char* putlogFile(void) const	{ return putlog_file?putlog_file:"NULL"; }
+
+	void setPutlogFp(FILE* fp) { putlogFp = fp; }
+	FILE* getPutlogFp(void) const { return putlogFp; }
 
 	gateAs* getAs(void);
 
@@ -107,13 +113,14 @@ public:
 	static int appSTSAckString;
 
 private:
-	char *access_file, *pvlist_file, *command_file;
+	char *access_file, *pvlist_file, *command_file, *putlog_file;
 	int debug_level, ro;
 	unsigned long event_mask;
 	char event_mask_string[4];
 	time_t connect_timeout,inactive_timeout,dead_timeout;
 	time_t disconnect_timeout,reconnect_inhibit;
 	gateAs* as;
+	FILE *putlogFp;
 };
 
 #ifndef GATE_RESOURCE_FILE

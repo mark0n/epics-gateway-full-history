@@ -76,6 +76,11 @@ gateResources::gateResources(void)
 	else
 		command_file=NULL;
 
+	if(access(GATE_PUTLOG_FILE,F_OK)==0)
+		putlog_file=strDup(GATE_PUTLOG_FILE);
+	else
+		putlog_file=NULL;
+	putlogFp=NULL;
 
 	debug_level=0;
 	ro=0;
@@ -107,6 +112,7 @@ gateResources::~gateResources(void)
 	if(access_file)	delete [] access_file;
 	if(pvlist_file)	delete [] pvlist_file;
 	if(command_file) delete [] command_file;
+	if(putlog_file) delete [] putlog_file;
 }
 
 int gateResources::appValue=0;
@@ -118,24 +124,31 @@ int gateResources::appUnits=0;
 int gateResources::appAttributes=0;
 int gateResources::appSTSAckString=0;
 
-int gateResources::setListFile(char* file)
+int gateResources::setListFile(const char* file)
 {
 	if(pvlist_file) delete [] pvlist_file;
 	pvlist_file=strDup(file);
 	return 0;
 }
 
-int gateResources::setAccessFile(char* file)
+int gateResources::setAccessFile(const char* file)
 {
 	if(access_file) delete [] access_file;
 	access_file=strDup(file);
 	return 0;
 }
 
-int gateResources::setCommandFile(char* file)
+int gateResources::setCommandFile(const char* file)
 {
-	if(access_file) delete [] command_file;
+	if(command_file) delete [] command_file;
 	command_file=strDup(file);
+	return 0;
+}
+
+int gateResources::setPutlogFile(const char* file)
+{
+	if(putlog_file) delete [] putlog_file;
+	putlog_file=strDup(file);
 	return 0;
 }
 

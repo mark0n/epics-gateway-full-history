@@ -96,9 +96,9 @@ void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 
 // vc is set in the constructor to the incoming vc.  The constructor
 // adds it to the chan_list.  The vc is set to NULL when the
-// gateVcData removes it from the chan_list via
-// gateVcData::removeChan.  This prevents it from calling removeChan
-// when the gateVcData is gone.
+// gateVcData removes it from the chan_list in the gateVcData
+// destructor.  This prevents it from calling removeChan when the
+// gateVcData is gone.
 gateChan::gateChan(const casCtx &ctx,gateVcData *v, gateAsClient *n)
 	:casChannel(ctx),vc(v),asclient(n)
 {
@@ -112,19 +112,28 @@ gateChan::~gateChan(void)
 	delete asclient;
 }
 
+// This is a new virtual write in CAS that knows the casChannel.  The
+// casPV::write() is not called if this one is implemented.  This
+// write calls a new, overloaded gateVcData::write() that has the
+// gateChan as an argument to do what used to be done in the virtual
+// gateVcData::write().
 caStatus gateChan::write(const casCtx &ctx, const gdd &value)
 {
 	// Trap writes
 	if(asclient && asclient->clientPvt()->trapMask) {
-		printf("%s %s@%s is writing %s\n",
-		  timeStamp(),
-		  asclient->user()?asclient->user():"Unknown",
-		  asclient->host()?asclient->host():"Unknown",
-		  asclient->getVC() && asclient->getVC()->getName()?
-		    asclient->getVC()->getName():"Unknown");
+		FILE *fp=global_resources->getPutlogFp();
+		if(fp) {
+			fprintf(fp,"%s %s@%s %s\n",
+			  timeStamp(),
+			  asclient->user()?asclient->user():"Unknown",
+			  asclient->host()?asclient->host():"Unknown",
+			  asclient->getVC() && asclient->getVC()->getName()?
+			  asclient->getVC()->getName():"Unknown");
+			fflush(fp);
+		}
 	}
 	
-	// Call the non-virtual-function write in the gateVcData
+	// Call the non-virtual-function write() in the gateVcData
 	if(vc) return vc->write(ctx,value,*this);
 	else return S_casApp_noSupport;
 }
