@@ -837,15 +837,23 @@ int main(int argc, char** argv)
 		}
 #endif
 
+		// Redirect stdout and stderr
+		// Open it and close it to empty it (Necessary on WIN32,
+		// apparently not necessary on Solaris)
+		FILE *fp=fopen(log_file,"w");
+		if(fp == NULL) {
+			fprintf(stderr,"Cannot open %s\n",log_file);
+			fflush(stderr);
+		} else {
+			fclose(fp);
+		}
 		// KE: This was formerly "w" instead of "a" and stderr was
 		//  overwriting the top of the log file
-		if( (freopen(log_file,"a",stderr))==NULL )
-		{
+		if((freopen(log_file,"a",stderr))==NULL ) {
 			fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
 			fflush(stderr);
 		}
-		if( (freopen(log_file,"a",stdout))==NULL )
-		{
+		if((freopen(log_file,"a",stdout))==NULL ) {
 			fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
 			fflush(stderr);
 		}

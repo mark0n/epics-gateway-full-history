@@ -29,6 +29,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.44  2002/08/16 16:23:25  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.42  2002/07/29 16:06:03  jba
  * Added license information.
  *
@@ -1104,8 +1107,22 @@ void gateServer::initStats(char *prefix)
 		// Use the specified one
 		stat_prefix=prefix;
 	} else {
-#ifndef WIN32
 		// Make one up
+#ifdef WIN32
+		TCHAR computerName[MAX_COMPUTERNAME_LENGTH+1];
+		DWORD size=MAX_COMPUTERNAME_LENGTH+1;
+		// Will probably be uppercase
+		BOOL status=GetComputerName(computerName,&size);
+		if(status && size > 0) {
+			// Convert to lowercase and copy
+			// OK for ANSI.  Won't work for Unicode w/o conversion.
+			char *pChar=computerName;
+			while(*pChar) *pChar=tolower(*pChar++);
+			stat_prefix=strDup(computerName);
+		} else {
+			stat_prefix=strDup("gateway");
+		}
+#else
 		struct utsname ubuf;
 		if(uname(&ubuf) >= 0) {
 			// Use the name of the host
@@ -1114,12 +1131,6 @@ void gateServer::initStats(char *prefix)
 			// If all else fails use "gateway"
 			stat_prefix=strDup("gateway");
 		}
-#else
-		// Use "gateway" for now.  Could use GetComputerName() here,
-		// but things like this should go in an os dependent file to
-		// avoid including windows.h, converting from TCHARS, etc. in
-		// this file.
-		stat_prefix=strDup("gateway");
 #endif
 	}
 	stat_prefix_len=strlen(stat_prefix);

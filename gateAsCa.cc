@@ -135,7 +135,39 @@ void gateAsCa(void)
 		time(&cur_time);
 	}
 	asComputeAllAsg();
+
+#if 0
+	// This is wrong
 	if(count>0) printf("Access security did not connect to %d PVs\n",count);
+#else
+	// See how many are connected now
+	int connectedCount=0;
+	pasg=(ASG*)ellFirst(&pasbase->asgList);
+	while(pasg)
+	{
+		pasginp=(ASGINP*)ellFirst(&pasg->inpList);
+		while(pasginp)
+		{
+			pcapvt=(CAPVT*)pasginp->capvt;
+			if(pcapvt && pcapvt->ch_id) {
+				if(ca_state(pcapvt->ch_id) == cs_conn) {
+					connectedCount++;
+				} else {
+					printf("Access security did not connect to %s\n",
+					  ca_name(pcapvt->ch_id));
+				}
+			} else {
+				fprintf(stderr,"Access security did not connect to an unknown PV\n");
+			}
+			pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
+		}
+		pasg=(ASG*)ellNext((ELLNODE*)pasg);
+	}
+	if(count) printf("Access security connected to %d of %d INP PVs\n",
+	  connectedCount,count);
+	fflush(stdout);
+#endif
+
 	ready=1;
 }
 

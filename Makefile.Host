@@ -71,7 +71,7 @@ WIN32_RUNTIME=MD
 USR_CXXFLAGS_WIN32 += /DWIN32 /D_WINDOWS
 USR_LDFLAGS_WIN32 += /SUBSYSTEM:CONSOLE
 
-USR_CXXFLAGS_solaris += -mt
+# USR_CXXFLAGS_solaris += -mt
 
 gateway_SRCS += gateway.cc
 gateway_SRCS += gatePv.cc
