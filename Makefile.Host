@@ -52,7 +52,7 @@ QUANTIFY_FLAGS = -measure-timed-calls=user+system -record-system-calls=no -colle
 # Turn on debug mode
 # USR_CXXFLAGS += -DDEBUG_MODE
 # Turn off Gateway debug calls:
-USR_CXXFLAGS += -DNODEBUG
+# USR_CXXFLAGS += -DNODEBUG
 # Use stat PV's
 USR_CXXFLAGS += -DSTAT_PVS
 # Use rate statistics
@@ -127,6 +127,7 @@ xxxx:
 	@echo ARCH_DEP_LDFLAGS_MD: $(ARCH_DEP_LDFLAGS_MD)
 	@echo ACC_SFLAGS_YES: $(ACC_SFLAGS_YES)
 	@echo ACC_SFLAGS_NO: $(ACC_SFLAGS_NO)
+	@echo SHARED_LIBRARIES: $(SHARED_LIBRARIES)
 
 # **************************** Emacs Editing Sequences *****************
 # Local Variables:

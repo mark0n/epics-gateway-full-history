@@ -33,6 +33,7 @@
 #define DEBUG_PUT 0
 #define DEBUG_BEAM 0
 #define DEBUG_ENUM 0
+#define DEBUG_DELAY 1
 
 #define OMIT_CHECK_EVENT 1
 
@@ -208,6 +209,12 @@ gatePvData::~gatePvData(void)
 		callback_list.remove(*id);
 		delete id;
 	}
+
+	// Clear the async exist test list
+	gateAsyncE* asynce;
+	while((asynce=eio.first()))	{
+		asynce->removeFromQueue();
+	}
 }
 
 void gatePvData::initClear(void)
@@ -225,14 +232,14 @@ void gatePvData::initClear(void)
 void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 {
 	gateDebug2(5,"gatePvData::init(gateServer=%p,name=%s)\n",m,name);
-	gateDebug1(5,"gatePvData::init entry name=%s)\n",n->name);
+	gateDebug1(5,"gatePvData::init entry pattern=%s)\n",n->pattern);
 	mrg=m;
-	ae=n;
+	asentry=n;
 	setTimes();
 	status=0;
 	pv_name=strDup(name);
 
-	if(ae==NULL)
+	if(asentry==NULL)
 		status=-1;
 	else
 	{
@@ -307,6 +314,13 @@ int gatePvData::activate(gateVcData* vcd)
 	
 	int rc=-1;
 	
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("%s gatePvData::activate: %s state=%d\n",timeStamp(),name(),
+			  getState());
+		}
+#endif
+
 	switch(getState())
 	{
 	case gatePvInactive:
@@ -385,6 +399,13 @@ int gatePvData::life(void)
 	event_count=0;
 
 	gateDebug1(5,"gatePvData::life() name=%s\n",name());
+
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("%s gatePvData::life: loop_count=%d %s state=%d\n",
+			  timeStamp(),mrg->loop_count,name(),getState());
+		}
+#endif
 
 	switch(getState())
 	{
@@ -484,8 +505,15 @@ int gatePvData::death(void)
 	event_count=0;
 
 	gateDebug1(5,"gatePvData::death() name=%s\n",name());
-
 	gateDebug1(3,"gatePvData::death() %s PV\n",getStateName());
+
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gatePvData::death: loop_count=%d %s state=%d\n",
+		  timeStamp(),mrg->loop_count,name(),getState());
+	}
+#endif
+
 	switch(getState())
 	{
 	case gatePvActive:
@@ -589,6 +617,13 @@ int gatePvData::monitor(void)
 	gateDebug1(5,"gatePvData::monitor() name=%s\n",name());
 	int rc=0;
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gatePvData::monitor: %s state=%d\n",timeStamp(),name(),
+		  getState());
+	}
+#endif
+
 	if(!monitored())
 	{
 		// gets only 1 element:
@@ -662,9 +697,8 @@ int gatePvData::get(void)
 	{
 	case gatePvActive:
 		gateDebug1(3,"gatePvData::get() %s PV\n",getStateName());
-		if(!pendingGet())
-		{
-			gateDebug0(3,"gatePvData::get() issuing CA get cb\n");
+		if(!pendingGet()) {
+			gateDebug0(3,"gatePvData::get() doing ca_array_get_callback\n");
 			setTransTime();
 			markGetPending();
 			// always get only one element, the monitor will get
@@ -687,15 +721,15 @@ int gatePvData::get(void)
 	return -1;
 }
 
-// Called by gateVcData::write().  Does a ca_array_put_callback or
-// ca_array_put depending on docallback.  The former is used unless
-// the vc is not expected to remain around (e.g. in its destructor).
-// The callback will eventually update the gateVcData's event_data if
-// all goes well and not do so otherwise.  Returns S_casApp_success
-// for a successful put and as good an error code as we can generate
-// otherwise.  There is unfortunately no S_casApp return code defined
-// for failure.
-int gatePvData::put(const gdd* dd, int docallback)
+// Called by gateVcData::write() and gateVcData::flushAsyncWriteQueue.
+// Does a ca_array_put_callback or ca_array_put depending on
+// docallback.  The former is used unless the vc is not expected to
+// remain around (e.g. in its destructor).  The callback will
+// eventually update the gateVcData's event_data if all goes well and
+// not do so otherwise.  Returns S_casApp_success for a successful put
+// and as good an error code as we can generate otherwise.  There is
+// unfortunately no S_casApp return code defined for failure.
+int gatePvData::put(const gdd* dd, int docallback, gateAsClient *asc)
 {
 	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",dd,name());
 	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -777,6 +811,13 @@ int gatePvData::put(const gdd* dd, int docallback)
 			break;
 		}
 
+		// Trap writes
+		if(asc) {
+			void *pvt = asTrapWriteBefore(asc->clientPvt(), asc->user(),
+			  asc->host(), asc);
+			asTrapWriteAfter(pvt);
+		}
+
 		if(docallback) {
 			// We need to keep track of which vc requested the put, so we
 			// make a gatePvCallbackId, save it in the callback_list, and
@@ -820,6 +861,12 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 	gateDebug1(10,"gatePvData::flushAsyncETQueue() name=%s\n",name());
 	gateAsyncE* asynce;
 
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("%s gatePvData::flushAsyncETQueue: %s count=%d state=%d\n",
+			  timeStamp(),name(),eio.count(),getState());
+		}
+#endif
 	while((asynce=eio.first()))	{
 		gateDebug1(1,"gatePvData::flushAsyncETQueue() posting %p\n",
 				   asynce);
@@ -860,7 +907,12 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
 #endif
-
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pv->name(),6)) {
+		printf("%s gatePvData::connectCB: %s state=%d\n",timeStamp(),pv->name(),
+		  pv->getState());
+	}
+#endif
 #if DEBUG_ENUM
 	printf("gatePvData::connectCB\n");
 #endif
@@ -944,7 +996,7 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 // pointer to a gatePvConnectId.  It uses the vcID to check that the
 // vc which originated the put is still the current one, in which case
 // if all is well, it will call the vc's putCB to update its
-// event_data.  Otherwise, we would be trying to update a gateVcDta
+// event_data.  Otherwise, we would be trying to update a gateVcData
 // that is gone and get errors.  The gatePvCallbackId's are stored in
 // a list in the gatePvData since they must remain around until this
 // callback runs.  If we did not need the vcID to check the vc, we
@@ -975,10 +1027,10 @@ void gatePvData::putCB(EVENT_ARGS args)
 	}
 
 #if DEBUG_PUT
-		printf("gatePvData::putCB: cbid=%p user=%p id=%ld pv=%p\n",
-		  cbid,ca_puser(args.chid),cbid->getID(),cbid->getPV());
+	printf("gatePvData::putCB: cbid=%p user=%p id=%ld pv=%p\n",
+	  cbid,ca_puser(args.chid),cbid->getID(),cbid->getPV());
 #endif		
-
+	
 	// We are through with the callback id.  Remove it from the
 	// callback_list and delete it.
 	pv->callback_list.remove(*cbid);
@@ -1018,6 +1070,13 @@ void gatePvData::eventCB(EVENT_ARGS args)
 	  pv->name());
 #endif
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pv->name(),6)) {
+		printf("%s gatePvData::eventCB: %s state=%d\n",timeStamp(),pv->name(),
+		  pv->getState());
+	}
+#endif
+
 	if(args.status==ECA_NORMAL)
 	{
 		// only sends event_data and does ADD transactions
@@ -1040,8 +1099,10 @@ void gatePvData::eventCB(EVENT_ARGS args)
 					pv->vc->vcAdd();
 				}
 				else
+				{
 					// Post the event
 					pv->vc->vcPostEvent();
+				}
 			}
 		}
 		++(pv->event_count);
@@ -1051,7 +1112,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 
 // This is the callback registered with ca_add_event in the
 // alhMonitor routine.  If conditions are right, it calls the routines
-// that copy the data into the GateVcData's alh_data.
+// that copy the data into the GateVcData's event_data.
 void gatePvData::alhCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
@@ -1071,7 +1132,7 @@ void gatePvData::alhCB(EVENT_ARGS args)
 
 	if(args.status==ECA_NORMAL)
 	{
-		// only sends alh_data and does ADD transactions
+		// only sends event_data and does ADD transactions
 		if(pv->active())
 		{
 			gateDebug1(5,"gatePvData::alhCB() %s PV\n",pv->getStateName());
@@ -1104,6 +1165,13 @@ void gatePvData::getCB(EVENT_ARGS args)
 	printf("gatePvData::getCB\n");
 #endif
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pv->name(),6)) {
+		printf("%s gatePvData::getCB: %s state=%d\n",timeStamp(),pv->name(),
+		  pv->getState());
+	}
+#endif
+
 	pv->markNoGetPending();
 	if(args.status==ECA_NORMAL)
 	{
@@ -1131,6 +1199,13 @@ void gatePvData::accessCB(ACCESS_ARGS args)
 
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
+#endif
+
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pv->name(),6)) {
+		printf("%s gatePvData::accessCB: %s vc=%d state=%d\n",timeStamp(),
+		  pv->name(),vc,pv->getState());
+	}
 #endif
 
 	// sets general read/write permissions for the gateway itself

@@ -44,10 +44,12 @@
 
 #include "gateVersion.h"
 
-class gateAs;
-class gateAsNode;
+// Utilities
+char *timeStamp(void);
 
-// parameters to both client and server sides
+class gateAs;
+
+// Parameters to both client and server sides
 class gateResources
 {
 public:

@@ -114,7 +114,7 @@ public:
 	
 	const char* name(void) const { return pv_name; }
 	gateVcData* VC(void) const { return vc; }
-	gateAsEntry* getEntry(void) const { return ae; }
+	gateAsEntry* getEntry(void) const { return asentry; }
 	gatePvState getState(void) const { return pv_state; }
 	const char* getStateName(void) const { return pv_state_names[pv_state]; }
 	int getStatus(void) const { return status; }
@@ -139,7 +139,7 @@ public:
 	int alhMonitor(void);           // add alh info monitor
 	int alhUnmonitor(void);         // delete alh info monitor
 	int get(void);                  // get callback
-	int put(const gdd*, int docallback);  // put with or without callback
+	int put(const gdd*, int docallback, gateAsClient *asc);  // put
 	
 	time_t timeInactive(void) const;
 	time_t timeActive(void) const;
@@ -188,7 +188,7 @@ private:
 	
 	gateServer* mrg;    // The gateServer that manages this gatePvData
 	gateVcData* vc;     // Pointer to the associated gateVcData, NULL if none
-	gateAsEntry* ae;
+	gateAsEntry* asentry;
 	aitUint32 max_elements;
 	int status;
 	char* pv_name;             // Name of the process variable

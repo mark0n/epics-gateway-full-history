@@ -31,6 +31,8 @@
 #define DEBUG_EVENT_DATA 0
 #define DEBUG_ENUM 0
 #define DEBUG_TIMESTAMP 0
+#define DEBUG_RTYP 0
+#define DEBUG_DELAY 1
 
 #include <stdio.h>
 #include <string.h>
@@ -58,21 +60,6 @@
 unsigned long gateVcData::nextID=0;
 
 // ---------------------------- utilities ------------------------------------
-static char *timeStamp(void)
-  // Gets current time and puts it in a static array
-  // The calling program should copy it to a safe place
-  //   e.g. strcpy(savetime,timestamp());
-{
-	static char timeStampStr[16];
-	long now;
-	struct tm *tblock;
-	
-	time(&now);
-	tblock=localtime(&now);
-	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-	
-	return timeStampStr;
-}
 
 void heading(const char *funcname, const char *pvname)
 {
@@ -108,12 +95,12 @@ void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 // ------------------------gateChan
 
 // vc is set in the constructor to the incoming vc.  The constructor
-// adds it to the chan list.  The vc is set to NULL when the
-// gateVcData removes it from the chan list via
+// adds it to the chan_list.  The vc is set to NULL when the
+// gateVcData removes it from the chan_list via
 // gateVcData::removeChan.  This prevents it from calling removeChan
 // when the gateVcData is gone.
-gateChan::gateChan(const casCtx &ctx,gateVcData *v, gateAsNode *n)
-	:casChannel(ctx),vc(v),node(n)
+gateChan::gateChan(const casCtx &ctx,gateVcData *v, gateAsClient *n)
+	:casChannel(ctx),vc(v),asclient(n)
 {
 	if(vc) vc->addChan(this);
 	n->setUserFunction(post_rights,this);
@@ -122,20 +109,23 @@ gateChan::gateChan(const casCtx &ctx,gateVcData *v, gateAsNode *n)
 gateChan::~gateChan(void)
 {
 	if(vc) vc->removeChan(this);
-	delete node;
+	delete asclient;
 }
 
+#if 0
+// KE: Unused
 void gateChan::setOwner(const char* const u, const char* const h)
-	{ node->changeInfo(u,h); }
+	{ asclient->changeInfo(u,h); }
+#endif
 
 bool gateChan::readAccess(void) const
-	{ return (node->readAccess()&&vc&&vc->readAccess())?true:false; }
+	{ return (asclient->readAccess()&&vc&&vc->readAccess())?true:false; }
 
 bool gateChan::writeAccess(void) const
-	{ return (node->writeAccess()&&vc&&vc->writeAccess())?true:false; }
+	{ return (asclient->writeAccess()&&vc&&vc->writeAccess())?true:false; }
 
-const char* gateChan::getUser(void) { return node->user(); }
-const char* gateChan::getHost(void) { return node->host(); }
+const char* gateChan::getUser(void) { return asclient->user(); }
+const char* gateChan::getHost(void) { return asclient->host(); }
 
 void gateChan::report(void)
 {
@@ -145,7 +135,7 @@ void gateChan::report(void)
 
 void gateChan::post_rights(void* v)
 {
-	gateChan* p = (gateChan*)v;
+	gateChan *p = (gateChan *)v;
 	p->postAccessRightsEvent();
 }
 
@@ -162,7 +152,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	time_last_trans(0),
 	time_last_alh_trans(0),
 	status(0),
-	entry(NULL),
+	asentry(NULL),
 	pv_state(gateVcClear),
 	mrg(m),
 	pv_name(strDup(name)),
@@ -190,7 +180,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 		// before returning here.  Be sure to mark this state connecting
 		// so that everything works out OK in this situation.
 		setState(gateVcConnect);
-		entry=pv->getEntry();
+		asentry=pv->getEntry();
 
 		if(pv->activate(this)==0)
 		{
@@ -217,6 +207,7 @@ gateVcData::~gateVcData(void)
 	gateDebug0(5,"~gateVcData()\n");
 	gateVcData* x;
 	if(in_list_flag) mrg->vcDelete(pv_name,x);
+
 // Clean up the pending write.  The server library destroys the
 // asynchronous io before destroying the casPV which results in
 // calling this destructor.  For this reason we do not have to worry
@@ -236,6 +227,7 @@ gateVcData::~gateVcData(void)
 	pv_name="Error";
 	if (pv) pv->setVC(NULL);
 	clearChanList();
+	clearAsyncLists();
 	
 #ifdef STAT_PVS
 	mrg->setStat(statVcTotal,--mrg->total_vc);
@@ -263,7 +255,8 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const u, const char * const h)
 {
 	gateDebug0(5,"gateVcData::createChannel()\n");
-	gateChan* c =  new gateChan(ctx,this,mrg->getAs()->getInfo(entry,u,h));
+	gateChan* c =  new gateChan(ctx,this,
+	  mrg->getAs()->getInfo(this,asentry,u,h));
 	return c;
 }
 
@@ -271,7 +264,7 @@ void gateVcData::report(void)
 {
 	printf("%-30s event rate = %5.2f\n",pv_name,pv->eventRate());
 
-	tsDLIter<gateChan> iter=chan.firstIter();
+	tsDLIter<gateChan> iter=chan_list.firstIter();
 	while(iter.valid()) {
 		iter->report();
 		iter++;
@@ -311,6 +304,13 @@ void gateVcData::vcAdd(void)
 	// an add indicates that the pv_data and event_data are ready
 	gateDebug1(1,"gateVcData::vcAdd() name=%s\n",name());
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gateVcData::vcAdd: %s state=%d\n",timeStamp(),name(),
+		  getState());
+	}
+#endif
+
 	switch(getState())
 	{
 	case gateVcConnect:
@@ -343,6 +343,13 @@ void gateVcData::setEventData(gdd* dd)
 	dumpdd(1,"dd (incoming)",name(),dd);
 #endif
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gateVcData::setEventData: %s state=%d\n",timeStamp(),name(),
+		  getState());
+	}
+#endif
+
 	if(event_data)
 	{
 		// Containers get special treatment (for performance reasons)
@@ -371,9 +378,6 @@ void gateVcData::setEventData(gdd* dd)
 	else
 		event_data = dd;
 
-#ifdef TODO
-	if(pv->fieldType() == DBR_ENUM) event_data->setRelated(pv_data);
-#endif
 #if DEBUG_GDD
 	dumpdd(4,"event_data(after)",name(),event_data);
 #endif
@@ -439,8 +443,10 @@ void gateVcData::setAlhData(gdd* dd)
 			unsigned short newacks = dd[gddAppTypeIndex_dbr_stsack_string_acks];
 			unsigned short newackt = dd[gddAppTypeIndex_dbr_stsack_string_ackt];
 
-			ndd[gddAppTypeIndex_dbr_stsack_string_ackt].put(&dd[gddAppTypeIndex_dbr_stsack_string_ackt]);
-			ndd[gddAppTypeIndex_dbr_stsack_string_acks].put(&dd[gddAppTypeIndex_dbr_stsack_string_acks]);
+			ndd[gddAppTypeIndex_dbr_stsack_string_ackt].
+			  put(&dd[gddAppTypeIndex_dbr_stsack_string_ackt]);
+			ndd[gddAppTypeIndex_dbr_stsack_string_acks].
+			  put(&dd[gddAppTypeIndex_dbr_stsack_string_acks]);
 
 			if(oldacks == newacks && oldackt == newackt) ackt_acks_changed=0;
 			event_data= ndd;
@@ -571,6 +577,13 @@ void gateVcData::vcNew(void)
 {
 	gateDebug1(10,"gateVcData::vcNew() name=%s\n",name());
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gateVcData::vcNew: %s state=%d\n",timeStamp(),name(),
+		  getState());
+	}
+#endif
+
 	// Flush any accumulated reads and writes
 	if(wio.count()) flushAsyncWriteQueue(GATE_NOCALLBACK);
 	if(rio.count()) flushAsyncReadQueue();
@@ -583,7 +596,7 @@ void gateVcData::vcNew(void)
 #endif
 }
 
-// This routine, called from ~gateVcdata, clears the chan list to
+// This routine, called from ~gateVcdata, clears the chan_list to
 // insure the gateChan's do not call the gateVcData to remove them
 // after the gateVcData is gone.
 void gateVcData::clearChanList(void)
@@ -591,10 +604,29 @@ void gateVcData::clearChanList(void)
 	gateDebug1(10,"gateVcData::clearChanList() name=%s\n",name());
 	gateChan *pChan;
 
-	while((pChan=chan.first()))	{
+	while((pChan=chan_list.first()))	{
 		// removeChan also sets the pChan->vc to NULL, the only really
 		// necessary thing to do in ~gateVcData
 		removeChan(pChan);
+	}
+}
+
+// This routine, called from ~gateVcdata, clears the async io lists to
+// insure the gateAsyncX's do not try to remove themselves from the
+// lists after the gateVcData and the lists are gone. removeFromQueue
+// sets the pointer to the list in the gateAsyncX to NULL.
+void gateVcData::clearAsyncLists(void)
+{
+	gateDebug1(10,"gateVcData::clearAsyncLists() name=%s\n",name());
+
+	gateAsyncW* asyncw;
+	while((asyncw=wio.first()))	{
+		asyncw->removeFromQueue();
+	}
+
+	gateAsyncR* asyncr;
+	while((asyncr=rio.first()))	{
+		asyncr->removeFromQueue();
 	}
 }
 
@@ -607,7 +639,11 @@ void gateVcData::flushAsyncWriteQueue(int docallback)
 
 	while((asyncw=wio.first()))	{
 		asyncw->removeFromQueue();
-		pv->put(&asyncw->DD(),docallback);
+#ifndef TEMP
+		pv->put(&asyncw->DD(),docallback,NULL);
+#else
+		pv->put(&asyncw->DD(),docallback,asc6);
+#endif
 		asyncw->postIOCompletion(S_casApp_success);
 	}
 }
@@ -630,6 +666,13 @@ void gateVcData::flushAsyncReadQueue(void)
 #endif
 		// Copy the current state into the asyncr->DD()
 		copyState(asyncr->DD());
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("%s gateVcData::flushAsyncReadQueue: %s state=%d\n",
+			  timeStamp(),name(),getState());
+			printf("  S_casApp_success\n");
+		}
+#endif
 		asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
 	}
 }
@@ -641,6 +684,13 @@ void gateVcData::vcPostEvent(void)
 {
 	gateDebug1(10,"gateVcData::vcPostEvent() name=%s\n",name());
 //	time_t t;
+
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gateVcData::vcPostEvent: %s state=%d\n",timeStamp(),name(),
+		  getState());
+	}
+#endif
 
 	if(needPosting())
 	{
@@ -728,8 +778,20 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	heading("gateVcData::read",name());
 	dumpdd(1,"dd(incoming)",name(),&dd);
 #endif
+#if DEBUG_RTYP
+	heading("gateVcData::read",name());
+	fflush(stderr);
+	printf(" gddAppType: %d \n",(int)dd.applicationType());
+	fflush(stdout);
+#endif
 #if DEBUG_TIMESTAMP
 	heading("gateVcData::read",name());
+#endif
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gateVcData::read: %s state=%d appType=%d\n",
+		  timeStamp(),name(), getState(),dd.applicationType());
+	}
 #endif
 
 	// Branch on application type
@@ -741,13 +803,34 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 		  "Got unsupported app type %d for %s\n",
 		  timeStamp(),at,name());
 		fflush(stderr);
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("  S_casApp_noSupport\n");
+		}
+#endif
 		return S_casApp_noSupport;
 	case gddAppType_class:
+#if DEBUG_RTYP
+		fflush(stderr);
+		printf(" gddAppType_class (%d):\n",(int)at);
+		dumpdd(1,"dd(incoming)",name(),&dd);
+#endif
 		dd.put(str);
+#if DEBUG_RTYP
+		dumpdd(1,"dd(outgoing)",name(),&dd);
+		printf(" gddAppType(outgoing): %d \n",(int)dd.applicationType());
+		fflush(stdout);
+#endif
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("  S_casApp_noSupport\n");
+		}
+#endif
 		return S_casApp_noSupport;
 	case gddAppType_dbr_stsack_string:
-		if((event_data && !(event_data->applicationType()==gddAppType_dbr_stsack_string))
-		   || !pv->alhMonitored())
+		if((event_data && 
+		  !(event_data->applicationType()==gddAppType_dbr_stsack_string))
+		  || !pv->alhMonitored())
 		{
 			pv->alhMonitor();
 			wait_for_alarm_info = 1;
@@ -764,6 +847,13 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			printf("gateVcData::read: return S_casApp_asyncCompletion\n");
 			fflush(stdout);
 #endif
+#if DEBUG_DELAY
+			if(!strncmp("Xorbit",name(),6)) {
+				printf("  S_casApp_asyncCompletion (%s %s)\n",
+				  ready()?"Ready":"Not Ready",
+				  wait_for_alarm_info?"WaitForAlarmInfo":"NotWaitForAlarmInfo");
+			}
+#endif
 			return S_casApp_asyncCompletion;
 		} else if(pending_write) {
 			// Pending write in progress, don't read now
@@ -771,6 +861,11 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			fflush(stderr);
 			printf("gateVcData::read: return S_casApp_postponeAsyncIO\n");
 			fflush(stdout);
+#endif
+#if DEBUG_DELAY
+			if(!strncmp("Xorbit",name(),6)) {
+				printf("  S_casApp_asyncCompletion (Pending write)\n");
+			}
 #endif
 			return S_casApp_postponeAsyncIO;
 		} else {
@@ -790,6 +885,11 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 #if 0
 				dd.dump();
 #endif
+			}
+#endif
+#if DEBUG_DELAY
+			if(!strncmp("Xorbit",name(),6)) {
+				printf("  S_casApp_success\n");
 			}
 #endif
 			return S_casApp_success;
@@ -844,7 +944,19 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 			return S_casApp_postponeAsyncIO;
 		} else {
 			// Initiate a put
-			caStatus stat = pv->put(&dd, docallback);
+#ifndef TEMP
+			tsDLIter<gateChan> iter=chan_list.firstIter();
+			gateAsClient *asc;
+			if(iter.valid()) {
+				asc = iter->getAsClient();
+			} else {
+				asc = NULL;
+			}
+			caStatus stat = pv->put(&dd, docallback, asc);
+#else
+			// Implement this
+			caStatus stat = pv->put(&dd, docallback, asc);
+#endif
 			if(stat != S_casApp_success) return stat;
 
 			if(docallback) {
@@ -955,7 +1067,7 @@ void gateVcData::postAccessRights(void)
 {
 	gateDebug0(5,"gateVcData::postAccessRights() posting access rights\n");
 
-	tsDLIter<gateChan> iter=chan.firstIter();
+	tsDLIter<gateChan> iter=chan_list.firstIter();
 	while(iter.valid()) {
 		iter->postAccessRightsEvent();
 		iter++;

@@ -190,15 +190,17 @@ public:
 	virtual ~gateServer(void);
 
 	// CAS virtual overloads
-	virtual pvExistReturn pvExistTest(const casCtx& c,const char* pvname);
-	virtual pvCreateReturn createPV(const casCtx& c,const char* pvname);
+	virtual pvExistReturn pvExistTest(const casCtx& ctx, const caNetAddr& netAddr,
+	  const char* pvname);
+	virtual pvExistReturn pvExistTest(const casCtx& ctx, const char* pvname);
+	virtual pvCreateReturn createPV(const casCtx& ctx, const char* pvname);
 
 	void mainLoop(void);
 	void gateCommands(const char* cfile);
 	void newAs(void);
 	void report1(void);
 	void report2(void);
-	gateAs* getAs(void) { return as_rules; }
+	gateAs* getAs(void) { return as; }
 	casEventMask select_mask;
 	casEventMask alh_mask;
 
@@ -290,7 +292,7 @@ private:
 
 	int suppressed_refresh_flag;	// flag to remember suppressed beacons
 
-	gateAs* as_rules;
+	gateAs* as;
 
 	static double delay_quick;
 	static double delay_normal;

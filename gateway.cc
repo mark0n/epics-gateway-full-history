@@ -12,11 +12,17 @@
 // Date: 2/96
 
 #define DEBUG_ENV 0
+#define DEBUG_OPENFILES 0
 
 // Use this to truncate the core file if GATEWAY_CORE_SIZE is
 // specified in the environment.  (Truncating makes it unusable so
 // consider truncation to 0 if anything.)
 #define TRUNC_CORE_FILE 1
+
+#if DEBUG_OPENFILES
+#include <limits.h>
+#include <unistd.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
@@ -28,6 +34,7 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <errno.h>
 
 #ifdef WIN32
 # include <direct.h>
@@ -109,7 +116,7 @@ void operator delete(void* x)
 //	cip = nothing, the normal interface
 //	sip = nothing, the normal interface
 //
-// Precidence:
+// Precedence:
 //	(1) Command line parameter 
 //	(2) environment variables
 //	(3) defaults
@@ -306,8 +313,7 @@ static int startEverything(char *prefix)
 	struct rlimit lim;
 #endif
 
-	if(client_ip_addr)
-	{
+	if(client_ip_addr) {
 		int status=setEnv("EPICS_CA_ADDR_LIST",client_ip_addr,
 		  &gate_ca_list);
 		// In addition, make EPICS_CA_AUTO_LIST=NO to avoid sending
@@ -315,34 +321,30 @@ static int startEverything(char *prefix)
 		// EPICS_CA_ADDR_LIST is specified instead of -cip, then
 		// EPICS_CA_AUTO_ADDR_LIST=NO must be set also as this branch
 		// will not be taken.
-		status=setEnv("EPICS_CA_AUTO_ADDR_LIST","NO",&gate_ca_auto_list)
+		status=setEnv("EPICS_CA_AUTO_ADDR_LIST","NO",&gate_ca_auto_list);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_auto_list);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_list);
 	}
 
-	if(server_ip_addr)
-	{
+	if(server_ip_addr) {
 		setEnv("EPICS_CAS_INTF_ADDR_LIST",server_ip_addr,
 		  &gate_cas_addr);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_addr);
 	}
 
-	if(server_ignore_ip_addr)
-	{
+	if(server_ignore_ip_addr) {
 		setEnv("EPICS_CAS_IGNORE_ADDR_LIST",server_ignore_ip_addr,
 		  &gate_cas_ignore_addr);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_ignore_addr);
 	}
 
-	if(client_port)
-	{
+	if(client_port) {
 		setEnv("EPICS_CA_SERVER_PORT",client_port,
 		  &gate_ca_port);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_port);
 	}
 
-	if(server_port)
-	{
+	if(server_port) {
 		setEnv("EPICS_CAS_SERVER_PORT",server_port,
 		  &gate_cas_port);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_port);
@@ -352,13 +354,15 @@ static int startEverything(char *prefix)
 	
 #ifndef WIN32
 	// Make script file ("gateway.killer" by default)
-	if((fd=fopen(GATE_SCRIPT_FILE,"w"))==(FILE*)NULL)
-	{
-		fprintf(stderr,"open of script file %s failed\n",
-			GATE_SCRIPT_FILE);
+	errno=0;
+	if((fd=fopen(GATE_SCRIPT_FILE,"w"))==(FILE*)NULL) {
+		fprintf(stderr,"Opening script file failed: %s\n",
+		  GATE_SCRIPT_FILE);
+		fflush(stderr);
+		perror("Reason");
+		fflush(stderr);
 		fd=stderr;
 	}
-
 	fprintf(fd,"\n");
 	fprintf(fd,"# options:\n");
 	fprintf(fd,"# home=<%s>\n",home_directory);
@@ -383,11 +387,11 @@ static int startEverything(char *prefix)
 
 	fprintf(fd,"# \n");
 
-	if(global_resources->isReadOnly())
+	if(global_resources->isReadOnly()) {
 		fprintf(fd,"# Gateway running in read-only mode.\n");
+	}
 
-	if(client_ip_addr)
-	{
+	if(client_ip_addr) {
 		fprintf(fd,"# %s\n",gate_ca_list);
 		fprintf(fd,"# %s\n",gate_ca_auto_list);
 	}
@@ -408,13 +412,16 @@ static int startEverything(char *prefix)
 	
 #ifndef WIN32
 	// Make script file ("gateway.restart" by default)
-	if((fd=fopen(GATE_RESTART_FILE,"w"))==(FILE*)NULL)
-	{
-		fprintf(stderr,"open of restart file %s failed\n",
-			GATE_RESTART_FILE);
+	errno=0;
+	if((fd=fopen(GATE_RESTART_FILE,"w"))==(FILE*)NULL) {
+		fprintf(stderr,"Opening restart file failed: %s\n",
+		  GATE_RESTART_FILE);
+		fflush(stderr);
+		perror("Reason");
+		fflush(stderr);
 		fd=stderr;
 	}
-
+	
 	fprintf(fd,"\n kill %d # to kill off this gateway\n\n",sid);
 	fflush(fd);
 	
@@ -424,23 +431,40 @@ static int startEverything(char *prefix)
 	
 #ifndef WIN32
 	// Set process limits
-	if(getrlimit(RLIMIT_NOFILE,&lim)<0)
+	if(getrlimit(RLIMIT_NOFILE,&lim)<0) {
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");
-	else
-	{
-		if(lim.rlim_cur<lim.rlim_max)
-		{
+	} else	{
+#if DEBUG_OPENFILES
+		printf("RLIMIT_NOFILE (before): rlim_cur=%d rlim_rlim_max=%d "
+		  "OPEN_MAX=%d SC_OPEN_MAX=%d FOPEN_MAX=%d\n",
+		  lim.rlim_cur,lim.rlim_max,
+		  OPEN_MAX,_SC_OPEN_MAX,FOPEN_MAX);
+		printf("  sysconf: _SC_OPEN_MAX %d _SC_STREAM_MAX %d\n",
+		  sysconf(_SC_OPEN_MAX), sysconf(_SC_STREAM_MAX));
+#endif
+		if(lim.rlim_cur<lim.rlim_max) {
 			lim.rlim_cur=lim.rlim_max;
 			if(setrlimit(RLIMIT_NOFILE,&lim)<0)
-				fprintf(stderr,"Failed to set FD limit %d\n",
-					(int)lim.rlim_cur);
+			  fprintf(stderr,"Failed to set FD limit %d\n",
+				(int)lim.rlim_cur);
 		}
+#if DEBUG_OPENFILES
+		if(getrlimit(RLIMIT_NOFILE,&lim)<0) {
+			printf("RLIMIT_NOFILE (after): Failed\n");
+		} else {
+			printf("RLIMIT_NOFILE (after): rlim_cur=%d rlim_rlim_max=%d "
+			  "OPEN_MAX=%d SC_OPEN_MAX=%d FOPEN_MAX=%d\n",
+			  lim.rlim_cur,lim.rlim_max,
+			  OPEN_MAX,_SC_OPEN_MAX,FOPEN_MAX);
+			printf("  sysconf: _SC_OPEN_MAX %d _SC_STREAM_MAX %d\n",
+			  sysconf(_SC_OPEN_MAX), sysconf(_SC_STREAM_MAX));
+		}
+#endif
 	}
-
-	if(getrlimit(RLIMIT_CORE,&lim)<0)
+	
+	if(getrlimit(RLIMIT_CORE,&lim)<0) {
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");
-	else
-	{
+	} else {
 #if TRUNC_CORE_FILE
 		// KE: Used to truncate it to 20000000 if GATEWAY_CORE_SIZE
 		// was not specified.  Truncating the core file makes it

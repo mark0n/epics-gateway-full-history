@@ -24,23 +24,23 @@
  *
  *********************************************************************-*/
 
+#define DEBUG_FD 1
 #define DEBUG_SET_STAT 0
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 #define DEBUG_PV_CONNNECT_CLEANUP 0
 #define DEBUG_EXIST 0
+#define DEBUG_DELAY 1
 
+// KE: Leave this in permanently for now.  DEBUG_TIMES prints a
+// message every minute, that helps determine when things happen.
 #define DEBUG_TIMES 1
-#define DEBUG_FD 1
+// This is the interval used with DEBUG_TIMES
+#define GATE_TIME_STAT_INTERVAL 60 /* sec */
 
 // This causes the GATE_DEBUG_VERSION to be printed in the mainLoop
 #define DEBUG_ 0
 #define GATE_DEBUG_VERSION "2-17-99"
-
-// This is the interval used with DEBUG_TIMES
-#define GATE_TIME_STAT_INTERVAL 60 /* sec */
-//#define GATE_TIME_STAT_INTERVAL 300 /* sec */
-//#define GATE_TIME_STAT_INTERVAL 1800 /* sec (half hour) */
 
 // Interval for rate statistics in seconds
 #define RATE_STATS_INTERVAL 10u
@@ -87,24 +87,6 @@ extern "C" {
 	static void errlogCB(void *userData, const char *message) {
 		gateServer::errlogCB(userData,message);
 	}
-}
-
-// ---------------------------- utilities ------------------------------------
-
-static char *timeStamp(void)
-  // Gets current time and puts it in a static array
-  // The calling program should copy it to a safe place
-  //   e.g. strcpy(savetime,timestamp());
-{
-	static char timeStampStr[16];
-	long now;
-	struct tm *tblock;
-	
-	time(&now);
-	tblock=localtime(&now);
-	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-	
-	return timeStampStr;
 }
 
 // ---------------------------- general main processing function -------------
@@ -187,9 +169,9 @@ void gateServer::mainLoop(void)
 	// Establish an errorLog listener
 	errlogAddListener(::errlogCB,NULL);
 
-	as_rules=global_resources->getAs();
+	as=global_resources->getAs();
 	gateAsCa(); // putrid hack for access security calculation rules
-	// as_rules->report(stdout);
+	// as->report(stdout);
 
 #ifndef WIN32
 	save_usr1=signal(SIGUSR1,sig_usr1);
@@ -309,7 +291,7 @@ void gateServer::mainLoop(void)
 			setStat(statReport2Flag,0ul);
 		}
 		if(report3_flag) {
-			as_rules->report(stdout);
+			as->report(stdout);
 			report3_flag=0;
 			setStat(statReport3Flag,0ul);
 		}
@@ -337,9 +319,13 @@ void gateServer::gateCommands(const char* cfile)
 
 	if(cfile)
 	{
+		errno=0;
 		if((fd=fopen(cfile,"r"))==NULL)
 		{
-			fprintf(stderr,"Failed to open command file %s\n",cfile);
+			fprintf(stderr,"Failed to open command file: %s\n",cfile);
+			fflush(stderr);
+			perror("Reason");
+			fflush(stderr);
 			return;
 		}
 	}
@@ -360,7 +346,7 @@ void gateServer::gateCommands(const char* cfile)
 			else if(strcmp(cmd,"R2")==0)
 					report2();
 			else if(strcmp(cmd,"R3")==0)
-					as_rules->report(stdout);
+					as->report(stdout);
 			else if(strcmp(cmd,"AS")==0)
 			{
 				time(&t);
@@ -379,9 +365,9 @@ void gateServer::gateCommands(const char* cfile)
 
 void gateServer::newAs(void)
 {
-	if (as_rules && global_resources->accessFile())
+	if (as && global_resources->accessFile())
 	{
-		as_rules->reInitialize(global_resources->accessFile());
+		as->reInitialize(global_resources->accessFile());
 	}
 }
 
@@ -921,6 +907,12 @@ void gateServer::inactiveDeadCleanup(void)
 	if(in_check)	setInactiveCheckTime();
 }
 
+pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr&,
+  const char* pvname)
+{
+	return pvExistTest(ctx, pvname);
+}
+
 pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 {
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&ctx,pvname);
@@ -983,71 +975,105 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
 #if statCount
 	// Check internal PVs
-	for(int i=0;i<statCount;i++)
-	{
-		if(strcmp(pvname,stat_table[i].pvname)==0)
+	if(!strncmp(stat_prefix,pvname,stat_prefix_len)) {
+		for(int i=0;i<statCount;i++)
 		{
-			return pverExistsHere;
+			if(strcmp(pvname,stat_table[i].pvname)==0)
+			{
+				return pverExistsHere;
+			}
 		}
 	}
 #endif
 
-	// See if we are connected already to real PV
+	// Check if we have it
 	if(pvFind(real_name,pv)==0)
 	{
-		// know about the PV already
+		// Is in pv_list
 		switch(pv->getState())
 		{
 		case gatePvInactive:
 		case gatePvActive:
 	  	{
-			// return as pv->name()
+			// We are connected to the PV
 			gateDebug2(5,"gateServer::pvExistTest() %s exists (%s)\n",
 					   real_name,pv->getStateName());
 			rc=pverExistsHere;
 			break;
 	  	}
 		default:
-			// no pv name returned
+			// We are not currently connected
 			gateDebug2(5,"gateServer::pvExistTest() %s is %s\n",
 					   real_name,pv->getStateName());
 			rc=pverDoesNotExistHere;
 			break;
 		}
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",pvname,6)) {
+			printf("%s gateServer::pvExistTest [pvFind]: loop_count=%d %s\n",
+			  timeStamp(),loop_count,pvname);
+		}
+#endif
 	}
 	else if(conFind(real_name,pv)==0)
 	{
+		// Is in pv_con_list -- connect is pending
 		gateDebug1(5,"gateServer::pvExistTest() %s Connecting (new async ET)\n",real_name);
 		pv->addET(ctx);
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",pvname,6)) {
+			printf("%s gateServer::pvExistTest [conFind]: loop_count=%d %s\n",
+			  timeStamp(),loop_count,pvname);
+		}
+#endif
 		rc=pverAsyncCompletion;
 	}
 	else
 	{
-		// not in the lists -- make a new one
+		// We don't have it so make a new gatePvData
 		gateDebug1(5,"gateServer::pvExistTest() %s creating new gatePv\n",pvname);
 		pv=new gatePvData(this,pNode,real_name);
+
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",pvname,6)) {
+			printf("\n%s gateServer::pvExistTest: loop_count=%d %s\n",
+			  timeStamp(),loop_count,pvname);
+		}
+#endif
 		
 		switch(pv->getState())
 		{
 		case gatePvConnect:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s (new async ET)\n",
-					   pvname,pv->getStateName());
+			  pvname,pv->getStateName());
 			pv->addET(ctx);
 			rc=pverAsyncCompletion;
 			break;
 		case gatePvInactive:
 		case gatePvActive:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s ?\n",
-					   pvname,pv->getStateName());
+			  pvname,pv->getStateName());
 			rc=pverExistsHere;
 			break;
 		default:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s ?\n",
-					   pvname,pv->getStateName());
+			  pvname,pv->getStateName());
 			rc=pverDoesNotExistHere;
 			break;
 		}
 	}
+	
+#if DEBUG_DELAY
+	if(rc.getStatus() == pverAsyncCompletion) {
+		printf("  pverAsyncCompletion\n");
+	} else if(rc.getStatus() == pverExistsHere) {
+		printf("  pverExistsHere\n"); 
+	} else if(rc.getStatus() == pverDoesNotExistHere) {
+		printf("  pverDoesNotExistHere\n"); 
+	} else {
+		printf("  Other return code\n"); 
+	}
+#endif
 
 	return rc;
 }
@@ -1061,28 +1087,37 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 
 #if statCount
 	// trap (and create if needed) server stats PVs
-	for(int i=0;i<statCount;i++)
-	{
-		if(strcmp(pvname,stat_table[i].pvname)==0)
+	if(!strncmp(stat_prefix,pvname,stat_prefix_len)) {
+		for(int i=0;i<statCount;i++)
 		{
-			if(stat_table[i].pv==NULL)
-				stat_table[i].pv=new gateStat(this,pvname,i);
-
-			return pvCreateReturn(*stat_table[i].pv);
+			if(strcmp(pvname,stat_table[i].pvname)==0)
+			{
+				if(stat_table[i].pv==NULL)
+				  stat_table[i].pv=new gateStat(this,pvname,i);
+				
+				return pvCreateReturn(*stat_table[i].pv);
+			}
 		}
 	}
 #endif
 
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pvname,6)) {
+		printf("%s gateServer::createPV: loop_count=%d %s\n",
+		  timeStamp(),loop_count,pvname);
+	}
+#endif
+	
     if ( !(pe = getAs()->findEntry(pvname)) )
     {
         gateDebug1(2,"gateServer::createPV() called for denied PV %s "
-                   " - this should not happen!\n", pvname);
+		  " - this should not happen!\n", pvname);
         return pvCreateReturn(S_casApp_pvNotFound);
     }
 
     pe->getRealName(pvname, real_name, sizeof(real_name));
 
-	if(vcFind(real_name,rc)<0)
+	if(vcFind(real_name,rc) < 0)
 	{
 		rc=new gateVcData(this,real_name);
 

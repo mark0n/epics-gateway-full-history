@@ -35,22 +35,6 @@
 #include "gateServer.h"
 #include "gateStat.h"
 
-static char *timeStamp(void)
-  // Gets current time and puts it in a static array
-  // The calling program should copy it to a safe place
-  //   e.g. strcpy(savetime,timestamp());
-{
-	static char timeStampStr[16];
-	long now;
-	struct tm *tblock;
-	
-	time(&now);
-	tblock=localtime(&now);
-	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-	
-	return timeStampStr;
-}
-
 static struct timespec *timeSpec(void)
 	// Gets current time and puts it in a static timespec struct
 	// For use by gdd::setTimeStamp, which will copy it

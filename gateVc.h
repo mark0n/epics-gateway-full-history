@@ -55,7 +55,7 @@ class gatePvData;
 class gateVcData;
 class gateServer;
 class gateAs;
-class gateAsNode;
+class gateAsClient;
 class gateAsEntry;
 
 // ----------------------- vc channel stuff -------------------------------
@@ -63,22 +63,25 @@ class gateAsEntry;
 class gateChan : public casChannel, public tsDLNode<gateChan>
 {
 public:
-	gateChan(const casCtx &ctx,gateVcData *v, gateAsNode *n);
+	gateChan(const casCtx &ctx, gateVcData *v, gateAsClient *n);
 	~gateChan(void);
 
 	virtual bool readAccess(void) const;
 	virtual bool writeAccess(void) const;
+#if 0
+	// KE: Unused
 	virtual void setOwner(const char * const user,const char * const host);
-
+#endif
 	const char *getUser(void);
 	const char *getHost(void);
 	void setVC(gateVcData *vcIn) { vc=vcIn; }
+	gateAsClient *getAsClient(void) const { return asclient; }
 	void report(void);
 
 	static void post_rights(void *);
 private:
 	gateVcData *vc;
-	gateAsNode *node; // I must delete this when done using it
+	gateAsClient *asclient; // Must be deleted when done using it
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -115,7 +118,7 @@ public:
     gdd* eventData(void) const { return event_data; }
     gdd* attribute(int) const { return NULL; } // not done
     aitIndex maximumElements(void) const;
-    gateAsEntry* getEntry(void) const { return entry; }
+    gateAsEntry* getEntry(void) const { return asentry; }
     void addChan(gateChan*);
     void removeChan(gateChan*);
 
@@ -144,6 +147,7 @@ public:
 	gatePendingWrite *pendingWrite() const { return pending_write; }
 	void cancelPendingWrite(void) { pending_write=NULL; }
 	void clearChanList(void);
+	void clearAsyncLists(void);
 	void flushAsyncReadQueue(void);
 	void flushAsyncWriteQueue(int docallback);
 
@@ -175,14 +179,14 @@ private:
 	time_t time_last_trans;
 	time_t time_last_alh_trans;
 	int status;
-	gateAsEntry* entry;
+	gateAsEntry* asentry;
 	gateVcState pv_state;
 	gateServer* mrg;     // The gateServer that manages this gateVcData
 	const char* pv_name;     // The name of the process variable
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;
-	tsDLList<gateChan> chan;
+	tsDLList<gateChan> chan_list;
 	tsDLList<gateAsyncR> rio;	// Queue for read's received when not ready
 	tsDLList<gateAsyncW> wio;	// Queue for write's received when not ready
 	gatePendingWrite *pending_write;  // NULL unless a write (put) is in progress
@@ -209,9 +213,9 @@ inline void gateVcData::setAlhTransTime(void) { time(&time_last_alh_trans); }
 inline time_t gateVcData::timeLastAlhTrans(void) const
 	{ return time(NULL)-time_last_alh_trans; }
 
-inline void gateVcData::addChan(gateChan* c) { chan.add(*c); }
+inline void gateVcData::addChan(gateChan* c) { chan_list.add(*c); }
 inline void gateVcData::removeChan(gateChan* c) {
-	chan.remove(*c); c->setVC(NULL); }
+	chan_list.remove(*c); c->setVC(NULL); }
 
 #endif
 

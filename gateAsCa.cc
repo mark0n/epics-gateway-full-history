@@ -9,6 +9,8 @@
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
 
+#define DEBUG_DELAY 0
+
 #include "time.h"
 
 #include "gateAs.h"
@@ -33,62 +35,88 @@ static volatile int count = 0;
 static time_t start_time;
 
 extern "C" {
+	static void connectCB(struct connection_handler_args arg);
+	static void eventCB(struct event_handler_args arg);
+}
+
 static void connectCB(struct connection_handler_args arg)
 {
-    chid	chid = arg.chid;
-    ASGINP	*pasginp = (ASGINP *)ca_puser(chid);;
-    ASG		*pasg = pasginp->pasg;;
-
-    if(ca_state(chid)!=cs_conn) {
-	if(!(pasg->inpBad & (1<<pasginp->inpIndex))) {
-	    /*was good so lets make it bad*/
-	    pasg->inpBad |= (1<<pasginp->inpIndex);
-	    if(ready) asComputeAsg(pasg);
+	chid	chid = arg.chid;
+	ASGINP	*pasginp = (ASGINP *)ca_puser(chid);;
+	ASG		*pasg = pasginp->pasg;;
+	
+#if DEBUG_DELAY
+		printf("gateAsCa-connectCB: ca_state=%d [cs_conn=%d] for %s\n",
+		  ca_state(chid),cs_conn,ca_name(chid));
+#endif
+	if(ca_state(chid)!=cs_conn) {
+#if DEBUG_DELAY
+		printf("gateAsCa-connectCB: cs_conn for %s\n",ca_name(chid));
+#endif
+		if(!(pasg->inpBad & (1<<pasginp->inpIndex))) {
+			// was good so lets make it bad
+			pasg->inpBad |= (1<<pasginp->inpIndex);
+			if(ready) asComputeAsg(pasg);
+		}
 	}
-    }
-    // eventCallback will set inpBad false
+	// eventCallback will set inpBad false
 }
 
 static void eventCB(struct event_handler_args arg)
 {
-    ASGINP              *pasginp = (ASGINP *)arg.usr;
-    ASG                 *pasg = pasginp->pasg;
-    CAPVT               *pcapvt = (CAPVT *)pasginp->capvt;
-    chid                chid = pcapvt->ch_id;
-    int                 caStatus = arg.status;
-    struct dbr_sts_double *pdata = (struct dbr_sts_double*)arg.dbr;
-
-    if (!ready && !pcapvt->gotFirstEvent)
-    {
-	--count;
-	pcapvt->gotFirstEvent=TRUE;
-    }
-    if(ca_state(chid)!=cs_conn || !ca_read_access(chid)) {
-        if(!(pasg->inpBad & (1<<pasginp->inpIndex))) {
-            /*was good so lets make it bad*/
-            pasg->inpBad |= (1<<pasginp->inpIndex);
-            if(ready) asComputeAsg(pasg);
-        }
-    } else {
-        if(caStatus!=ECA_NORMAL) {
-            epicsPrintf("asCa: eventCallback error %s\n",ca_message(caStatus));
-        } else {
-            pcapvt->rtndata = *pdata; /*structure copy*/
-            if(pdata->severity==INVALID_ALARM) {
-                pasg->inpBad |= (1<<pasginp->inpIndex);
-            } else {
-                pasg->inpBad &= ~((1<<pasginp->inpIndex));
-                pasg->pavalue[pasginp->inpIndex] = pdata->value;
-            }
-            pasg->inpChanged |= (1<<pasginp->inpIndex);
-            if(ready) asComputeAsg(pasg);
-	    gateDebug2(11,"AS: %s %f\n",pasginp->inp,pdata->value);
-	    gateDebug2(11,"    stat=%d sevr=%d\n",
-		(int)pdata->status,(int)pdata->severity);
-        }
-    }
+	ASGINP              *pasginp = (ASGINP *)arg.usr;
+	ASG                 *pasg = pasginp->pasg;
+	CAPVT               *pcapvt = (CAPVT *)pasginp->capvt;
+	chid                chid = pcapvt->ch_id;
+	int                 caStatus = arg.status;
+	struct dbr_sts_double *pdata = (struct dbr_sts_double*)arg.dbr;
+	
+#if DEBUG_DELAY
+	printf("gateAsCa-eventCB: ca_state=%d [cs_conn=%d] for %s\n",
+	  ca_state(chid),cs_conn,ca_name(chid));
+#endif
+	if (!ready && !pcapvt->gotFirstEvent)
+	{
+		--count;
+#if DEBUG_DELAY
+		printf("  !ready && !pcapvt->gotFirstEvent count=%d\n",count); 
+#endif
+		pcapvt->gotFirstEvent=TRUE;
+	}
+	if(ca_state(chid)!=cs_conn || !ca_read_access(chid)) {
+#if DEBUG_DELAY
+		printf("  ca_state(chid)!=cs_conn || !ca_read_access(chid) count=%d\n",count); 
+#endif
+		if(!(pasg->inpBad & (1<<pasginp->inpIndex))) {
+			// was good so lets make it bad
+			pasg->inpBad |= (1<<pasginp->inpIndex);
+			if(ready) asComputeAsg(pasg);
+		}
+	} else {
+		if(caStatus!=ECA_NORMAL) {
+#if DEBUG_DELAY
+			printf("  caStatus!=ECA_NORMAL count=%d\n",count); 
+#endif
+			epicsPrintf("asCa: eventCallback error %s\n",ca_message(caStatus));
+		} else {
+#if DEBUG_DELAY
+		printf("  caStatus == ECA_NORMAL count=%d\n",count); 
+#endif
+			pcapvt->rtndata = *pdata; // structure copy
+			if(pdata->severity==INVALID_ALARM) {
+				pasg->inpBad |= (1<<pasginp->inpIndex);
+			} else {
+				pasg->inpBad &= ~((1<<pasginp->inpIndex));
+				pasg->pavalue[pasginp->inpIndex] = pdata->value;
+			}
+			pasg->inpChanged |= (1<<pasginp->inpIndex);
+			if(ready) asComputeAsg(pasg);
+			gateDebug2(11,"AS: %s %f\n",pasginp->inp,pdata->value);
+			gateDebug2(11,"    stat=%d sevr=%d\n",
+			  (int)pdata->status,(int)pdata->severity);
+		}
+	}
 }
-} // extern "C"
 
 void gateAsCa(void)
 {
@@ -96,11 +124,11 @@ void gateAsCa(void)
 	ASGINP	*pasginp;
 	CAPVT	*pcapvt;
 	time_t	cur_time;
-
+	
 	ready=0;
 	count=0;
 	time(&start_time);
-
+	
 	// CA must be initialized by this time - hackery
 	pasg=(ASG*)ellFirst(&pasbase->asgList);
 	while(pasg)
@@ -113,31 +141,30 @@ void gateAsCa(void)
 			pcapvt=(CAPVT*)pasginp->capvt;
 			++count;
 			gateDebug1(11,"Access security searching for %s\n",pasginp->inp);
-
-			/*Note calls gateAsCB immediately called for local Pvs*/
+			
+			// Note calls gateAsCB immediately called for local Pvs
 			SEVCHK(ca_search_and_connect(pasginp->inp,&pcapvt->ch_id,
-				connectCB,pasginp),"ca_search_and_connect (gateAsCa)");
-
-			/*Note calls eventCB immediately called for local Pvs*/
+			  connectCB,pasginp),"ca_search_and_connect (gateAsCa)");
+			
+			// Note calls eventCB immediately called for local Pvs
 			SEVCHK(ca_add_event(DBR_STS_DOUBLE,pcapvt->ch_id,
-				eventCB,pasginp,0), "ca_add_event (gateAsCa)");
-
+			  eventCB,pasginp,0), "ca_add_event (gateAsCa)");
+			
 			pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
 		}
 		pasg=(ASG*)ellNext((ELLNODE*)pasg);
 	}
 	// SEVCHK(ca_pend_event(0.0),"ca_pend_event (gateAsCa)");
 	time(&cur_time);
-
+	
 	while(count>0 && (cur_time-start_time)<4)
 	{
 		ca_pend_event(1.0);
 		time(&cur_time);
 	}
-	asComputeAllAsg();
 
-      // See how many are connected now (count should be the number
-      // unconnected, but do it explicitly and print the names)
+	// See how many are connected now (count should be the number
+	// unconnected, but do it explicitly and print the names)
 	int connectedCount=0,totalCount=0;;
 	pasg=(ASG*)ellFirst(&pasbase->asgList);
 	while(pasg) {
@@ -147,14 +174,14 @@ void gateAsCa(void)
 		    pcapvt=(CAPVT*)pasginp->capvt;
 		    totalCount++;
 		    if(pcapvt && pcapvt->ch_id) {
-			if(ca_state(pcapvt->ch_id) == cs_conn) {
-			    connectedCount++;
-			} else {
-			    printf("Access security did not connect to %s\n",
-			      ca_name(pcapvt->ch_id));
-			}
+				if(ca_state(pcapvt->ch_id) == cs_conn) {
+					connectedCount++;
+				} else {
+					printf("Access security did not connect to %s\n",
+					  ca_name(pcapvt->ch_id));
+				}
 		    } else {
-			fprintf(stderr,"Access security did not connect to an unknown PV\n");
+				fprintf(stderr,"Access security did not connect to an unknown PV\n");
 		    }
 		    pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
 		}
@@ -165,8 +192,14 @@ void gateAsCa(void)
 		  connectedCount,totalCount);
 	}
 	fflush(stdout);
-
+	
+	// We are now ready for the eventCBs to do asComputeAsg.  (Put
+	// this before the call to asComputeAllAsg in case asComputeAllAsg
+	// blocks an eventCB so that it finishes after asComputeAllAsg.
 	ready=1;
+
+	// Compute rules for all the access security groups
+	asComputeAllAsg();
 }
 
 void gateAsCaClear(void)
@@ -174,7 +207,7 @@ void gateAsCaClear(void)
 	ASG		*pasg;
 	ASGINP	*pasginp;
 	CAPVT	*pcapvt;
-
+	
 	pasg=(ASG*)ellFirst(&pasbase->asgList);
 	while(pasg)
 	{
@@ -183,11 +216,11 @@ void gateAsCaClear(void)
 		{
 			pasg->inpBad |= (1<<pasginp->inpIndex);
 			pcapvt=(CAPVT*)pasginp->capvt;
-
+			
 			gateDebug1(11,"Access security clearing channel %s\n",pasginp->inp);
 			if (pcapvt->ch_id)
-				SEVCHK(ca_clear_channel(pcapvt->ch_id),
-					 "ca_clear_channel (gateAsCaClear)");
+			  SEVCHK(ca_clear_channel(pcapvt->ch_id),
+				"ca_clear_channel (gateAsCaClear)");
 			pcapvt->ch_id = NULL;
 			free(pasginp->capvt);
 			pasginp->capvt = NULL;
@@ -196,7 +229,7 @@ void gateAsCaClear(void)
 		pasg=(ASG*)ellNext((ELLNODE*)pasg);
 	}
 	SEVCHK(ca_pend_io(1.0),"ca_pend_io (gateAsCaClear)");
-
+	
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

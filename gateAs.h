@@ -35,6 +35,7 @@ extern "C" {
 #include <ellLib.h>
 #include "asLib.h"
 #include "gpHash.h"
+#include "asTrapWrite.h"	
 }
 
 // KE: Put these here to avoid redefining RE_DUP_MAX as defined in
@@ -72,11 +73,14 @@ extern "C" {
 #define GATE_DENY_FIRST 0
 #define GATE_ALLOW_FIRST 1
 
+class gateVcData;
 class gateAsEntry;
 class gateAsHost;
+class gateAsLine;
 
 typedef tsSLList<gateAsEntry> gateAsList;
 typedef tsSLList<gateAsHost> gateHostList;
+typedef tsSLList<gateAsLine> gateLineList;
 
 //  ----------------- AS host (to build up host list) ------------------ 
 
@@ -95,43 +99,41 @@ class gateAsEntry : public tsSLNode<gateAsEntry>
 {
 public:
 	gateAsEntry(void) :
-		name(NULL), alias(NULL), group(NULL), level(1), as(NULL) { }
-
-								               // ALLOW / ALIAS
-	gateAsEntry(const char* pvname,			   //   PV name pattern (regex)
-				const char* rname,             //   Real name substitution pattern
-				const char* g, int l) :        //   ASG / ASL
-		name(pvname), alias(rname), group(g), level(l), as(NULL) { }
-
-#ifdef USE_DENYFROM
-												// DENY / DENY FROM
-#else
-												// DENY
-#endif
-	gateAsEntry(const char* pvname) :			//   PV name pattern (regex)
-		name(pvname), alias(NULL), group(NULL), level(1), as(NULL) { }
+	  pattern(NULL), alias(NULL), group(NULL), level(1), asmemberpvt(NULL) { }
 	
-	aitBool init(gateAsList& n,                 // Where this entry is added to
-				 int line)						// Line number
-	{
+	// ALLOW / ALIAS
+	gateAsEntry(const char* pat, //   PV name pattern (regex)
+	  const char* rname,         //   Real name substitution pattern
+	  const char* g,             //   ASG
+	  int l) :                   //   ASL
+	  pattern(pat), alias(rname), group(g), level(l), asmemberpvt(NULL) { }
+	
+#ifdef USE_DENYFROM
+	// DENY / DENY FROM
+#else
+	// DENY
+#endif
+	gateAsEntry(const char* pat) :	//   PV name pattern (regex)
+	  pattern(pat), alias(NULL), group(NULL), level(1), asmemberpvt(NULL) { }
+	
+	aitBool init(gateAsList& n, int line) {
 		if (compilePattern(line)==aitFalse) return aitFalse;
 		n.add(*this);
-		if (group == NULL || asAddMember(&as,(char*)group) != 0) as = NULL;
-		else asPutMemberPvt(as,this);
+		if (group == NULL || asAddMember(&asmemberpvt,(char*)group) != 0) asmemberpvt = NULL;
+		else asPutMemberPvt(asmemberpvt,this);
 		return aitTrue;
 	}
-
+	
 #ifdef USE_DENYFROM
-	aitBool init(const char* host,				// Host name to deny
-				 tsHash<gateAsList>& h,         // Where this entry is added to
-				 gateHostList& hl,				// Where a new key should be added
-				 int line)						// Line number
-	{
+	aitBool init(const char* host,	// Host name to deny
+	  tsHash<gateAsList>& h,        // Where this entry is added to
+	  gateHostList& hl,				// Where a new key should be added
+	  int line) {					// Line number
 		gateAsList* l;
-
+		
 		if(compilePattern(line)==aitFalse) return aitFalse;
 		if(h.find(host,l)==0)
-			l->add(*this);
+		  l->add(*this);
 		else
 		{
 			l = new gateAsList;
@@ -144,26 +146,25 @@ public:
 #endif
 	
 	void getRealName(const char* pv, char* real, int len);
-
-	const char* name;
+	
+	const char* pattern;
 	const char* alias;
 	const char* group;
 	int level;
-	ASMEMBERPVT as;
+	ASMEMBERPVT asmemberpvt;
 	char pat_valid;
 	struct re_pattern_buffer pat_buff;
 	struct re_registers regs;
-
+	
 private:
-	aitBool compilePattern(int line)
-	{
+	aitBool compilePattern(int line) {
 		const char *err;
 		pat_buff.translate=0; pat_buff.fastmap=0;
 		pat_buff.allocated=0; pat_buff.buffer=0;
-
-		if((err = re_compile_pattern(name, strlen(name), &pat_buff)))
+		
+		if((err = re_compile_pattern(pattern, strlen(pattern), &pat_buff)))
 		{
-			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, name, err);
+			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, pattern, err);
 			return aitFalse;
 		}
 		return aitTrue;
@@ -172,38 +173,46 @@ private:
 
 //  -------------- AS node (information for CAS Channels) --------------
 
-class gateAsNode
+class gateAsClient
 {
 public:
-	gateAsNode(void) { asc=NULL; entry=NULL; }
-	gateAsNode(gateAsEntry* e,const char* user, const char* host);
-	~gateAsNode(void)
-		{ if(asc) asRemoveClient(&asc); asc=NULL; }
-
+	gateAsClient(gateVcData *vc);
+	gateAsClient::gateAsClient(gateVcData *vcd, gateAsEntry* e, const char* user,
+	  const char* host);
+	~gateAsClient(void);
+	
 	aitBool readAccess(void)  const
-		{ return (asc==NULL||asCheckGet(asc))?aitTrue:aitFalse; }
+	  { return (asclientpvt==NULL||asCheckGet(asclientpvt))?aitTrue:aitFalse; }
 	aitBool writeAccess(void) const
-		{ return (asc&&asCheckPut(asc))?aitTrue:aitFalse; }
-
+	  { return (asclientpvt&&asCheckPut(asclientpvt))?aitTrue:aitFalse; }
+	
 	gateAsEntry* getEntry(void)
-		{ return entry; }
+	  { return asentry; }
+#if 0
+	// KE: Not used
 	long changeInfo(const char* user, const char* host)
-		{ return asChangeClient(asc,entry->level,(char*)user,(char*)host);}
-
-	const char* user(void) { return (const char*)asc->user; }
-	const char* host(void) { return (const char*)asc->host; }
-
+	  { return asChangeClient(asclientpvt,asentry->level,(char*)user,(char*)host);}
+#endif
+	
+	const char *user(void) { return (const char*)asclientpvt->user; }
+	const char *host(void) { return (const char*)asclientpvt->host; }
+	ASCLIENTPVT clientPvt(void) { return asclientpvt; }
+	
 	void setUserFunction(void (*ufunc)(void*),void* uarg)
-		{ user_arg=uarg; user_func=ufunc; }
-
+	  { user_arg=uarg; user_func=ufunc; }
+	gateVcData *getVC(void) const { return vc; }
+	
 private:
-	ASCLIENTPVT asc;
-	gateAsEntry* entry;
+	ASCLIENTPVT asclientpvt;
+	gateAsEntry* asentry;
 	void* user_arg;
 	void (*user_func)(void*);
-
+	asTrapWriteId twID;
+	gateVcData *vc;
+	
 public:
 	static void clientCallback(ASCLIENTPVT p, asClientStatus s);
+	static void trapWriteCB(asTrapWriteMessage *pMsg, int after);
 };
 
 class gateAsLine : public tsSLNode<gateAsLine>
@@ -230,9 +239,14 @@ public:
 	gateAs(const char* pvlist_file);
 	~gateAs(void);
 
-	// user must delete the gateAsNode that the following function returns
-	gateAsNode* getInfo(const char* pv,const char* usr,const char* hst);
-	gateAsNode* getInfo(gateAsEntry* e,const char* usr,const char* hst);
+	// user must delete the gateAsClient that the following function returns
+#if 0
+	// KE: Not used
+	gateAsClient* getInfo(gateVcData *vc, const char* pv, const char* user,
+	  const char* host);
+#endif
+	gateAsClient* getInfo(gateVcData *vc, gateAsEntry* e, const char* user,
+	  const char* host);
 
 #ifdef USE_DENYFROM
 	inline gateAsEntry* findEntry(const char* pv, const char* host = 0);
@@ -256,7 +270,7 @@ private:
 	gateAsList deny_list;
 	gateAsList allow_list;
 	gateHostList host_list;
-	tsSLList<gateAsLine> line_list;
+	gateLineList line_list;
 
 
 	static unsigned char eval_order;

@@ -23,9 +23,13 @@
  *
  *********************************************************************-*/
 
+#define DEBUG_DELAY 0
+#define DEBUG_AS 0
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #ifdef WIN32
 # define strcasecmp stricmp
@@ -39,6 +43,7 @@
 
 #include "gateAs.h"
 #include "gateResources.h"
+#include "gateVc.h"
 
 void gateAsCa(void);
 void gateAsCaClear(void);
@@ -54,10 +59,13 @@ FILE* gateAs::rules_fd = NULL;
 // extern "C" wrappers needed for callbacks
 extern "C" {
 	static void clientCallback(ASCLIENTPVT p, asClientStatus s) {
-		gateAsNode::clientCallback(p, s);
+		gateAsClient::clientCallback(p, s);
 	}
 	static int readFunc(char* buf, int max_size) {
 		return gateAs::readFunc(buf, max_size);
+	}
+	static void trapWriteCB(asTrapWriteMessage *pMsg, int after) {
+		gateAsClient::trapWriteCB(pMsg, after);
 	}
 }
 
@@ -98,7 +106,7 @@ void gateAsEntry::getRealName(const char* pv, char* rname, int len)
 		if(ir==len) rname[ir-1] = '\0';
 		gateDebug4(6,"gateAsEntry::getRealName() PV %s matches %s -> alias %s"
                    " yields real name %s\n",
-				   pv, name, alias, rname);
+				   pv, pattern, alias, rname);
 	}
 	else                        // Not an alias: PV name _is_ real name
 	{
@@ -107,20 +115,81 @@ void gateAsEntry::getRealName(const char* pv, char* rname, int len)
     return;
 }
 
-gateAsNode::gateAsNode(gateAsEntry* e,const char* user, const char* host)
+gateAsClient::gateAsClient(gateVcData *vcd) :
+	asclientpvt(NULL),
+	asentry(NULL),
+	user_arg(NULL),
+	user_func(NULL),
+	twID(0),
+	vc(vcd)
 {
-	asc=NULL;
-	entry=NULL;
-	user_func=NULL;
-	if(e&&asAddClient(&asc,e->as,e->level,(char*)user,(char*)host)==0)
-	  asPutClientPvt(asc,this);
-	asRegisterClientCallback(asc,::clientCallback);
 }
 
-void gateAsNode::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
+gateAsClient::gateAsClient(gateVcData *vcd, gateAsEntry* e, const char* user,
+  const char* host) :
+	asclientpvt(NULL),
+	asentry(e),
+	user_arg(NULL),
+	user_func(NULL),
+	twID(0),
+	vc(vcd)
 {
-	gateAsNode* v = (gateAsNode*)asGetClientPvt(p);
-	if(v->user_func) v->user_func(v->user_arg);
+	if(e&&asAddClient(&asclientpvt,e->asmemberpvt,e->level,(char*)user,(char*)host)==0)
+	  asPutClientPvt(asclientpvt,this);
+	// Callback is called if rights are changed by rereading the
+	// access file, etc.  Callback will be called once right now, but
+	// won't do anything since the user_func is NULL.  The user_func
+	// is set in gateChan::gateChan.
+#if DEBUG_DELAY
+	gateAsClient *v=this;
+	printf("%s gateAsClient::gateAsClient pattern=%s user_func=%d\n",
+	  timeStamp(),
+	  v->asentry?(v->asentry->pattern?v->asentry->pattern:"[NULL pattern]"):"[NULL entry]",
+	  v->user_func);
+#endif
+	// Register the client callback
+	asRegisterClientCallback(asclientpvt,::clientCallback);
+	// Register the trapWrite callback
+	twID = asTrapWriteRegisterListener(::trapWriteCB);
+#if DEBUG_DELAY
+	printf("%s gateAsClient::gateAsClient finished\n",
+	  timeStamp());
+#endif
+}
+
+gateAsClient::~gateAsClient(void)
+{
+	// client callback
+	if(asclientpvt) asRemoveClient(&asclientpvt);
+	asclientpvt=NULL;
+
+	// trapWrite callback
+	if(twID) asTrapWriteUnregisterListener(twID);
+}
+
+void gateAsClient::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
+{
+	gateAsClient* asc = (gateAsClient*)asGetClientPvt(p);
+#if DEBUG_DELAY
+	printf("%s gateAsClient::clientCallback pattern=%s user_func=%d\n",
+	  timeStamp(),
+	  asc->asentry?(asc->asentry->pattern?
+		asc->asentry->pattern:"[NULL pattern]"):"[NULL entry]",
+	  asc->user_func);
+#endif
+	if(asc->user_func) asc->user_func(asc->user_arg);
+}
+
+void gateAsClient::trapWriteCB(asTrapWriteMessage *pMsg, int after) {
+	gateAsClient *asc = (gateAsClient *)pMsg->serverSpecific;
+	if(asc && !after) {
+		printf("%s %s@%s writing %s\n",
+		  timeStamp(),
+		  asc->user()?asc->user():"Unknown",
+		  asc->host()?asc->host():"Unknown",
+		  asc->getVC() && asc->getVC()->getName()?
+		    asc->getVC()->getName():"Unknown");
+	}
 }
 
 gateAs::gateAs(const char* lfile, const char* afile)
@@ -168,7 +237,7 @@ int gateAs::readPvList(const char* lfile)
 	int line=0;
 	FILE* fd;
 	char inbuf[GATE_MAX_PVLIST_LINE_LENGTH];
-	const char *name,*rname,*hname;
+	const char *pattern,*rname,*hname;
 	char *cmd,*asg,*asl,*ptr;
 	gateAsEntry* pe;
 	gateAsLine*  pl;
@@ -179,9 +248,13 @@ int gateAs::readPvList(const char* lfile)
 
 	if(lfile)
 	{
+		errno=0;
 		if((fd=fopen(lfile,"r"))==NULL)
 		{
 			fprintf(stderr,"Failed to open PV list file %s\n",lfile);
+			fflush(stderr);
+			perror("Reason");
+			fflush(stderr);
 			return -1;
 		}
 	}
@@ -201,10 +274,10 @@ int gateAs::readPvList(const char* lfile)
 		// Allocate memory for input line
 		pl=new gateAsLine(inbuf,strlen(inbuf),line_list);
 		++line;
-		name=rname=hname=NULL;
-		if(!(name=strtok(pl->buf," \t\n"))) continue;
+		pattern=rname=hname=NULL;
+		if(!(pattern=strtok(pl->buf," \t\n"))) continue;
 
-		// Two strings (name and command) are mandatory
+		// Two strings (pattern and command) are mandatory
 
 		if(!(cmd=strtok(NULL," \t\n")))
 		{
@@ -219,10 +292,10 @@ int gateAs::readPvList(const char* lfile)
 			// Arbitrary number of arguments: [from] host names
 			if((hname=strtok(NULL,", \t\n")) && strcasecmp(hname,"FROM")==0)
 			  hname=strtok(NULL,", \t\n");
-			if(hname)           // host name(s) present
+			if(hname)           // host pattern(s) present
 			  do
 			  {
-				  pe = new gateAsEntry(name);
+				  pe = new gateAsEntry(pattern);
 				  if(pe->init(hname,deny_from_table,host_list,line)==aitFalse) {
 					  delete pe;
 				  } else {
@@ -232,7 +305,7 @@ int gateAs::readPvList(const char* lfile)
 			  while((hname=strtok(NULL,", \t\n")));
 			else
 			{                   // no host name specified
-				pe = new gateAsEntry(name);
+				pe = new gateAsEntry(pattern);
 				if(pe->init(deny_list,line)==aitFalse) delete pe;
 			}
 			continue;
@@ -252,7 +325,7 @@ int gateAs::readPvList(const char* lfile)
 			}
 			else
 			{                   // no host name specified
-				pe = new gateAsEntry(name);
+				pe = new gateAsEntry(pattern);
 				if(pe->init(deny_list,line)==aitFalse) delete pe;
 			}
 			continue;
@@ -314,7 +387,7 @@ int gateAs::readPvList(const char* lfile)
 		   strcasecmp(cmd,"PATTERN")==0 ||
 		   strcasecmp(cmd,"PV")==0)
 		{
-			pe = new gateAsEntry(name,rname,asg,lev);
+			pe = new gateAsEntry(pattern,rname,asg,lev);
 			if(pe->init(allow_list,line)==aitFalse) delete pe;
 			continue;
 		}
@@ -330,31 +403,35 @@ int gateAs::readPvList(const char* lfile)
 	return 0;
 }
 
-gateAsNode* gateAs::getInfo(gateAsEntry* e,const char* u,const char* h)
+gateAsClient* gateAs::getInfo(gateVcData *vc, gateAsEntry* e, const char* u, 
+  const char* h)
 {
-	gateAsNode* node;
-	gateDebug3(12,"entry=%8.8x user=%s host=%s\n",(int)e,u,h);
-	node=new gateAsNode(e,u,h);
+	gateAsClient* node;
+	gateDebug3(12,"asentry=%8.8x user=%s host=%s\n",(int)e,u,h);
+	node=new gateAsClient(vc,e,u,h);
 	gateDebug2(12," node: user=%s host=%s\n",node->user(),node->host());
 	gateDebug2(12,"  read=%s write=%s\n",
 		node->readAccess()?"True":"False",node->writeAccess()?"True":"False");
-	gateDebug3(12,"  name=%s group=%s level=%d\n",e->name,e->group,e->level);
+	gateDebug3(12,"  pattern=%s group=%s level=%d\n",e->pattern,e->group,e->level);
 	return node;
 }
 
-gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
+#if 0
+// KE: Not used
+gateAsClient* gateAs::getInfo(gateVcData *vc, const char* pv, const char* u,
+  const char* h)
 {
 	gateAsEntry* pe;
-	gateAsNode* node;
+	gateAsClient* node;
 
 #ifdef USE_DENYFROM
 	if((pe=findEntry(pv,h)))
-		node=new gateAsNode(pe,u,h);
+		node=new gateAsClient(vc,pe,u,h);
 	else
 		node=NULL;
 #else
 	if((pe=findEntry(pv)))
-		node=new gateAsNode(pe,u,h);
+		node=new gateAsClient(vc,pe,u,h);
 	else
 		node=NULL;
 #endif
@@ -363,39 +440,46 @@ gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 	gateDebug1(12," node=%8.8x\n",(int)node);
 	return node;
 }
+#endif
 
 long gateAs::initialize(const char* afile)
 {
 	long rc=0;
 
-	if(rules_installed==aitTrue)
-	{
+	if(rules_installed==aitTrue) {
 		fprintf(stderr,"Access security rules already installed\n");
 		return -1;
 	}
-
-	if(afile)
-	{
-		if((rules_fd=fopen(afile,"r"))==NULL)
-		{
+	
+	if(afile) {
+		errno=0;
+		if((rules_fd=fopen(afile,"r"))==NULL) {
+			// Open failed
+			fprintf(stderr,"Failed to open security file: %s\n",afile);
+			fflush(stderr);
+			perror("Reason");
+			fflush(stderr);
+			fprintf(stderr,"Setting default security rules\n");
+			fflush(stderr);
 			use_default_rules=aitTrue;
 			rc=asInitialize(::readFunc);
-			if(rc) fprintf(stderr,"Failed to set default security rules\n");
-		}
-		else
-		{
+			if(rc) {
+				fprintf(stderr,"Failed to set default security rules\n");
+				fflush(stderr);
+			}
+		} else {
+			// Open succeeded
 			rc=asInitialize(::readFunc);
 			if(rc) fprintf(stderr,"Failed to read security file: %s\n",afile);
 			fclose(rules_fd);
 		}
-	}
-	else
-	{
+	} else {
+		// afile is NULL
 		use_default_rules=aitTrue;
 		rc=asInitialize(::readFunc);
 		if(rc) fprintf(stderr,"Failed to set default security rules\n");
 	}
-
+	
 	if(rc==0) rules_installed=aitTrue;
 	return rc;
 }
@@ -464,7 +548,7 @@ void gateAs::report(FILE* fd)
 	while(pi1.pointer())
 	{
 		pNode1=pi1.pointer();
-		fprintf(fd," %-30s %-16s %d ",pNode1->name,pNode1->group,pNode1->level);
+		fprintf(fd," %-30s %-16s %d ",pNode1->pattern,pNode1->group,pNode1->level);
 		if(pNode1->alias) fprintf(fd," %s\n",pNode1->alias);
 		else fprintf(fd,"\n");
 		pi1++;
@@ -478,7 +562,7 @@ void gateAs::report(FILE* fd)
 		while(pi2.pointer())
 		{
 			pNode2=pi2.pointer();
-			fprintf(fd," %s\n",pNode2->name);
+			fprintf(fd," %s\n",pNode2->pattern);
 			pi2++;
 		}
 	}
@@ -498,7 +582,7 @@ void gateAs::report(FILE* fd)
 			while(pi4.pointer())
 			{
 				pNode4=pi4.pointer();
-				fprintf(fd," %s\n",pNode4->name);
+				fprintf(fd," %s\n",pNode4->pattern);
 			}
 		}
 		pi3++;
@@ -513,7 +597,11 @@ void gateAs::report(FILE* fd)
 	if(rules_installed==aitTrue) fprintf(fd,"Access Rules are installed.\n");
 	if(use_default_rules==aitTrue) fprintf(fd,"Using default access rules.\n");
 
-	fprintf(fd,"---------------------------------------------------------------------------\n");
+#if DEBUG_AS
+	fprintf(fd,"\n============================ Access Security Dump =========================\n");
+	asDump(NULL,NULL,TRUE);
+#endif
+	fprintf(fd,"-----------------------------------------------------------------------------\n");
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

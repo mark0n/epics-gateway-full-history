@@ -63,8 +63,6 @@ public:
 	gdd& DD(void) const { return dd; }
 	void removeFromQueue(void) {
 		if(rio) {
-			// We trust the server library to remove the asyncIO
-			// before removing the gateVcData and hence the rio queue
 			rio->remove(*this);
 			rio=NULL;
 		}
@@ -88,8 +86,6 @@ public:
 	const gdd& DD(void) const { return dd; }
 	void removeFromQueue(void) {
 		if(wio) {
-			// We trust the server library to remove the asyncIO
-			// before removing the gateVcData and hence the wio queue
 			wio->remove(*this);
 			wio=NULL;
 		}

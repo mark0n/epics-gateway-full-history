@@ -40,6 +40,23 @@
 #include "gddAppTable.h"
 #include "dbMapper.h"
 
+// ---------------------------- utilities ------------------------------------
+char *timeStamp(void)
+  // Gets current time and puts it in a static array
+  // The calling program should copy it to a safe place
+  //   e.g. strcpy(savetime,timestamp());
+{
+	static char timeStampStr[16];
+	long now;
+	struct tm *tblock;
+	
+	time(&now);
+	tblock=localtime(&now);
+	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+	
+	return timeStampStr;
+}
+
 gateResources* global_resources;
 
 gateResources::gateResources(void)
