@@ -19,6 +19,10 @@
 // consider truncation to 0 if anything.)
 #define TRUNC_CORE_FILE 1
 
+#define NRESTARTS 10
+#define RESTART_INTERVAL 10*60  // sec
+#define RESTART_DELAY 10        // sec
+
 #if DEBUG_OPENFILES
 #include <limits.h>
 #include <unistd.h>
@@ -51,10 +55,11 @@
 #include "gateResources.h"
 
 // Function Prototypes
-static int startEverything(char *prefix);
 void gatewayServer(char *prefix);
-void print_instructions(void);
-int manage_gateway(void);
+void printRecentHistory(void);
+static int startEverything(char *prefix);
+static void print_instructions(void);
+static int manage_gateway(void);
 static int setEnv(const char *var, const char *val, char **envString);
 static int setEnv(const char *var, const int ival, char **envString);
 
@@ -63,6 +68,8 @@ static int setEnv(const char *var, const int ival, char **envString);
 static pid_t gate_pid;
 #endif
 static int death_flag=0;
+int nStart=0;
+time_t startTime[NRESTARTS];
 
 // still need to add client and server IP addr info using 
 // the CA environment variables.
@@ -1118,9 +1125,8 @@ int main(int argc, char** argv)
 		if(fp == NULL) {
 			fprintf(stderr,"Cannot open %s\n",putlog_file);
 			fflush(stderr);
-		} else {
-			gr->setPutlogFp(fp);
 		}
+		gr->setPutlogFp(fp);
 	}
 
 	startEverything(stat_prefix);
@@ -1130,7 +1136,7 @@ int main(int argc, char** argv)
 
 #define pr fprintf
 
-void print_instructions(void)
+static void print_instructions(void)
 {
 	pr(stderr,"-debug value: Enter value between 0-100.  50 gives lots of\n");
 	pr(stderr," info, 1 gives small amount.\n\n");
@@ -1222,11 +1228,17 @@ void print_instructions(void)
 // -------------------------------------------------------------------
 //  part that watches the gateway process and ensures that it stays up
 
-int manage_gateway(void)
+static int manage_gateway(void)
 {
-	time_t t,pt=0;
+	time_t t,prevt=0;
 	int rc;
-	
+	int i;
+
+	// Initialize time array
+	for(i=0; i < NRESTARTS; i++) {
+		startTime[i]=0;
+	}
+
 	save_chld=signal(SIGCHLD,sig_chld);
 	save_hup=signal(SIGHUP,sig_stop);
 	save_term=signal(SIGTERM,sig_stop);
@@ -1259,11 +1271,34 @@ int manage_gateway(void)
 	
 	// 
 	do {
-		// Don't respawn faster than every 6 seconds
+		// Don't allow runaway restarts
 		time(&t);
-		if((t-pt)<5) sleep(6);
-		pt=t;
+		if(nStart < NRESTARTS) {
+			startTime[nStart]=t;
+			nStart++;
+		} else {
+			// Check the interval since NRESTARTSth previous start
+			if(t-startTime[0] < RESTART_INTERVAL) {
+				// Too many recent starts
+				fprintf(stderr,
+				  "\nGateway: There were too many [%d] restarts in the last %d seconds\n",
+				  NRESTARTS+1,RESTART_INTERVAL);
+				fprintf(stderr,"Aborting Gateway ServerPID %d\n",(int)parent_pid);
+				exit(1);
+			} else {
+				// Reset the start times
+				for(i=0; i < NRESTARTS-1; i++) {
+					startTime[i]=startTime[i+1];
+				}
+				nStart=NRESTARTS;
+				startTime[NRESTARTS-1]=t;
+			}
+		}
 		
+		// Don't respawn faster than every RESTART_DELAY seconds
+		if((t-prevt) < RESTART_DELAY) sleep(RESTART_DELAY);
+		prevt=t;
+
 		// Fork.  Parent will be the server and child will be the
 		// gateway.  Parent will pause until receiving a signal that is
 		// handled by sig_stop, which sets death_flag to 1.
@@ -1344,6 +1379,28 @@ static int setEnv(const char *var, int ival, char **envString)
 	}
 #endif
 	return 0;
+}
+
+void printRecentHistory(void) {
+#ifndef WIN32
+	int nStarts=0;
+	int i;
+
+	if(nStart < 1) return;
+	for(i=0; i < nStart-1; i++) {
+		if((startTime[nStart-1]-startTime[i]) < RESTART_INTERVAL) {
+			nStarts++;
+		}
+	}
+	if(nStarts) {
+		fflush(stderr);
+		printf("There have been %d restarts for serverPID %d "
+		  "in the last %d seconds\n",
+		  nStarts+1,parent_pid,RESTART_INTERVAL);
+		printf("  Only %d restarts are allowed in this interval\n",NRESTARTS);
+		fflush(stdout);
+	}
+#endif
 }
 
 

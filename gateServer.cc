@@ -73,6 +73,9 @@
 #include "gatePv.h"
 #include "gateStat.h"
 
+// Function Prototypes
+void gatewayServer(char *prefix);
+void printRecentHistory(void);
 void gateAsCa(void);
 
 // extern "C" wrappers needed by CA routines for callbacks
@@ -158,6 +161,9 @@ void gateServer::mainLoop(void)
 
 	printf("Statistics PV prefix is %s\n",stat_prefix);
 
+	// Print if too many have been started recently
+	printRecentHistory();
+
 #if DEBUG_TIMES
 	epicsTime begin, end, lastPrintTime;
 	double fdTime, pendTime, cleanTime;
@@ -165,6 +171,7 @@ void gateServer::mainLoop(void)
 
 	printf("%s gateServer::mainLoop: Starting and printing statistics every %d seconds\n",
 	  timeStamp(),GATE_TIME_STAT_INTERVAL);
+    printf("  Key: [VcTotal|PvTotal|Active,Inactive|Connecting,Dead,Disconnected]\n");
 #endif
 #if DEBUG_EXCEPTION
 	epicsThrowTraceEnable = true;

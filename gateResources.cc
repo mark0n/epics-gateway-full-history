@@ -62,6 +62,7 @@ char *timeStamp(void)
 
 gateResources::gateResources(void)
 {
+	as = NULL;
     if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
       access_file=strDup(GATE_PV_ACCESS_FILE);
     else
@@ -77,14 +78,17 @@ gateResources::gateResources(void)
     else
       command_file=NULL;
 
+	// Miscellaneous initializations
 	putlog_file=NULL;
-    
+	putlogFp=NULL;
     debug_level=0;
     ro=0;
-    setEventMask(DBE_VALUE | DBE_ALARM);
-
 	serverMode=false;
+#ifdef RESERVE_FOPEN_FD
+	reserveFp = NULL;
+#endif
     
+    setEventMask(DBE_VALUE | DBE_ALARM);
     setConnectTimeout(GATE_CONNECT_TIMEOUT);
     setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
     setDeadTimeout(GATE_DEAD_TIMEOUT);
@@ -104,10 +108,6 @@ gateResources::gateResources(void)
 	appMenuitem=tt.getApplicationType("menuitem");
 	// RL: Should this rather be included in the type table?
 	appSTSAckString=gddDbrToAit[DBR_STSACK_STRING].app;
-	
-#ifdef RESERVE_FOPEN_FD
-	reserveFp = NULL;
-#endif
 }
 
 gateResources::~gateResources(void)
