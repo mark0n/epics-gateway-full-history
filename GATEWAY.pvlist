@@ -1,6 +1,6 @@
 # Valid forms of the lines in this file:
 #
-#  1) EVALUATION	  ORDER   <eval_order>
+#  1) EVALUATION          ORDER   <eval_order>
 #  2) <pv_name_pattern>   DENY    [FROM] [<host> ...]
 #  3) <pv_name_pattern>   ALIAS   <actual_pv_name> [<asg> [<asl>]]
 #  4) <pv_name_pattern>   ALLOW   [<asg> [<asl>]]
@@ -54,19 +54,19 @@
 #
 # Below:
 #  - make ALLOW rules override DENY rules
-#  - anything starting with ID is not allowed
-#  - don't answer to any request from host gw1
-#  - scummy0 ... scummy9 are translated to jbk_ai0 ... jbk_ai9 on real network;
-#    users are allowed access according to access security rules for group jims_group
-#  - requests for PVs starting with jbk_ will be allowed according to rules
-#    for access security group jims_group
-#  - PV food is allowed according to rules in group jims_group at access level 1
+#  - requests for PVs starting with Beam: will be allowed according to rules for access
+#    security group Beam, similarly for PS using PowerSupply and hydra flags using
+#    GatewayAdmin
+#  - anything starting with test is not allowed
 
 
 EVALUATION ORDER DENY, ALLOW
 
-ID.*              DENY
-.*                DENY    gw1
-scummy\([0-9]\)   ALIAS   jbk_ai\1  jims_group 0
-food              ALLOW             jims_group
-jbk_.*            ALLOW             jims_group 0
+[0-9].*                 ALLOW
+[a-z].*                 ALLOW
+[A-Z].*                 ALLOW
+
+Beam:*                  ALLOW     Beam 1
+PS*                     ALLOW     PowerSupply 1
+hydra.*Flag             ALLOW     GatewayAdmin
+test.*                  DENY

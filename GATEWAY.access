@@ -1,11 +1,28 @@
+UAG(smith)	   {smith,Smith}
+UAG(engineers)     {smith,roberts}
+HAG(engineershost) {snoopy}
 
-ASG(DEFAULT)
-{
-	RULE(1,READ)
+ASG(DEFAULT) {
+   RULE(1,READ)
 }
 
-ASG(jims_group)
-{
-	RULE(1,READ)
-	RULE(1,WRITE)
+ASG(Beam) {
+   INPA(BeamAccess:access)
+   RULE(1,READ)
+   RULE(1,WRITE,TRAPWRITE) {
+     UAG(smith)
+     CALC("A")
+   }
+}
+
+ASG(PowerSupply) {
+   RULE(1,READ)
+   RULE(1,WRITE){
+     UAG(smith)
+   }
+   RULE(1,READ)
+   RULE(1,WRITE) {
+     UAG(engineers)
+     HAG(engineershost)
+   }
 }

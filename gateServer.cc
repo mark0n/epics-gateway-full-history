@@ -32,6 +32,9 @@
 #define DEBUG_EXIST 0
 #define DEBUG_DELAY 0
 
+// KE: Leave this in for now.  It causes traces to be printed when
+// exceptions occur.  It requires Base 3.15.
+#define DEBUG_EXCEPTION  1
 // KE: Leave this in permanently for now.  DEBUG_TIMES prints a
 // message every minute, that helps determine when things happen.
 #define DEBUG_TIMES 1
@@ -61,6 +64,10 @@
 #endif
 
 #include "gdd.h"
+
+#if DEBUG_EXCEPTION
+#include <epicsThrowTrace.h>
+#endif
 
 #include "gateResources.h"
 #include "gateServer.h"
@@ -164,6 +171,9 @@ void gateServer::mainLoop(void)
 #if DEBUG_
 	printf("gateServer::mainLoop: Version %s\n",
 	  GATE_DEBUG_VERSION);
+#endif
+#if DEBUG_EXCEPTION
+	epicsThrowTraceEnable = true;
 #endif
 
 	// Establish an errorLog listener

@@ -27,7 +27,7 @@ class gateServer;
 class gateStat : public casPV
 {
 public:
-	gateStat(gateServer *serv,const char *n, int t);
+	gateStat(gateServer *serv, const char *n, int t);
 	virtual ~gateStat(void);
 
 	// CA server interface functions

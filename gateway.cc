@@ -1126,7 +1126,7 @@ void print_instructions(void)
 	pr(stderr," uses to listen for PV requests.  Sets environment variable\n");
 	pr(stderr," EPICS_CAS_SERVER_PORT.\n\n");
 	
-	pr(stderr,"-cport CA_client_port:  The port thich the gateway's CA client\n");
+	pr(stderr,"-cport CA_client_port:  The port which the gateway's CA client\n");
 	pr(stderr," uses to find the real PVs.  Sets environment variable\n");
 	pr(stderr," EPICS_CA_SERVER_PORT.\n\n");
 	
@@ -1158,7 +1158,7 @@ void print_instructions(void)
 
 	pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
 	pr(stderr," and start a daemon that watches the gateway and automatically\n");
-	pr(stderr," restarted it if it dies.\n");
+	pr(stderr," restarts it if it dies.\n");
 	
 	pr(stderr,"-mask event_mask: Event mask that is used for connections on the\n");
 	pr(stderr," real network: use any combination of v (value), a (alarm), l (log).\n");
@@ -1169,6 +1169,7 @@ void print_instructions(void)
 	
 	pr(stderr,"-uid number: Run the server with this id, server does a\n");
 	pr(stderr," setuid(2) to this user id number.\n\n");
+
 	pr(stderr,"-gid number: Run the server with this id, server does a\n");
 	pr(stderr," setgid(2) to this group id number.\n\n");
 }
