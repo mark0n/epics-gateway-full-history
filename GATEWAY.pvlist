@@ -1,73 +1,68 @@
-
 # Valid forms of the lines in this file:
-#  1) pv_name_or_pattern DENY    [host ...]
-#  2) pv_alias_name      ALIAS   actual_pv_name
-#  3) pv_name            PV      [access_security_group [access_security_level]]
-#  4) pv_pattern         PATTERN [access_security_group [access_security_level]]
 #
-# pv_name_or_pattern:
-#  Standard EPICS PV name or a pattern which can be used to match a group of
-#  PVs.  Patterns use the standard shell type wildcard characters for matching.
+#  1) EVALUATION	  ORDER   <eval_order>
+#  2) <pv_name_pattern>   DENY    [FROM] [<host> ...]
+#  3) <pv_name_pattern>   ALIAS   <actual_pv_name> [<asg> [<asl>]]
+#  4) <pv_name_pattern>   ALLOW   [<asg> [<asl>]]
 #
-# pv_alias_name:
-#  Specific PV name that user on the CA server side of the gateway will see.
+# where:
+#        <eval_order>      = DENY, ALLOW      allow rules take precedence (default)
+#                            ALLOW, DENY      deny rules take precedence
+#        <pv_name_pattern> = regular expression that matches PV names
+#        <host>            = unqualified host name
+#        <actual_pv_name>  = substitution pattern that specifies the real PV name
+#                            (\0 ... \9 are replaced by matched sub-expressions)
+#        <asg>             = Access Security Group as specified in AS file   [DEFAULT]
+#        <asl>             = Access Security Level (0 or 1)                  [1]
+#        
 #
-# actual_pv_name:
-#  The name of the PV on the real control network that gateway is serving.
+# ORDER:
+#  This will set the evaluation order that is used when a client requests
+#  a PV. Setting this to "DENY, ALLOW" will allow access to a PV name that matches
+#  both a DENY and an ALLOW pattern. (This is the default.)
+#  NOTE: Matching DENY FROM patterns (with host names) will always override matching
+#        ALLOW patterns.
 #
-# pv_name:
-#  Standard EPICS PV name.
-#
-# pv_pattern:
-#  Group of PV names specified using shell-like wild characters.
-#
-# access_security_group:
-#  Standard EPICS access security group name.
-#
-# access_security_level:
-#  Standard EPICS access security level (0 or 1).
-#
-# DENY:
-#  The gateway will completely ignore requests for this PV name or
-#  any PV that matches the pattern.  Can be used to block the gateway
-#  from responsing to groups of PVs.
-#  Naming hosts will block the PVs only for the given hosts (useful to prevent
-#  loops caused by forwarding to other gateways)
+# DENY / DENY FROM:
+#  The gateway will completely ignore requests for any PV that matches the pattern.
+#  Can be used to block the gateway from responding to groups of PVs.
+#  Naming hosts (DENY FROM) will block the PVs only for the given hosts (useful to
+#  prevent loops caused by forwarding to other gateways).
 #
 # ALIAS:
-#  Define a PV alias.  The gateway will transparently translate the PV
-#  alias name to a real name on the control network is serves.
-#  Real name is used for pattern matching.
+#  Define a PV alias. The gateway will transparently translate PV names to different
+#  actual PV names on the control network it serves.
+#  The actual name may contain the special escape sequences \0 ... \9 which will be
+#  replaced by the n-th sub-expression matched.
 #
-# PV:
-#  Used to declare access security rules for specific PV names.  The 
-#  access_security_group option and access_security_level are optional.
-#  Defaults are DEFAULT and 1.
-#
-# PATTERN:
-#  Same as PV except identify an entire group of PVs that use a particular
-#  access_security_group and access_security_level.
+# ALLOW:
+#  Used to declare PV names which the Gateway should serve. Access security rules
+#  to be used for PVs matched by this pattern may be specified. (Optional. The 
+#  defaults are DEFAULT and 1.)
 #
 # Notes:
-#  1) Pattern use shell-like wildcard characters (*, ?, [])
-#  2) Any PV not included in this file is not allowed access. 
-#  3) See EPICS access security documentation for creating an access security
+#  1) Commands are not case sensitive.
+#  2) Pattern use GNU-style regular expressions. (See the documentation included
+#     with the regex library for details on regular expressions.)
+#  3) Any PV not included in an ALLOW command is not allowed access. 
+#  4) See EPICS access security documentation for creating an access security
 #     file for the PV gateway.
 #
 # Below:
+#  - make ALLOW rules override DENY rules
 #  - anything starting with ID is not allowed
 #  - don't answer to any request from host gw1
-#  - scummy translated to jbk_ai1 on real network and users are allowed
-#    access according to access security rules for group jims_group
+#  - scummy0 ... scummy9 are translated to jbk_ai0 ... jbk_ai9 on real network;
+#    users are allowed access according to access security rules for group jims_group
 #  - requests for PVs starting with jbk_ will be allowed according to rules
 #    for access security group jims_group
-#  - PV food is allowed according to rules in group jims_group at access
-#    level 1
-#  - all other PVs will be allowed and given read permission to everyone
+#  - PV food is allowed according to rules in group jims_group at access level 1
 
-ID*     DENY
-*       DENY    gw1
-scummy  ALIAS   jbk_ai1
-scummy  PV      jims_group 0
-food    PV      jims_group
-jbk_*   PATTERN jims_group 0
+
+EVALUATION ORDER DENY, ALLOW
+
+ID.*              DENY
+.*                DENY    gw1
+scummy\([0-9]\)   ALIAS   jbk_ai\1  jims_group 0
+food              ALLOW             jims_group
+jbk_.*            ALLOW             jims_group 0
