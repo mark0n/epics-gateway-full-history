@@ -203,14 +203,16 @@ bool gateVcChan::readAccess(void) const
 {
 	gateVcData *vc=(gateVcData *)casPv;
 
-	return (asclient->readAccess() && vc && vc->readAccess())?true:false;
+	return (asclient && asclient->readAccess() && vc && vc->readAccess())?
+	  true:false;
 }
 
 bool gateVcChan::writeAccess(void) const
 {
 	gateVcData *vc=(gateVcData *)casPv;
 
-	return (asclient->writeAccess() && vc && vc->writeAccess())?true:false;
+	return (asclient && asclient->writeAccess() && vc && vc->writeAccess())?
+	  true:false;
 }
 
 // ------------------------gateVcData
