@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.8  1996/11/27 04:55:45  jbk
+ * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+ *
  * Revision 1.7  1996/11/07 14:11:08  jbk
  * Set up to use the latest CA server library.
  * Push the ulimit for FDs up to maximum before starting CA server
@@ -57,6 +60,31 @@ class gateAsyncR;
 class gateAsyncW;
 class gateVcData;
 
+// ----------------------- vc channel stuff -------------------------------
+
+class gateChan : public casChannel
+{
+public:
+	gateChan(const casCtx& ctx,const char* user,const char* host);
+	~gateChan(void);
+
+	virtual aitBool readAccess(void) const;
+	virtual aitBool writeAccess(void) const;
+    virtual void setOwner(const char* const user,const char* const host);
+
+	void setServerReadAccess(aitBool b);
+	void setServerWriteAccess(aitBool b);
+	void setUserReadAccess(aitBool b);
+	void setUserWriteAccess(aitBool b);
+
+	const char* getUser(void) { return user; }
+	const char* getHost(void) { return host; }
+private:
+	aitBool user_read_access, server_read_access;
+	aitBool user_write_access,server_write_access;
+	const char *user,*host;
+};
+
 // ----------------------- vc data stuff -------------------------------
 
 class gateVcData : public casPV, public tsDLHashNode<gateVcData>
@@ -68,13 +96,15 @@ public:
 	// CA server interface functions
 	virtual caStatus interestRegister(void);
 	virtual void interestDelete(void);
-	virtual aitEnum bestExternalType(void);
+	virtual aitEnum bestExternalType(void) const;
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
 	virtual caStatus write(const casCtx &ctx, gdd &value);
 	virtual void destroy(void);
 	virtual unsigned maxSimultAsyncOps(void) const;
+	virtual unsigned maxDimension(void) const;
+	virtual aitIndex maxBound(unsigned dim) const;
 	virtual casChannel *createChannel (const casCtx &ctx,
-		const char * const pUserName, const char * const pHostName);
+		const char* const pUserName, const char* const pHostName);
 
 	int pending(void);
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }
@@ -84,16 +114,21 @@ public:
 	void dumpValue(void);
 	void dumpAttributes(void);
 
-	const char* name(void)			{ return pv_name; }
+	const char* name(void) const { return pv_name; }
 	aitString& nameString(void)	{ return pv_string; }
 	void* PV(void)				{ return pv; }
+	gateChan* getChannel(void) const	{ return gch; }
 	void setPV(gatePvData* t)	{ pv=t; }
 	gateVcState getState(void)	{ return pv_state; }
 	gdd* attributes(void)		{ return data; }
 	gdd* value(void)			{ return event_data; }
 	gdd* attribute(int) 		{ return NULL; } // not done
-	aitEnum nativeType(void);
-	aitIndex maximumElements(void);
+	aitEnum nativeType(void) const;
+	aitIndex maximumElements(void) const;
+	const char* getUser(void) const;
+	const char* getHost(void) const;
+	void setReadAccess(aitBool b);
+	void setWriteAccess(aitBool b);
 
 	// Pv notification interface
 	virtual void vcNew(void);
@@ -133,9 +168,8 @@ private:
 	int status;
 	gateVcState pv_state;
 	gateServer* mrg;
+	gateChan* gch;
 	char* pv_name;
-	const char* pv_user;
-	const char* pv_host;
 	aitString pv_string;
 	int in_list_flag;
 	int prev_post_value_changes;
@@ -145,6 +179,15 @@ private:
 	gdd* data;
 	gdd* event_data;
 };
+
+inline const char* gateVcData::getUser(void) const
+	{ return getChannel()?getChannel()->getUser():"NoUser"; }
+inline const char* gateVcData::getHost(void) const
+	{ return getChannel()?getChannel()->getHost():"NoHost"; }
+inline void gateVcData::setReadAccess(aitBool b)
+	{ if(getChannel()) getChannel()->setServerReadAccess(b); }
+inline void gateVcData::setWriteAccess(aitBool b)
+	{ if(getChannel()) getChannel()->setServerWriteAccess(b); }
 
 inline int gateVcData::pending(void)
 	{ return (pv_state==gateVcConnect)?1:0; }

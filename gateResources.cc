@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.8  1996/11/27 04:55:33  jbk
+// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+//
 // Revision 1.7  1996/10/22 15:58:38  jbk
 // changes, changes, changes
 //
@@ -411,16 +414,11 @@ int gateResources::ignoreMatchName(char* item)
 {
 	int rc,i;
 
-	if(!pattern_dis) return 1; // accept all request if no table
+	if(!pattern_dis) return 0; // don't match if no table
 
 	for(rc=0,i=0;pattern_dis[i] && rc==0;i++)
 		rc=matchOne(pattern_dis[i],item);
 
 	return rc;
-}
-
-int gateResources::ignoreMatchOne(char* pattern, char* item)
-{
-	return patmatch(pattern,item);
 }
 

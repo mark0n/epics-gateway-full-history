@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.14  1996/11/27 04:55:37  jbk
+// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+//
 // Revision 1.13  1996/11/21 19:29:11  jbk
 // Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
 //
@@ -229,6 +232,7 @@ osiTime& gateServer::currentDelay(void) { return *delay_current; }
 void gateServer::exCB(EXCEPT_ARGS args)
 {
 	gateDebug0(9,"exCB: -------------------------------\n");
+	/*
 	gateDebug1(9,"exCB: name=%s\n",ca_name(args.chid));
 	gateDebug1(9,"exCB: type=%d\n",ca_field_type(args.chid));
 	gateDebug1(9,"exCB: number of elements=%d\n",ca_element_count(args.chid));
@@ -240,6 +244,7 @@ void gateServer::exCB(EXCEPT_ARGS args)
 	gateDebug1(9,"exCB: type=%d\n",args.type);
 	gateDebug1(9,"exCB: count=%d\n",args.count);
 	gateDebug1(9,"exCB: status=%d\n",args.stat);
+	*/
 
 	// this is the exception callback
 	// problem - log a message about the PV

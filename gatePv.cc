@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.7  1996/10/22 16:06:40  jbk
+// changed list operators head to first
+//
 // Revision 1.6  1996/10/22 15:58:36  jbk
 // changes, changes, changes
 //
@@ -170,7 +173,7 @@ int gatePvData::activate(gateVcData* vcd)
 		vc=vcd;
 		setState(gatePvActive);
 		setActiveTime();
-		get();
+		rc=get();
 		break;
 	case gatePvDead:
 		gateDebug0(3,"gatePvData::activate() PV is dead\n");
@@ -367,7 +370,11 @@ int gatePvData::monitor(void)
 
 	if(!monitored())
 	{
-		rc=ca_add_event(eventType(),chan,eventCB,this,&event);
+		// gets only 1 element:
+		// rc=ca_add_event(eventType(),chan,eventCB,this,&event);
+		// gets native element count number of elements:
+		rc=ca_add_array_event(eventType(),0,chan,eventCB,this,
+			0.0,0.0,0.0,&event);
 		SEVCHK(rc,"gatePvData::Monitor() add event");
 
 		if(rc==ECA_NORMAL)
@@ -674,7 +681,15 @@ void gatePvData::getCB(EVENT_ARGS args)
 
 void gatePvData::accessCB(ACCESS_ARGS args)
 {
-	// not implemented yet
+	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
+	gateVcData* vc=pv->VC();
+
+	// sets general read/write permissions for the gateway itself
+	if(vc)
+	{
+		vc->setReadAccess(ca_read_access(args.chid)?aitTrue:aitFalse);
+		vc->setWriteAccess(ca_write_access(args.chid)?aitTrue:aitFalse);
+	}
 
 	gateDebug0(9,"accCB: -------------------------------\n");
 	gateDebug1(9,"accCB: name=%s\n",ca_name(args.chid));
@@ -877,7 +892,7 @@ gdd* gatePvData::eventLongCB(void* dbr)
 	if(count>1)
 	{
 		value=new gddAtomic(GR->appValue,aitEnumInt32,1,&count);
-		d=(aitInt32*)ts->value;
+		d=(aitInt32*)&ts->value;
 		value->putRef(d);
 	}
 	else

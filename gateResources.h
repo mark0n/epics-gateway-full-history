@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.8  1996/11/27 04:55:35  jbk
+ * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+ *
  * Revision 1.7  1996/10/22 15:58:39  jbk
  * changes, changes, changes
  *
@@ -90,10 +93,8 @@ public:
 	char* findAlias(const char* const name) const;
 
 	int matchName(char* pv_name);
-	int matchOne(char* pattern,char* pv_name);
-
 	int ignoreMatchName(char* pv_name);
-	int ignoreMatchOne(char* pattern,char* pv_name);
+	int matchOne(char* pattern,char* pv_name);
 
 	// here for convenience
 	static int appValue;

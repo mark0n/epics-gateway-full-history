@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.9  1996/11/27 04:55:42  jbk
+// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+//
 // Revision 1.8  1996/11/21 19:29:14  jbk
 // Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
 //
@@ -46,6 +49,56 @@
 #include "gateVc.h"
 #include "gatePv.h"
 
+// ------------------------gateChan
+
+gateChan::gateChan(const casCtx& ctx,const char* u,const char* h)
+	:casChannel(ctx)
+{
+	user_read_access=aitTrue;
+	user_write_access=aitTrue;
+	server_read_access=aitTrue;
+	server_write_access=aitTrue;
+	user=u;
+	host=h;
+}
+
+gateChan::~gateChan(void)
+{
+	user="ErrorNoUser";
+	host="ErrorNoHost";
+}
+
+void gateChan::setOwner(const char* const u, const char* const h)
+{
+	user=u;
+	host=h;
+}
+
+aitBool gateChan::readAccess(void) const
+	{ return (server_read_access&&user_read_access)?aitTrue:aitFalse; }
+
+aitBool gateChan::writeAccess(void) const
+	{ return (server_write_access&&user_write_access)?aitTrue:aitFalse; }
+
+void gateChan::setServerReadAccess(aitBool b)
+	{ server_read_access=b; }
+
+void gateChan::setServerWriteAccess(aitBool b)
+{
+	if(global_resources->isReadOnly())
+		server_write_access=aitFalse;
+	else
+		server_write_access=b;
+}
+
+void gateChan::setUserReadAccess(aitBool b)
+	{ user_read_access=b; }
+
+void gateChan::setUserWriteAccess(aitBool b)
+	{ user_read_access=b; }
+
+// ------------------------gateVcData
+
 gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	casPV(c,name)
 {
@@ -55,6 +108,7 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	data=NULL;
 	event_data=NULL;
 	pv=NULL;
+	gch=NULL;
 	pv_name=strDup(name);
 	pv_string=(const char*)pv_name;
 	setState(gateVcClear);
@@ -97,6 +151,8 @@ gateVcData::~gateVcData(void)
 	if(data) data->unreference();
 	if(event_data) event_data->unreference();
 	delete [] pv_name;
+	pv_name="Error";
+	gch=NULL;
 	pv->setVC(NULL);
 }
 
@@ -111,9 +167,10 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const pUserName, const char * const pHostName)
 {
 	gateDebug0(5,"~gateVcData::createChannel()\n");
-	pv_user=pUserName;
-	pv_host=pHostName;
-	return casPV::createChannel(ctx,pUserName,pHostName);
+	// I hope this only gets called once per casPv instance
+	if(gch==NULL)
+		gch=new gateChan(ctx,pUserName,pHostName);
+	return gch;
 }
 
 unsigned gateVcData::maxSimultAsyncOps(void) const
@@ -128,7 +185,7 @@ void gateVcData::dumpValue(void)
 
 void gateVcData::report(void)
 {
-	printf("%-30.30s %-12.12s %-36.36s\n",pv_name,pv_user,pv_host);
+	printf("%-30.30s %-12.12s %-36.36s\n",pv_name,getUser(),getHost());
 }
 
 void gateVcData::dumpAttributes(void)
@@ -276,9 +333,9 @@ void gateVcData::pvData(gdd* dd)
 	vcData();
 }
 
-aitEnum gateVcData::nativeType(void)
+aitEnum gateVcData::nativeType(void) const
 {
-	gateDebug1(10,"gateVcData::nativeType() name=%s\n",name());
+	gateDebug0(10,"gateVcData::nativeType()\n");
 	if(pv) return pv->nativeType();
 	else return aitEnumFloat64;  // this sucks - potential problem area
 }
@@ -432,10 +489,43 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 	return rc;
 }
 
-aitEnum gateVcData::bestExternalType(void)
+aitEnum gateVcData::bestExternalType(void) const
 {
-	gateDebug1(10,"gateVcData::bestExternalType() name=%s\n",name());
+	gateDebug0(10,"gateVcData::bestExternalType()\n");
 	return nativeType();
+}
+
+unsigned gateVcData::maxDimension(void) const
+{
+	unsigned dim;
+
+	// This information could be asked for very early, before the data
+	// gdd is ready.
+
+	if(data)
+		dim=data->dimension();
+	else
+	{
+		if(maximumElements()>1)
+			dim=1;
+		else
+			dim=0;
+	}
+
+	gateDebug2(10,"gateVcData::maxDimension() %s %d\n",name(),(int)dim);
+	return dim;
+}
+
+aitIndex gateVcData::maxBound(unsigned dim) const
+{
+	gateDebug3(10,"gateVcData::maxBound(%u) %s %d\n",
+		dim,name(),(int)maximumElements());
+	return maximumElements();
+}
+
+aitIndex gateVcData::maximumElements(void) const
+{
+	return pv?pv->maxElements():0;
 }
 
 // ------------------------------- aync read/write pending methods ----------

@@ -33,3 +33,4 @@
 #  cd /home/helios2/srsys/op/adl  <--- major adl file directory.
 #  medm -x sMain.adl <--- main APS adl file
 
+# test PV for waveform = SRI:S35DCCT:currentCP
