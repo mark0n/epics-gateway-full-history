@@ -165,7 +165,7 @@ gatePvData::~gatePvData(void)
 	delete [] pv_name;
 
 	// Clear the callback_list;
-	gatePvCallbackId *id;
+	gatePvCallbackId *id = NULL;
 	while((callback_list.first()))
 	{
 		callback_list.remove(*id);
@@ -621,7 +621,9 @@ int gatePvData::get(void)
 		gateDebug0(2,"gatePvData::get() dead PV?\n");
 		break;
 	}
-	return (rc==ECA_NORMAL)?0:-1;
+	if(rc==ECA_NORMAL) return 0;
+	if(rc==ECA_NORDACCESS) return 1;
+	return -1;
 }
 
 // Called by gateVcData::write().  Does a ca_array_put_callback or
@@ -662,7 +664,7 @@ int gatePvData::put(gdd* dd, int docallback)
 			// Only print this when it becomes full
 			if(!full) {
 				fprintf(stderr,"gatePvData::put:"
-				  "  Callback list is full for %s\n",name);
+				  "  Callback list is full for %s\n",name());
 				full=1;
 				return -1;
 			}
@@ -687,7 +689,7 @@ int gatePvData::put(gdd* dd, int docallback)
 		case aitEnumFixedString:     // Always a pointer
 			count=dd->getDataSizeElements();
 			pValue=dd->dataPointer();
-			gateDebug1(5," putting FString <%s>\n",(char *)pUser);
+			gateDebug1(5," putting FString <%s>\n",(char*)pValue);
 			break;
 		default:
 			if(dd->isScalar()) {
@@ -770,44 +772,44 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 		case DBF_STRING:
 			pv->data_type=DBR_STS_STRING;
 			pv->event_type=DBR_TIME_STRING;
-			pv->event_func=eventStringCB;
-			pv->data_func=dataStringCB;
+			pv->event_func=&gatePvData::eventStringCB;
+			pv->data_func=&gatePvData::dataStringCB;
 			break;
 		case DBF_SHORT: // DBF_INT is same as DBF_SHORT
 			pv->data_type=DBR_CTRL_SHORT;
 			pv->event_type=DBR_TIME_SHORT;
-			pv->event_func=eventShortCB;
-			pv->data_func=dataShortCB;
+			pv->event_func=&gatePvData::eventShortCB;
+			pv->data_func=&gatePvData::dataShortCB;
 			break;
 		case DBF_FLOAT:
 			pv->data_type=DBR_CTRL_FLOAT;
 			pv->event_type=DBR_TIME_FLOAT;
-			pv->event_func=eventFloatCB;
-			pv->data_func=dataFloatCB;
+			pv->event_func=&gatePvData::eventFloatCB;
+			pv->data_func=&gatePvData::dataFloatCB;
 			break;
 		case DBF_ENUM:
 			pv->data_type=DBR_CTRL_ENUM;
 			pv->event_type=DBR_TIME_ENUM;
-			pv->event_func=eventEnumCB;
-			pv->data_func=dataEnumCB;
+			pv->event_func=&gatePvData::eventEnumCB;
+			pv->data_func=&gatePvData::dataEnumCB;
 			break;
 		case DBF_CHAR:
 			pv->data_type=DBR_CTRL_CHAR;
 			pv->event_type=DBR_TIME_CHAR;
-			pv->event_func=eventCharCB;
-			pv->data_func=dataCharCB;
+			pv->event_func=&gatePvData::eventCharCB;
+			pv->data_func=&gatePvData::dataCharCB;
 			break;
 		case DBF_LONG:
 			pv->data_type=DBR_CTRL_LONG;
 			pv->event_type=DBR_TIME_LONG;
-			pv->event_func=eventLongCB;
-			pv->data_func=dataLongCB;
+			pv->event_func=&gatePvData::eventLongCB;
+			pv->data_func=&gatePvData::dataLongCB;
 			break;
 		case DBF_DOUBLE:
 			pv->data_type=DBR_CTRL_DOUBLE;
 			pv->event_type=DBR_TIME_DOUBLE;
-			pv->event_func=eventDoubleCB;
-			pv->data_func=dataDoubleCB;
+			pv->event_func=&gatePvData::eventDoubleCB;
+			pv->data_func=&gatePvData::dataDoubleCB;
 			break;
 		default:
 #if 1
@@ -851,7 +853,8 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 // gatePvConnectId.  We will leave it this way for now.
 void gatePvData::putCB(EVENT_ARGS args)
 {
-	gateDebug1(5,"gatePvData::putCB(gatePvData=%8.8x)\n",pv);
+	gateDebug1(5,"gatePvData::putCB(gatePvData=%8.8x)\n",
+			   (unsigned int)ca_puser(args.chid));
 
 	// Get the callback id
 	gatePvCallbackId* cbid=(gatePvCallbackId *)args.usr;
@@ -906,7 +909,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 	gateDebug2(5,"gatePvData::eventCB(gatePvData=%8.8x) type=%d\n",
-		pv,(unsigned int)args.type);
+		(unsigned int)pv, (unsigned int)args.type);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -925,13 +928,13 @@ void gatePvData::eventCB(EVENT_ARGS args)
 		if(pv->active())
 		{
 			gateDebug0(5,"gatePvData::eventCB() active pv\n");
-			if(dd=pv->runEventCB((void *)(args.dbr)))
-#if DEBUG_BEAM
-			  printf("  dd=%x needAddRemove=%d\n",
-				dd,
-				pv->needAddRemove());
-#endif
+			if((dd=pv->runEventCB((void *)(args.dbr))))
 			{
+#if DEBUG_BEAM
+				printf("  dd=%x needAddRemove=%d\n",
+					   dd,
+					   pv->needAddRemove());
+#endif
 				if(pv->needAddRemove())
 				{
 					gateDebug0(5,"gatePvData::eventCB() need add/remove\n");
@@ -950,7 +953,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 void gatePvData::getCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
-	gateDebug1(5,"gatePvData::getCB(gatePvData=%8.8x)\n",pv);
+	gateDebug1(5,"gatePvData::getCB(gatePvData=%8.8x)\n", (unsigned int)pv);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -964,7 +967,7 @@ void gatePvData::getCB(EVENT_ARGS args)
 		if(pv->active())
 		{
 			gateDebug0(5,"gatePvData::getCB() pv active\n");
-			if(dd=pv->runDataCB((void *)(args.dbr))) pv->vc->setPvData(dd);
+			if((dd=pv->runDataCB((void *)(args.dbr)))) pv->vc->setPvData(dd);
 			pv->monitor();
 		}
 	}

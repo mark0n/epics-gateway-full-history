@@ -77,7 +77,7 @@ void dumpdd(int step, const char *desc, const char * /*name*/, gdd *dd)
 		);
 	fflush(stdout);
 	dd->dump(); fflush(stderr);
-	printf(" relatedgdd=%x\n",dd->related());
+	printf(" relatedgdd=%p\n",dd->related());
 	printf("--------------------------------------\n");
 	fflush(stdout);
 }
@@ -125,26 +125,28 @@ void gateChan::post_rights(void* v)
 
 gateVcData::gateVcData(gateServer* m,const char* name) :
 	casPV(*m),
+	pv(NULL),
 	vcID(nextID++),
 #if 0
 	event_count(0),
 #endif
-	time_last_trans(0),
 	read_access(aitTrue),
-	mrg(m),
-	pv_data(NULL),
-	event_data(NULL),
-	pv(NULL),
+	time_last_trans(0),
+	status(0),
 	entry(NULL),
+	pv_state(gateVcClear),
+	mrg(m),
 	pv_name(strDup(name)),
 	pv_string((const char*)pv_name),
-	pv_state(gateVcClear),
+	in_list_flag(0),
 	prev_post_value_changes(0),
 	post_value_changes(0),
-	status(0),
-	in_list_flag(0),
-	pending_write(NULL)
+	pending_write(NULL),
+	pv_data(NULL),
+	event_data(NULL)
 {
+	int rc;
+
 	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 
 	if(global_resources->isReadOnly())
@@ -166,14 +168,18 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 		setState(gateVcConnect);
 		entry=pv->getEntry();
 
-		if(pv->activate(this)==0)
-		{
+		rc = pv->activate(this);
+		switch (rc) {
+		case 1:
+			read_access=aitFalse;
+		case 0:
 			mrg->vcAdd(pv_name,*this);
 			markInList();
 			// set state to gateVcConnect used to be here
-		}
-		else
+			break;
+		default :
 			status=1;
+		}
 	}
 	else
 		status=1;
@@ -242,7 +248,7 @@ void gateVcData::report(void)
 	tsDLFwdIter<gateChan> iter(chan);
 	gateChan* p;
 
-	printf("%-30.30s - event rate=%lf\n",pv_name,pv->eventRate());
+	printf("%-30.30s - event rate=%f\n",pv_name,pv->eventRate());
 
 	for(p=iter.first();p;p=iter.next())
 		p->report();
@@ -707,7 +713,8 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 {
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
-	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+// 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+//  RL: unused
 
 #if DEBUG_GDD
 	heading("gateVcData::write",name());
