@@ -712,9 +712,9 @@ void gateServer::inactiveDeadCleanup(void)
 	if(in_check)	setInactiveCheckTime();
 }
 
-pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
+pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 {
-	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&c,pvname);
+	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&ctx,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
 	gateAsEntry* node;
@@ -734,19 +734,21 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 	}
 #endif
 
-	if(as_rules->getAlias(pvname, real_name, sizeof(real_name)) == aitTrue)
-		gateDebug2(5,"gateServer::pvExistTest() PV %s has real name %s\n",
-				   pvname,real_name);
+	getClientHostName(ctx, hostname, sizeof(hostname));
 
-	getClientHostName(c, hostname, sizeof(hostname));
+	// See if requested name is allowed and check for aliases
 
-	// see if requested name is allowed
-	if(!(node=getAs()->findEntry(pvname,hostname)))
+	if ( !(node = getAs()->findEntry(pvname, hostname)) )
 	{
-		gateDebug2(1,"gateServer::pvExistTest() %s (from %s) not allowed\n",
+		gateDebug2(1,"gateServer::pvExistTest() %s (from %s) is not allowed\n",
 				   pvname, hostname);
 		return pverDoesNotExistHere;
 	}
+
+    node->getRealName(pvname, real_name, sizeof(real_name));
+
+    gateDebug3(1,"gateServer::pvExistTest() %s (from %s) real name %s\n",
+               pvname, hostname, real_name);
 
 	// see if we are connected already to real PV
 	if(pvFind(real_name,pv)==0)
@@ -774,13 +776,13 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 	else if(conFind(real_name,pv)==0)
 	{
 		gateDebug1(5,"gateServer::pvExistTest() %s Connecting (new async ET)\n",real_name);
-		pv->addET(c);
+		pv->addET(ctx);
 		rc=pverAsyncCompletion;
 	}
 	else
 	{
 		// not in the lists -- make a new one
-		gateDebug1(5,"gateServer::pvExistTest() %s new\n",pvname);
+		gateDebug1(5,"gateServer::pvExistTest() %s creating new gatePv\n",pvname);
 		pv=new gatePvData(this,node,real_name);
 		
 		switch(pv->getState())
@@ -788,7 +790,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 		case gatePvConnect:
 			gateDebug2(5,"gateServer::pvExistTest() %s %s (new async ET)\n",
 					   pvname,pv->getStateName());
-			pv->addET(c);
+			pv->addET(ctx);
 			rc=pverAsyncCompletion;
 			break;
 		case gatePvInactive:
@@ -812,6 +814,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 {
 	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
 	gateVcData* rc;
+    gateAsEntry* pe;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
 
 #if statCount
@@ -828,9 +831,14 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	}
 #endif
 
-	if(as_rules->getAlias(pvname, real_name, sizeof(real_name)) == aitTrue)
-		gateDebug2(5,"gateServer::createPV() PV %s has real name %s\n",
-				   pvname,real_name);
+    if ( !(pe = getAs()->findEntry(pvname)) )
+    {
+        gateDebug1(2,"gateServer::createPV() called for denied PV %s "
+                   " - this should not happen!\n", pvname);
+        return pvCreateReturn(S_casApp_pvNotFound);
+    }
+
+    pe->getRealName(pvname, real_name, sizeof(real_name));
 
 	if(vcFind(real_name,rc)<0)
 	{

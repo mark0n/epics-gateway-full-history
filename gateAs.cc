@@ -18,6 +18,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.15  2000/05/03 17:08:30  lange
+ * Minor Bugfix, enhanced report functions.
+ *
  * Revision 1.14  2000/05/02 13:49:39  lange
  * Uses GNU regex library (0.12) for pattern matching;
  * Fixed some CAS beacon problems (reconnecting IOCs)
@@ -45,6 +48,52 @@ unsigned char gateAs::eval_order = GATE_ALLOW_FIRST;
 aitBool gateAs::rules_installed = aitFalse;
 aitBool gateAs::use_default_rules = aitFalse;
 FILE* gateAs::rules_fd = NULL;
+
+void gateAsEntry::getRealName(const char* pv, char* rname, int len)
+{
+	char c;
+	int in, ir, j, n;
+
+	if (alias)                  // Build real name from substitution pattern
+	{
+		ir = 0;
+		for (in=0; ir<len; in++)
+		{
+			if ((c = alias[in]) == '\\')
+			{
+				c = alias[++in];
+				if(c >= '0' && c <= '9')
+				{
+					n = c - '0';
+					if(regs.start[n] >= 0)
+					{
+						for(j=regs.start[n];
+							ir<len && j<regs.end[n];
+							j++)
+							rname[ir++] = pv[j];
+						if(ir==len)
+						{
+							rname[ir-1] = '\0';
+							break;
+						}
+					}
+					continue;
+				}
+			}
+			rname[ir++] = c;
+			if(c) continue; else break;
+		}
+		if(ir==len) rname[ir-1] = '\0';
+		gateDebug4(6,"gateAsEntry::getRealName() PV %s matches %s -> alias %s"
+                   " yields real name %s\n",
+				   pv, name, alias, rname);
+	}
+	else                        // Not an alias: PV name _is_ real name
+	{
+		strncpy(rname, pv, len);
+	}
+    return;
+}
 
 void gateAsNode::client_callback(ASCLIENTPVT p,asClientStatus /*s*/)
 {
@@ -135,7 +184,7 @@ int gateAs::readPvList(const char* lfile)
 			// Arbitrary number of arguments: [from] host names
 			if((hname=strtok(NULL,", \t\n")) && strcasecmp(hname,"FROM")==0)
 				hname=strtok(NULL,", \t\n");
-			if(hname)
+			if(hname)           // host name(s) present
 				do
 				{
 					pe = new gateAsEntry(name);
@@ -144,7 +193,7 @@ int gateAs::readPvList(const char* lfile)
 				}
 				while((hname=strtok(NULL,", \t\n")));
 			else
-			{
+			{                   // no host name specified
 				pe = new gateAsEntry(name);
 				if(pe->init(deny_list,line)==aitFalse) delete pe;
 			}
@@ -222,64 +271,15 @@ int gateAs::readPvList(const char* lfile)
 	return 0;
 }
 
-aitBool gateAs::getAlias(const char* pv, char* rname, int len)
-{
-	gateAsEntry* pe;
-	char c;
-	int in, ir, j, n;
-
-	pe = findEntryInList(pv,allow_list);
-
-	if(pe && pe->alias)						// Build real name fom substitution pattern
-	{
-		ir = 0;
-		for(in=0;ir<len;in++)
-		{
-			if((c = pe->alias[in]) == '\\')
-			{
-				c = pe->alias[++in];
-				if(c >= '0' && c <= '9')
-				{
-					n = c - '0';
-					if(pe->regs.start[n] >= 0)
-					{
-						for(j=pe->regs.start[n];
-							ir<len && j<pe->regs.end[n];
-							j++)
-							rname[ir++] = pv[j];
-						if(ir==len)
-						{
-							rname[ir-1] = '\0';
-							break;
-						}
-					}
-					continue;
-				}
-			}
-			rname[ir++] = c;
-			if(c) continue; else break;
-		}
-		if(ir==len) rname[ir-1] = '\0';
-		gateDebug3(6,"gateAs::getAlias() PV %s matches %s -> real name %s\n",
-				   pv, pe->name, rname);
-		return aitTrue;
-	}
-	else								// Not an alias: PV name _is_ real name
-	{
-		strncpy(rname, pv, len);
-		return aitFalse;
-	}
-}
-
 gateAsNode* gateAs::getInfo(gateAsEntry* e,const char* u,const char* h)
 {
 	gateAsNode* node;
-	gateDebug3(1,"entry=%8.8x user=%s host=%s\n",(int)e,u,h);
+	gateDebug3(12,"entry=%8.8x user=%s host=%s\n",(int)e,u,h);
 	node=new gateAsNode(e,u,h);
-	gateDebug2(1," node: user=%s host=%s\n",node->user(),node->host());
-	gateDebug2(1,"  read=%s write=%s\n",
+	gateDebug2(12," node: user=%s host=%s\n",node->user(),node->host());
+	gateDebug2(12,"  read=%s write=%s\n",
 		node->readAccess()?"True":"False",node->writeAccess()?"True":"False");
-	gateDebug3(1,"  name=%s group=%s level=%d\n",e->name,e->group,e->level);
+	gateDebug3(12,"  name=%s group=%s level=%d\n",e->name,e->group,e->level);
 	return node;
 }
 
@@ -296,19 +296,6 @@ gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 	gateDebug3(12,"pv=%s user=%s host=%s\n",pv,u,h);
 	gateDebug1(12," node=%8.8x\n",(int)node);
 	return node;
-}
-
-gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
-{
-	gateAsList* pl=NULL;
-
-	if(deny_from_table.find(host,pl)==0 &&			// DENY FROM
-	   findEntryInList(pv, *pl)) return NULL;
-
-	if(eval_order == GATE_ALLOW_FIRST &&			// DENY takes precedence
-	   findEntryInList(pv, deny_list)) return NULL;
-
-	return findEntryInList(pv, allow_list);
 }
 
 long gateAs::initialize(const char* afile)

@@ -19,6 +19,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.16  2002/02/08 12:01:03  lange
+ * Bugfix: NULL asg group when adding DENY entry.
+ * (Reported and suggested by Stephanie Allison)
+ *
  * Revision 1.15  2001/08/16 15:44:13  lange
  * Fixed timestamped connection loss messages (reported by Joan Sage)
  *
@@ -98,21 +102,6 @@ public:
 
 class gateAsEntry : public tsSLNode<gateAsEntry>
 {
-private:
-	aitBool compilePattern(int line)
-	{
-		const char *err;
-		pat_buff.translate=0; pat_buff.fastmap=0;
-		pat_buff.allocated=0; pat_buff.buffer=0;
-
-		if((err = re_compile_pattern(name, strlen(name), &pat_buff)))
-		{
-			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, name, err);
-			return aitFalse;
-		}
-		return aitTrue;
-	}
-
 public:
 	gateAsEntry(void) :
 		name(NULL), alias(NULL), group(NULL), level(1), as(NULL) { }
@@ -157,6 +146,8 @@ public:
 		return aitTrue;
 	}
 
+	void getRealName(const char* pv, char* real, int len);
+
 	const char* name;
 	const char* alias;
 	const char* group;
@@ -165,6 +156,21 @@ public:
 	char pat_valid;
 	struct re_pattern_buffer pat_buff;
 	struct re_registers regs;
+
+private:
+	aitBool compilePattern(int line)
+	{
+		const char *err;
+		pat_buff.translate=0; pat_buff.fastmap=0;
+		pat_buff.allocated=0; pat_buff.buffer=0;
+
+		if((err = re_compile_pattern(name, strlen(name), &pat_buff)))
+		{
+			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, name, err);
+			return aitFalse;
+		}
+		return aitTrue;
+	}
 };
 
 //  -------------- AS node (information for CAS Channels) -------------- 
@@ -238,13 +244,10 @@ public:
 	gateAsNode* getInfo(const char* pv,const char* usr,const char* hst);
 	gateAsNode* getInfo(gateAsEntry* e,const char* usr,const char* hst);
 
-	gateAsEntry* findEntry(const char* pv,const char* host);
+	inline gateAsEntry* findEntry(const char* pv, const char* host = 0);
 
-	aitBool getAlias(const char* pv, char* buff, int len);
 	int readPvList(const char* pvlist_file);
-
 	void report(FILE*);
-
 	static long reInitialize(const char* as_file_name);
 
 	static const char* default_group;
@@ -289,6 +292,20 @@ private:
 		return pe;
 	}
 };
+
+inline gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
+{
+	gateAsList* pl=NULL;
+
+	if(host && deny_from_table.find(host,pl)==0 &&	// DENY FROM
+	   findEntryInList(pv, *pl)) return NULL;
+
+	if(eval_order == GATE_ALLOW_FIRST &&			// DENY takes precedence
+	   findEntryInList(pv, deny_list)) return NULL;
+
+	return findEntryInList(pv, allow_list);
+}
+
 
 #endif /* _GATEAS_H_ */
 
