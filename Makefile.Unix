@@ -5,13 +5,16 @@
 # $Id$
 #
 # $Log$
+# Revision 1.2  1996/06/11 02:05:16  jbk
+# complete the makeilfe
+#
 # Revision 1.1  1996/05/22 03:21:48  jbk
 # new stuff
 #
 #
 
-# EPICS = ../../../..
-EPICS = /usr/local/epics/R3.12.2
+EPICS = ../../../..
+# EPICS = /usr/local/epics/R3.12.2
 
 include Target.include
 include $(EPICS)/config/CONFIG_EXTENSIONS
