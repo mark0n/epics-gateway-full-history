@@ -1,0 +1,20 @@
+
+
+# Using gateway as CA concentrator with local loopback driver.
+# Set these variable where clients are run:
+# EPICS_CA_ADDR_LIST=127.0.0.1 
+# EPICS_CA_AUTO_ADDR_LIST=NO
+#
+# iocpvgateway: -cip 164.54.2.108 - test with PV pvgateway:memuse
+
+# Other important variables to remember
+# EPICS_CAS_ADDR= - IP address where server listens
+# EPICS_CAS_SERVER_PORT= - port that the CA server uses
+# EPICS_CA_SERVER_PORT= - port that the CA client library uses
+
+export JBK_CAS_PORT=9990
+# ./gateway -pv ../PV_LIST -alias ../PV_ALIAS $*
+# ./gateway -cip 164.54.2.108 -sip 127.0.0.1 $*
+# ./gateway -cport 9990 -sport 9990 $*
+./gateway $*
+
