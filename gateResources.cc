@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.5  1996/09/10 15:04:12  jbk
+// many fixes.  added instructions to usage. fixed exist test problems.
+//
 // Revision 1.4  1996/09/07 13:01:51  jbk
 // fixed bugs.  reference the gdds from CAS now.
 //
@@ -31,19 +34,21 @@ extern int patmatch(char *pattern, char *string);
 
 gateResources::gateResources(void)
 {
-	home_dir=strdup(GATE_HOME);
-	pv_access_file=strdup(GATE_PV_ACCESS_FILE);
-	pv_list_file=strdup(GATE_PV_LIST_FILE);
-	pv_alias_file=strdup(GATE_PV_ALIAS_FILE);
-	debug_level=0;
-	suffix=strdup(GATE_SUFFIX);
-	prefix=strdup(GATE_LOG);
-	list_buffer=(char*)NULL;
-	pattern_list=(char**)NULL;
-	log_on=0;
+	pv_access_file=NULL;
+	pv_list_file=NULL;
+	pv_alias_file=NULL;
 	log_file=NULL;
 	alias_table=NULL;
 	alias_buffer=NULL;
+	list_buffer=NULL;
+	pattern_list=NULL;
+
+	home_dir=strdup(GATE_HOME);
+	suffix=strdup(GATE_SUFFIX);
+	prefix=strdup(GATE_LOG);
+
+	debug_level=0;
+	log_on=0;
 
 	genLogFile();
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
@@ -59,19 +64,24 @@ gateResources::gateResources(void)
 	appFixed=tt.getApplicationType("fixed");
 	appAttributes=tt.getApplicationType("attributes");
 	appMenuitem=tt.getApplicationType("menuitem");
+
+	if(access(GATE_PV_ACCESS_FILE,F_OK)==0) setAccessFile(GATE_PV_ACCESS_FILE);
+	if(access(GATE_PV_LIST_FILE,F_OK)==0)   setAccessFile(GATE_PV_LIST_FILE);
+	if(access(GATE_PV_ALIAS_FILE,F_OK)==0)  setAccessFile(GATE_PV_ALIAS_FILE);
 }
 
 gateResources::~gateResources(void)
 {
+	if(list_buffer)		delete [] list_buffer;
+	if(pattern_list)	delete [] pattern_list;
+	if(pv_access_file)	delete [] pv_access_file;
+	if(pv_list_file)	delete [] pv_list_file;
+	if(pv_alias_file)	delete [] pv_alias_file;
+
 	delete [] home_dir;
-	delete [] pv_access_file;
-	delete [] pv_list_file;
 	delete [] log_file;
 	delete [] suffix;
 	delete [] prefix;
-
-	if(list_buffer) delete [] list_buffer;
-	if(pattern_list) delete [] pattern_list;
 }
 
 int gateResources::appValue=0;
@@ -109,9 +119,10 @@ int gateResources::setListFile(char* file)
 	unsigned long pv_len;
 	char* pc;
 
-	if(list_buffer) delete [] list_buffer;
+	if(list_buffer)  delete [] list_buffer;
 	if(pattern_list) delete [] pattern_list;
-	delete [] pv_list_file;
+	if(pv_list_file) delete [] pv_list_file;
+
 	pv_list_file=strdup(file);
 
 	if( (pv_fd=fopen(pv_list_file,"r"))==(FILE*)NULL ||
@@ -157,9 +168,10 @@ int gateResources::setAliasFile(char* file)
 	char* pc;
 	char* real;
 
-	if(alias_buffer) delete [] alias_buffer;
-	if(alias_table) delete [] alias_table;
+	if(alias_buffer)  delete [] alias_buffer;
+	if(alias_table)   delete [] alias_table;
 	if(pv_alias_file) delete [] pv_alias_file;
+
 	pv_alias_file=strdup(file);
 
 	if( (pv_fd=fopen(pv_alias_file,"r"))==NULL ||
@@ -234,7 +246,7 @@ int gateResources::setDebugLevel(int level)
 
 int gateResources::setAccessFile(char* file)
 {
-	delete [] pv_access_file;
+	if(pv_access_file) delete [] pv_access_file;
 	pv_access_file=strdup(file);
 	return 0;
 }

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.4  1996/09/10 15:04:11  jbk
+ * many fixes.  added instructions to usage. fixed exist test problems.
+ *
  * Revision 1.3  1996/07/26 02:34:44  jbk
  * Interum step.
  *
@@ -18,12 +21,12 @@
 
 #define GATE_PIPE_FILE "GATEWAY.pipe"
 #define GATE_SCRIPT_FILE "GATEWAY.killer"
-#define GATE_PV_LIST_FILE "GATEWAY_PV_LIST_FILE"
-#define GATE_PV_ACCESS_FILE "GATEWAY_PV_ACCESS_FILE"
-#define GATE_PV_ALIAS_FILE "GATEWAY_PV_ALIAS_FILE"
-#define GATE_LOG "GATEWAY_LOG"
+#define GATE_PV_LIST_FILE "GATEWAY.pvlist"
+#define GATE_PV_ACCESS_FILE "GATEWAY.access"
+#define GATE_PV_ALIAS_FILE "GATEWAY.alias"
+#define GATE_LOG "GATEWAY"
 #define GATE_HOME "."
-#define GATE_SUFFIX "default"
+#define GATE_SUFFIX "log"
 #define GATE_CONNECT_TIMEOUT 1
 #define GATE_INACTIVE_TIMEOUT (60*60*2)
 #define GATE_DEAD_TIMEOUT (60*2)

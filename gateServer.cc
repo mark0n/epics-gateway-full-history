@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.7  1996/09/10 15:04:13  jbk
+// many fixes.  added instructions to usage. fixed exist test problems.
+//
 // Revision 1.6  1996/09/07 13:01:52  jbk
 // fixed bugs.  reference the gdds from CAS now.
 //
@@ -52,7 +55,6 @@ void gateServer::mainLoop(void)
 {
 	int not_done=1;
 	osiTime delay(0u,500000000u);
-	global_resources->setSuffix("server");
 
 	while(not_done)
 	{

@@ -15,6 +15,7 @@
 export JBK_CAS_PORT=9990
 # ./gateway -pv ../PV_LIST -alias ../PV_ALIAS $*
 # ./gateway -cip 164.54.2.108 -sip 127.0.0.1 $*
+# ./gateway -sip 127.0.0.1 -cip 164.54.8.255
 # ./gateway -cport 9990 -sport 9990 $*
 ./gateway $*
 

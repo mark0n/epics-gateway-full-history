@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.4  1996/09/10 15:04:14  jbk
+// many fixes.  added instructions to usage. fixed exist test problems.
+//
 // Revision 1.3  1996/07/26 02:34:47  jbk
 // Interum step.
 //
@@ -250,12 +253,8 @@ int main(int argc, char** argv)
 					print_instructions();
 					return 0;
 				case PARM_NS:
-					if(argv[i][0]=='-') no_error=0;
-					else
-					{
-						no_server=1;
-						not_done=0;
-					}
+					no_server=1;
+					not_done=0;
 					break;
 				case PARM_PV:
 					if(++i>=argc) no_error=0;
@@ -476,6 +475,8 @@ int main(int argc, char** argv)
 		startEverything();
 	else
 	{
+		gr->setUpLogging();
+
 		// disassociate from parent
 		switch(fork())
 		{
