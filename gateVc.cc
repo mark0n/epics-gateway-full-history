@@ -405,8 +405,8 @@ const char* gateVcData::getName() const
 	return name();
 }
 
-// This is called whenever a client of casPV with asynchronous io
-// disconnects
+// This is called whenever CAS want to destroy your casPV, usually
+// because all clients have disconnected
 void gateVcData::destroy(void)
 {
 	gateDebug0(1,"gateVcData::destroy()\n");

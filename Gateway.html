@@ -465,6 +465,17 @@ files. The Gateway gets around this by reserving a FD pointing to
 security fails for this or any other reason, the access security will go to
 the default, not what it was before the failure.</p>
 
+<p>The number of threads on Linux is determined by the maximum user space,
+about half of the 32-bit address space or about 2 GB. The maximum number of
+threads is thus 2 GB divided by the stacksize (typically 10240 KB) giving
+about 204 threads in the typical case. Channel Access uses two threads for
+each IOC connection, one for receive and one for send. This limits the
+Gateway from connecting to more than about 100 IOCs. If the stacksize were
+decreased to say, 4096 KB (ulimit -s 4096), then about 256 IOCs would be
+allowed. The APS Linux Gateway currently uses this number. Starting with Base
+3.14.7, EPICS allocates memory for threads more efficiently, and you should
+not have to change the stacksize.</p>
+
 <h2><a name="Using">Using the Gateway</a></h2>
 
 <p>To use the Gateway as your process variable server, it is usually only
@@ -864,17 +875,20 @@ built.</p>
 <p><strong>gateway:clientEventRate</strong></p>
 
 <p>This is the rate in Hz at which client events are happening. Client events
-include such things as connection notifications, read and write
-verifications, value changes, and access rights changes. They relate to
-communication from the IOC.</p>
+include such things as attempted read and writes, connection changes, value
+changes, and access rights changes. They relate to communication from the
+IOC.</p>
 
 <p><strong>gateway:clientPostRate</strong></p>
 
 <p>This is the rate in Hz at which events are posted from the VC object to
 CAS and hence to the MEDMs. It is independent of the number of MEDMs
 (providing there is at least one). It tends to be similar to the
-clientEventRate. In earlier versions of the Gateway this was named
-<strong>gateway:postEventRate</strong>.</p>
+clientEventRate; but only value changes cause post events. The other events
+do not contribute. </p>
+
+<p>In earlier versions of the Gateway this was named<strong>
+gateway:postEventRate</strong>.</p>
 
 <p><strong>gateway:existTestRate</strong></p>
 

@@ -199,7 +199,7 @@ public:
 	virtual pvExistReturn pvExistTest(const casCtx& ctx, const caNetAddr& netAddr,
 	  const char* pvname);
 	virtual pvExistReturn pvExistTest(const casCtx& ctx, const char* pvname);
-	virtual pvCreateReturn createPV(const casCtx& ctx, const char* pvname);
+	virtual pvAttachReturn pvAttach(const casCtx& ctx, const char* pvname);
 
 	// caServer overwrite
     void generateBeaconAnomaly();

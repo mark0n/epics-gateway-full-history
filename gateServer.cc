@@ -1668,9 +1668,9 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	return rc;
 }
 
-pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
+pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
 {
-	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
+	gateDebug1(5,"gateServer::pvAttach() PV %s\n",pvname);
 	gateVcData* rc;
     gateAsEntry* pEntry;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
@@ -1679,7 +1679,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	// information in .pvlist, not .access.
     if ( !(pEntry = getAs()->findEntry(pvname)) )
     {
-        gateDebug1(2,"gateServer::createPV() called for denied PV %s "
+        gateDebug1(2,"gateServer::pvAttach() called for denied PV %s "
 		  " - this should not happen!\n", pvname);
         return pvCreateReturn(S_casApp_pvNotFound);
     }
@@ -1694,7 +1694,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 				if(stat_table[i].pv == NULL)
 				  stat_table[i].pv=new gateStat(this,pEntry,real_name,i);
 #if DEBUG_DESC
-				printf("gateServer::createPV:  %s\n",stat_table[i].pv->getName());
+				printf("gateServer::pvAttach:  %s\n",stat_table[i].pv->getName());
 #endif
 				return pvCreateReturn(*stat_table[i].pv);
 			}
@@ -1702,7 +1702,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 				if(stat_table[i].descPv == NULL)
 				  stat_table[i].descPv=new gateStatDesc(this,pEntry,real_name,i);
 #if DEBUG_DESC
-				printf("gateServer::createPV:  %s\n",stat_table[i].descPv->getName());
+				printf("gateServer::pvAttach:  %s\n",stat_table[i].descPv->getName());
 #endif
 				return pvCreateReturn(*stat_table[i].descPv);
 			}
@@ -1712,7 +1712,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 
 #if DEBUG_DELAY
 	if(!strncmp("Xorbit",real_name,6)) {
-		printf("%s gateServer::createPV: loop_count=%d %s\n",
+		printf("%s gateServer::pvAttach: loop_count=%d %s\n",
 		  timeStamp(),loop_count,real_name);
 	}
 #endif
@@ -1725,7 +1725,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 
 		if(rc->getStatus())
 		{
-			gateDebug1(5,"gateServer::createPV() bad PV %s\n",real_name);
+			gateDebug1(5,"gateServer::pvAttach() bad PV %s\n",real_name);
 			delete rc;
 			rc=NULL;
 		}
