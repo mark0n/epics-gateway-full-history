@@ -1,3 +1,13 @@
+/*************************************************************************\
+* Copyright (c) 2002 The University of Chicago, as Operator of Argonne
+* National Laboratory.
+* Copyright (c) 2002 Berliner Speicherring-Gesellschaft fuer Synchrotron-
+* Strahlung mbH (BESSY).
+* Copyright (c) 2002 The Regents of the University of California, as
+* Operator of Los Alamos National Laboratory.
+* This file is distributed subject to a Software License Agreement found
+* in the file LICENSE that is included with this distribution. 
+\*************************************************************************/
 #ifndef _GATEPV_H_
 #define _GATEPV_H_
 
@@ -21,6 +31,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.13  2000/10/18 16:06:28  lange
+ * Bugfix in beacon relay mechanism
+ *
  * Revision 1.12  2000/05/02 13:49:39  lange
  * Uses GNU regex library (0.12) for pattern matching;
  * Fixed some CAS beacon problems (reconnecting IOCs)

@@ -1,3 +1,13 @@
+/*************************************************************************\
+* Copyright (c) 2002 The University of Chicago, as Operator of Argonne
+* National Laboratory.
+* Copyright (c) 2002 Berliner Speicherring-Gesellschaft fuer Synchrotron-
+* Strahlung mbH (BESSY).
+* Copyright (c) 2002 The Regents of the University of California, as
+* Operator of Los Alamos National Laboratory.
+* This file is distributed subject to a Software License Agreement found
+* in the file LICENSE that is included with this distribution. 
+\*************************************************************************/
 static char RcsId[] = "@(#)$Id$";
 
 /*+*********************************************************************
@@ -16,6 +26,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.1  2000/04/05 15:59:32  lange
+ * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
+ *
  *
  *********************************************************************-*/
 

@@ -1,3 +1,13 @@
+/*************************************************************************\
+* Copyright (c) 2002 The University of Chicago, as Operator of Argonne
+* National Laboratory.
+* Copyright (c) 2002 Berliner Speicherring-Gesellschaft fuer Synchrotron-
+* Strahlung mbH (BESSY).
+* Copyright (c) 2002 The Regents of the University of California, as
+* Operator of Los Alamos National Laboratory.
+* This file is distributed subject to a Software License Agreement found
+* in the file LICENSE that is included with this distribution. 
+\*************************************************************************/
 #ifndef _GATEVERSION_H_
 #define _GATEVERSION_H_
 
@@ -17,6 +27,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.10  2002/07/24 15:17:22  evans
+ * Added CPUFract stat PV.  Added GATEWAY_UPDATE_LEVEL to gateVersion.h.
+ * Printed BASE_VERSION_STRING to header of gateway.log.
+ *
  * Revision 1.9  2002/07/19 06:29:51  lange
  * 1.3.3 - Bugfix: double call to regexp match in pvExistTest() fixed.
  *

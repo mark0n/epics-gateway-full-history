@@ -1,3 +1,13 @@
+/*************************************************************************\
+* Copyright (c) 2002 The University of Chicago, as Operator of Argonne
+* National Laboratory.
+* Copyright (c) 2002 Berliner Speicherring-Gesellschaft fuer Synchrotron-
+* Strahlung mbH (BESSY).
+* Copyright (c) 2002 The Regents of the University of California, as
+* Operator of Los Alamos National Laboratory.
+* This file is distributed subject to a Software License Agreement found
+* in the file LICENSE that is included with this distribution. 
+\*************************************************************************/
 #ifndef _GATEAS_H_
 #define _GATEAS_H_
 
@@ -19,6 +29,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.17  2002/07/18 15:07:45  lange
+ * Optimisation (connect time): expression matching only once in pvExistTest()
+ *
  * Revision 1.16  2002/02/08 12:01:03  lange
  * Bugfix: NULL asg group when adding DENY entry.
  * (Reported and suggested by Stephanie Allison)

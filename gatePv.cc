@@ -1,3 +1,13 @@
+/*************************************************************************\
+* Copyright (c) 2002 The University of Chicago, as Operator of Argonne
+* National Laboratory.
+* Copyright (c) 2002 Berliner Speicherring-Gesellschaft fuer Synchrotron-
+* Strahlung mbH (BESSY).
+* Copyright (c) 2002 The Regents of the University of California, as
+* Operator of Los Alamos National Laboratory.
+* This file is distributed subject to a Software License Agreement found
+* in the file LICENSE that is included with this distribution. 
+\*************************************************************************/
 static char RcsId[] = "@(#)$Id$";
 
 /*+*********************************************************************
@@ -20,6 +30,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.32  2001/12/20 12:42:46  lange
+ * fix for memory leak in flushAsyncETQueue() by Joan Sage
+ *
  * Revision 1.31  2000/10/18 16:06:28  lange
  * Bugfix in beacon relay mechanism
  *
