@@ -204,14 +204,14 @@ gatePvData::~gatePvData(void)
 
 	// Clear the callback_list;
 	gatePvCallbackId *id = NULL;
-	while((callback_list.first()))
+	while((id=callback_list.first()))
 	{
 		callback_list.remove(*id);
 		delete id;
 	}
 
 	// Clear the async exist test list
-	gateAsyncE* asynce;
+	gateAsyncE* asynce = NULL;
 	while((asynce=eio.first()))	{
 		asynce->removeFromQueue();
 	}
