@@ -119,7 +119,8 @@ private:
 # define statExistTestRate   NEXT_STAT_PV+2
 # define statLoopRate        NEXT_STAT_PV+3
 # define statCPUFract        NEXT_STAT_PV+4
-# define NEXT_RATE_STAT      NEXT_STAT_PV+5
+# define statLoad            NEXT_STAT_PV+5
+# define NEXT_RATE_STAT      NEXT_STAT_PV+6
 #else
 # define NEXT_RATE_STAT      NEXT_STAT_PV
 #endif

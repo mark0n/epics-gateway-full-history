@@ -31,6 +31,11 @@
 #define DEBUG_PV_CONNNECT_CLEANUP 0
 #define DEBUG_EXIST 0
 #define DEBUG_DELAY 0
+#define DEBUG_CLOCK 0
+
+#ifdef __linux__
+#undef USE_LINUX_PROC_FOR_CPU
+#endif
 
 // DEBUG_TIMES prints a message every minute, which helps determine
 // when things happen.
@@ -49,15 +54,25 @@
 // Interval for rate statistics in seconds
 #define RATE_STATS_INTERVAL 10u
 
+// Number of load elements to get in getloadavg.  Should be 1, unless
+// the implementation in the Gateway is changed.
+#define N_LOAD 1
+
 #define ULONG_DIFF(n1,n2) (((n1) >= (n2))?((n1)-(n2)):((n1)+(ULONG_MAX-(n2))))
 
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#ifdef SOLARIS
+// Is in stdlib.h elsewhere, not available on WIN32
+#include <sys/loadavg.h>
+#endif
 
 #ifdef WIN32
 #else
@@ -81,6 +96,14 @@
 void gatewayServer(char *prefix);
 void printRecentHistory(void);
 void gateAsCa(void);
+
+#ifdef __linux__
+# ifdef USE_LINUX_PROC_FOR_CPU
+static double linuxCpuTimeDiff(void);
+static pid_t gate_pid=0;
+# endif
+static clock_t mainClock=(clock_t)(-1);
+#endif
 
 // extern "C" wrappers needed by CA routines for callbacks
 extern "C" {
@@ -204,6 +227,13 @@ void gateServer::mainLoop(void)
 	first_reconnect_time = 0;
 	markNoRefreshSuppressed();
 
+#ifdef USE_LINUX_PROC_FOR_CPU
+	// Save the pid.  Could put this in a class variable.
+	gate_pid=getpid();
+	if(!gate_pid) printf("gateServer::mainLoop: Could not get pid\n");
+	else printf("gateServer::mainLoop: gate_pid=%d\n",gate_pid);
+#endif
+
 	// Initialize stat counters
 #if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
 	// Start a default timer queue (true to use shared queue, false to
@@ -218,7 +248,7 @@ void gateServer::mainLoop(void)
 	  // Then start the timer
 	    statTimer->start();
 	} else {
-	    printf("Could not start statistics timer\n");
+	    printf("gateServer::mainLoop: Could not start statistics timer\n");
 	}
 #endif
 
@@ -228,8 +258,9 @@ void gateServer::mainLoop(void)
 	pendTime=0.0;
 	cleanTime=0.0;
 #endif
-	while(not_done)
-	{
+
+	// Main loop
+	while(not_done)	{
 #if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
 		loop_count++;
 #endif
@@ -343,6 +374,14 @@ void gateServer::mainLoop(void)
 				exit(0);
 			}
 		}
+
+#ifdef __linux__
+# ifndef USE_LINUX_PROC_FOR_CPU
+		// Get clock for this thread
+		mainClock=clock();
+# endif
+#endif
+
 	}
 }
 
@@ -1471,6 +1510,12 @@ void gateServer::initStats(char *prefix)
 			stat_table[i].units="";
 			stat_table[i].precision=3;
 			break;
+		case statLoad:
+			stat_table[i].name="load";
+			stat_table[i].init_value=&zero;
+			stat_table[i].units="";
+			stat_table[i].precision=3;
+			break;
 #endif
 #ifdef CAS_DIAGNOSTICS
 		case statServerEventRate:
@@ -1559,8 +1604,17 @@ gateRateStatsTimer::expire(const epicsTime &curTime)
 	unsigned long peCurCount=mrg->post_event_count;
 	unsigned long etCurCount=mrg->exist_count;
 	unsigned long mlCurCount=mrg->loop_count;
-	// clock is really clock_t, which should be long
+	// clock really returns clock_t, which should be long
+#ifdef __linux__
+# ifndef USE_LINUX_PROC_FOR_CPU
+	// Use clock from main process for Linux
+	unsigned long cpuCurCount=mainClock;
+# endif
+#else
+	// Use clock for other systems.  For WIN32, clock returns wall
+	// clock so cpuFract always is 1.
 	unsigned long cpuCurCount=(unsigned long)clock();
+#endif
 	double ceRate,peRate,etRate,mlRate,cpuFract;
 #endif
 #ifdef CAS_DIAGNOSTICS
@@ -1579,6 +1633,7 @@ gateRateStatsTimer::expire(const epicsTime &curTime)
 		pePrevCount=peCurCount;
 		etPrevCount=etCurCount;
 		mlPrevCount=mlCurCount;
+		cpuPrevCount=cpuCurCount;
 #endif
 #ifdef CAS_DIAGNOSTICS
 		sePrevCount=seCurCount;
@@ -1587,6 +1642,21 @@ gateRateStatsTimer::expire(const epicsTime &curTime)
 		first=0;
 	}
 	delTime=(double)(curTime-prevTime);
+
+#if DEBUG_CLOCK
+	static int second=1;
+	if(second) {
+		if(cpuCurCount > 0 && cpuPrevCount != cpuCurCount) {
+			printf("%s %d cpuPrevCount=%lu cpuCurCount=%lu\n",
+			  timeStamp(),second++,cpuPrevCount,cpuCurCount);
+			if(second > 25) second=0;
+		} else if(cpuCurCount == (unsigned long)((clock_t)(-1))) {
+			printf("%s %d cpuCurCount=%ld\n",timeStamp(),second++,
+			  (clock_t)cpuCurCount);
+			if(second > 25) second=0;
+		}
+	}
+#endif
 
 #ifdef RATE_STATS
 	// Calculate the client event rate
@@ -1614,11 +1684,30 @@ gateRateStatsTimer::expire(const epicsTime &curTime)
 	// however, we can't distinguish that -1 from a -1 owing to
 	// wrapping.  So treat the return value as an unsigned long and
 	// don't check the return value.
+#ifdef USE_LINUX_PROC_FOR_CPU
+	double timeDiff=linuxCpuTimeDiff();
+	if(timeDiff < 0.0) {
+		// Error
+		cpuFract=-1.0;
+	} else {
+		cpuFract=(delTime > 0)?timeDiff/delTime:0.0;
+	}
+#else
 	cpuFract=(delTime > 0)?(double)(ULONG_DIFF(cpuCurCount,cpuPrevCount))/
 	  delTime/CLOCKS_PER_SEC:0.0;
-	mrg->setStat(statCPUFract,cpuFract);
 #endif
+	mrg->setStat(statCPUFract,cpuFract);
 
+#ifndef WIN32
+	// Calculate the load using average over last minute.  Does not
+	// exist for WIN32.
+	double load[N_LOAD];
+	int nProcesses;
+	nProcesses=getloadavg(load,N_LOAD);	  
+	mrg->setStat(statLoad,load[N_LOAD-1]);
+#endif
+#endif
+	
 #ifdef CAS_DIAGNOSTICS
 	// Calculate the server event rate
 	seRate=(delTime > 0)?(double)(ULONG_DIFF(seCurCount,sePrevCount))/
@@ -1658,6 +1747,127 @@ gateRateStatsTimer::expire(const epicsTime &curTime)
 }
 #endif  // #if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
 #endif  // #if stat_count
+
+#ifdef USE_LINUX_PROC_FOR_CPU
+// A clock routine for Linux
+// From Man pages for Red Hat Linux 8.0 3.2-7
+// This data may change
+//    pid %d The process id.
+//    comm %s
+//            The filename of the executable,  in  parentheses.
+//            This  is visible whether or not the executable is
+//            swapped out.
+//    state %c
+//            One character from the string "RSDZTW" where R is
+//            running,  S is sleeping in an interruptible wait,
+//            D is waiting in uninterruptible disk sleep, Z  is
+//            zombie, T is traced or stopped (on a signal), and
+//            W is paging.
+//    ppid %d
+//            The PID of the parent.
+//    pgrp %d
+//            The process group ID of the process.
+//    session %d
+//            The session ID of the process.
+//    tty_nr %d
+//            The tty the process uses.
+//    tpgid %d
+//            The process group ID of the  process  which  cur-
+//            rently owns the tty that the process is connected
+//            to.
+//    flags %lu
+//            The flags of the process.  The math bit is  deci-
+//            mal 4, and the traced bit is decimal 10.
+//    minflt %lu
+//            The  number  of minor faults the process has made
+//            which have not required  loading  a  memory  page
+//            from disk.
+//    cminflt %lu
+//            The  number  of minor faults that the process and
+//            its children have made.
+//    majflt %lu
+//            The number of major faults the process  has  made
+//            which  have  required  loading a memory page from
+//            disk.
+//    cmajflt %lu
+//            The number of major faults that the  process  and
+//            its children have made.
+//    utime %lu
+//            The  number of jiffies that this process has been
+//            scheduled in user mode.
+//    stime %lu
+//            The number of jiffies that this process has  been
+//            scheduled in kernel mode.
+//    cutime %ld
+//            The  number  of jiffies that this process and its
+//            children have been scheduled in user mode.
+//    cstime %ld
+//            The number of jiffies that this process  and  its
+//            children have been scheduled in kernel mode.
+//    ...
+// jiffie is .01 sec
+#define SEC_PER_JIFFIE .01
+static double linuxCpuTimeDiff(void)
+{
+	static unsigned long prevutime=0;
+	static unsigned long prevstime=0;
+	double retVal=-1.0;
+
+	if(gate_pid > 0) {
+		static char statfile[80]="";
+		// Create the file name once
+		if(!*statfile) {
+			sprintf(statfile,"/proc/%d/stat",gate_pid);
+		}
+		FILE *fp=fopen(statfile,"r");
+		if(fp) {
+			int pid=0;
+			char comm[1024];  // Should use MAX_PATH or PATH_MAX
+			char state;
+			int ppid,pgrp,session,tty_nr,tpgid;
+			unsigned long flags,minflt,cminflt,majflt,cmajflt,utime=0,stime=0;
+			long cutime=0,cstime=0;
+			// Remove cutime and cstime for efficiency
+			int count=fscanf(fp,"%d %s %c %d %d %d %d %d "
+			  "%lu %lu %lu %lu %lu "
+			  "%lu %lu %ld %ld",
+			  &pid,comm,&state,&ppid,&pgrp,&session,&tty_nr,&tpgid,
+			  &flags,&minflt,&cminflt,&majflt,&cmajflt,
+			  &utime,&stime,&cutime,&cstime);
+			fclose(fp);
+			if(count == 17 ) {
+				double utimediff=(double)ULONG_DIFF(utime,prevutime);
+				double stimediff=(double)ULONG_DIFF(stime,prevstime);
+				retVal=(utimediff+stimediff)*SEC_PER_JIFFIE;
+#if DEBUG_CLOCK
+				if(prevstime > stime) {
+					printf("prevstime=%lu > stime=%lu\n",prevstime,stime);
+				}
+				if(prevutime > utime) {
+					printf("prevutime=%lu > utime=%lu\n",prevutime,utime);
+				}
+#endif
+				prevstime=stime;
+				prevutime=utime;
+			}
+#if DEBUG_CLOCK
+			static int nprint=0;
+			if(nprint == 0) {
+				printf("SEC_PER_JIFFIE=%g ULONG_MAX=%lu\n",
+				  SEC_PER_JIFFIE,ULONG_MAX);
+			}
+			if(nprint < 1000) {
+				printf("%2d utime=%lu stime=%lu cutime=%ld cstime=%ld "
+				  "retVal=%g\n",
+				  ++nprint,utime,stime,cutime,cstime,retVal);
+			}
+#endif
+		}
+	}
+	return retVal;
+}
+#endif
+
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
