@@ -13,6 +13,7 @@ gateExistData::gateExistData(gateServer& s,const char* n,const casCtx &ctx,
 	// create a gatePvData thing here
 	gateDebug1(10,"gateExistData() name=%s\n",n);
 	ndd=dd;
+	ndd->reference();
 	pv=new gatePvData(&s,this,n);
 }
 
@@ -21,6 +22,7 @@ gateExistData::gateExistData(gateServer& s,gatePvData* p,const casCtx &ctx,
 {
 	gateDebug0(10,"gateExistData(gatePvData*)\n");
 	ndd=dd;
+	ndd->reference();
 	pv=p;
 	pv->addET(this);
 }
@@ -28,6 +30,7 @@ gateExistData::gateExistData(gateServer& s,gatePvData* p,const casCtx &ctx,
 gateExistData::~gateExistData(void)
 {
 	gateDebug0(10,"~gateExistData()\n");
+	ndd->unreference();
 }
 
 void gateExistData::nak(void)

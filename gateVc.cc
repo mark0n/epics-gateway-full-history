@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.2  1996/07/26 02:34:46  jbk
+// Interum step.
+//
 // Revision 1.1  1996/07/23 16:32:42  jbk
 // new gateway that actually runs
 //
@@ -378,7 +381,7 @@ aitEnum gateVcData::bestExternalType(void)
 gateAsyncRW::~gateAsyncRW(void)
 {
 	gateDebug0(10,"~gateAsyncRW()\n");
-	// do nothing?
+	dd.unreference();
 }
 
 void gateAsyncRW::destroy(void)

@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.5  1996/09/06 11:56:23  jbk
+// little fixes
+//
 // Revision 1.4  1996/08/14 21:10:33  jbk
 // next wave of updates, menus stopped working, units working, value not
 // working correctly sometimes, can't delete the channels
@@ -305,7 +308,7 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		if(conFind(r_name,pv)==0)
 		{
 			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
-			ed=new gateExistData(*this,r_name,c,&cname);
+			ed=new gateExistData(*this,pv,c,&cname);
 			rc=S_casApp_asyncCompletion;
 		}
 		else

@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.4  1996/08/14 21:10:34  jbk
+ * next wave of updates, menus stopped working, units working, value not
+ * working correctly sometimes, can't delete the channels
+ *
  * Revision 1.3  1996/07/26 02:34:46  jbk
  * Interum step.
  *
@@ -203,6 +207,6 @@ inline int gateServer::vcAdd(const char* name, gateVcData& pv)
 inline int gateServer::vcFind(const char* name, gateVcData*& pv)
 	{ return vc_list.find(name,pv); }
 inline int gateServer::vcDelete(const char* name, gateVcData*& pv)
-	{ return vc_list.find(name,pv); }
+	{ return vc_list.remove(name,pv); }
 
 #endif

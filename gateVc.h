@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.3  1996/09/06 11:56:23  jbk
+ * little fixes
+ *
  * Revision 1.2  1996/08/14 21:10:34  jbk
  * next wave of updates, menus stopped working, units working, value not
  * working correctly sometimes, can't delete the channels
@@ -139,7 +142,9 @@ inline void gateVcData::markNotInterested(void)
 class gateAsyncRW : public casAsyncIO
 {
 public:
-	gateAsyncRW(const casCtx &ctx,gdd& wdd) : casAsyncIO(ctx),dd(wdd) { }
+	gateAsyncRW(const casCtx &ctx,gdd& wdd) : casAsyncIO(ctx),dd(wdd)
+		{ dd.reference(); }
+
 	virtual ~gateAsyncRW(void);
 
 	virtual void destroy(void);

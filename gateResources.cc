@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.3  1996/07/26 02:34:44  jbk
+// Interum step.
+//
 // Revision 1.2  1996/07/23 16:32:37  jbk
 // new gateway that actually runs
 //
@@ -35,6 +38,9 @@ gateResources::gateResources(void)
 	pattern_list=(char**)NULL;
 	log_on=0;
 	log_file=NULL;
+	alias_table=NULL;
+	alias_buffer=NULL;
+
 	genLogFile();
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
 	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
