@@ -1,3 +1,24 @@
+static char RcsId[] = "@(#)$Id$";
+
+/*+*********************************************************************
+ *
+ * File:       gateAs.cc
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     Access Security part - handles all Gateway configuration:
+ *             - Reads PV list file
+ *             - Reads Access Security file
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *********************************************************************-*/
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -5,16 +26,21 @@
 #include <unistd.h>
 #include <fcntl.h>
 
+#include "tsSLList.h"
+
 #include "gateAs.h"
 #include "gateResources.h"
 
 void gateAsCa(void);
 void gateAsCaClear(void);
 
-extern int patmatch(char *pattern, char *string);
-
 const char* gateAs::default_group = "DEFAULT";
 const char* gateAs::default_pattern = "*";
+unsigned char gateAs::eval_order = GATE_DENY_FIRST;
+
+aitBool gateAs::rules_installed = aitFalse;
+aitBool gateAs::use_default_rules = aitFalse;
+FILE* gateAs::rules_fd = NULL;
 
 void gateAsNode::client_callback(ASCLIENTPVT p,asClientStatus /*s*/)
 {
@@ -27,80 +53,41 @@ gateAs::gateAs(const char* lfile, const char* afile)
 	if(initialize(afile))
 		fprintf(stderr,"Failed to install access security file %s\n",afile);
 
-	initPvList(lfile);
+	readPvList(lfile);
 }
 
 gateAs::gateAs(const char* lfile)
 {
-	initPvList(lfile);
+	readPvList(lfile);
 }
 
 gateAs::~gateAs(void)
 {
-	gateAsAlias *pa,*pad;
-	gateAsEntry *pe,*ped;
-	gateAsDeny *pd,*pdd;
-	gateAsLines *pl,*pld;
+	tsSLIterRm<gateAsHost>* pihl = new tsSLIterRm<gateAsHost>(host_list);
+	gateAsList* l;
+	gateAsHost* ph;
 
-	for(pa=head_alias;pa;)
+	while((ph=pihl->next()))
 	{
-		pad=pa;
-		pa=pa->next;
-		delete pad;
+		deny_from_table.remove(ph->host,l);
+		deleteAsList(*l);
 	}
-	for(pd=head_deny;pd;)
-	{
-		pdd=pd;
-		pd=pd->next;
-		delete pdd;
-	}
-	for(pe=head_pat;pe;)
-	{
-		ped=pe;
-		pe=pe->next;
-		delete ped;
-	}
-	for(pe=head_pv;pe;)
-	{
-		ped=pe;
-		pe=pe->next;
-		delete ped;
-	}
-	for(pl=head_lines;pl;)
-	{
-		pld=pl;
-		pl=pl->next;
-		delete pld;
-	}
-}
 
-int gateAs::initPvList(const char* lfile)
-{
-	int i;
-
-	head_deny=NULL;
-	head_alias=NULL;
-	head_pat=NULL;
-	head_pv=NULL;
-	head_lines=NULL;
-	default_entry=NULL;
-
-	pat_table=new gateAsEntry*[128];
-	for(i=0;i<128;i++) pat_table[i]=NULL;
-
-	return readPvList(lfile);
+	deleteAsList(deny_list);
+	deleteAsList(allow_list);
+	deleteAsList(line_list);
 }
 
 int gateAs::readPvList(const char* lfile)
 {
-	int i,lev,line,expl_as=0;
+	int lev;
+	int line=0;
 	FILE* fd;
-	char inbuf[200];
-	char *name,*cmd,*asg,*asl,*rname,*ptr;
+	char inbuf[GATE_MAX_PVLIST_LINE_LENGTH];
+	const char *name,*rname,*hname;
+	char *cmd,*asg,*asl,*ptr;
 	gateAsEntry* pe;
-	gateAsAlias* pa;
-	gateAsDeny*  pd;
-	gateAsLines* pl;
+	gateAsLine*  pl;
 
 	if(lfile)
 	{
@@ -113,141 +100,166 @@ int gateAs::readPvList(const char* lfile)
 	else
 		return 0;
 
-	line=0;
+	// Read all PV file lines
 	while(fgets(inbuf,sizeof(inbuf),fd))
 	{
-		if((ptr=strchr(inbuf,'#'))) *ptr='\0';
-		pl=new gateAsLines(strlen(inbuf),head_lines);
-		strcpy(pl->buf,inbuf);
+		if((ptr=strchr(inbuf,'#'))) *ptr='\0'; // Take care of comments
+
+		// Allocate memory for input line
+		pl=new gateAsLine(inbuf,strlen(inbuf),line_list);
 		++line;
+		name=rname=hname=NULL;
 
-		if((name=strtok(pl->buf," \t\n")))
+		if(!(name=strtok(pl->buf," \t\n"))) continue;
+
+		// Two strings (name and command) are mandatory
+
+		if(!(cmd=strtok(NULL," \t\n")))
 		{
-			if((cmd=strtok(NULL," \t\n")))
-			{
-				if(strcasecmp(cmd,"DENY")==0)
-					// DENY has arbitrary number of arguments
-		            if((rname=strtok(NULL," \t\n")))
-						do						
-							pd=new gateAsDeny(name,rname,head_deny);
-						while ((rname=strtok(NULL," \t\n")));
-					else
-						pd=new gateAsDeny(name,NULL,head_deny);
-				else
+			fprintf(stderr,"Error in PV list file (line %d): "
+					"missing command\n",line);
+			continue;
+		}
+
+		if(strcasecmp(cmd,"DENY")==0)                                // DENY [FROM]
+		{
+			// Arbitrary number of arguments: [from] host names
+			if((hname=strtok(NULL,", \t\n")) && strcasecmp(hname,"FROM")==0)
+				hname=strtok(NULL,", \t\n");
+			if(hname)
+				do
 				{
-					// check for ALIAS command (has one extra argument)
-					if(strcasecmp(cmd,"ALIAS")==0)
-					{
-						if((rname=strtok(NULL," \t\n")))
-							pa=new gateAsAlias(name,rname,head_alias);
-						else
-							fprintf(stderr,"No alias given in PV list file (line %d)\n",line);
-					}
-
-					// try to get two more fields - asg/asl
-					expl_as=0;
-					asg=(char*)default_group;
-					lev=1;
-					if((asg=strtok(NULL," \t\n")))
-					{
-						expl_as=1;
-						if((asl=strtok(NULL," \t\n")) &&
-							(sscanf(asl,"%d",&lev)!=1)) lev=1;
-					}
-					else
-					{
-						asg=(char*)default_group;
-						lev=1;
-					}
-
-					// check for commands and set up appropriate entries
-					if(strcasecmp(cmd,"PATTERN")==0)
-					{
-						if((name[0]>='0' && name[0]<='9') ||
-						   (name[0]>='a' && name[0]<='z') ||
-						   (name[0]>='A' && name[0]<='Z'))
-							pe=new gateAsEntry(name,asg,lev,pat_table[name[0]]);
-						else
-							pe=new gateAsEntry(name,asg,lev,head_pat);
-					}
-
-					else if(((strcasecmp(cmd,"PV")==0) || (strcasecmp(cmd,"ALIAS")==0)))
-					{
-						// if asg/asl not explicitly set and matching pattern exists,
-						// use its asg/asl as default
-						if(!expl_as)
-						{
-							for(pe=pat_table[name[0]];
-								 pe&&patmatch((char*)pe->name,name)==0;
-								 pe=pe->next);
-							if(pe==NULL)		// not found? try special patterns
-							{
-								for(pe=head_pat;
-									 pe&&patmatch((char*)pe->name,name)==0;
-									 pe=pe->next);
-							}
-							if(pe)				// pattern asg/asl overwrites defaults
-							{
-								asg=(char*)pe->group;
-								lev=pe->level;
-							}
-						}
-
-						// new entry only if no explicit entry (PV or ALIAS) exists
-						for(pe=head_pv;pe && strcmp(pe->name,name)!=0;pe=pe->next);
-						if(pe==NULL)
-							pe=new gateAsEntry(name,asg,lev,head_pv);
-						else if(expl_as)
-							fprintf(stderr,
-								"PV '%s' already defined "
-								"(ignoring access info in line %d of PV list file)\n",name,line);
-					}
-					else
-						fprintf(stderr,
-							"Invalid command '%s' in PV list file (line %d)\n",cmd,line);
+					pe = new gateAsEntry(name);
+					if(pe->init(hname,deny_from_table,host_list,line)==aitFalse)
+						delete pe;
 				}
+				while((hname=strtok(NULL,", \t\n")));
+			else
+			{
+				pe = new gateAsEntry(name);
+				if(pe->init(deny_list,line)==aitFalse) delete pe;
+			}
+			continue;
+		}
+		
+		if(strcasecmp(cmd,"ORDER")==0)                               // ORDER
+		{
+			// Arguments: "allow, deny" or "deny, allow"
+			if(!(hname=strtok(NULL,", \t\n")) ||
+			   !(rname=strtok(NULL,", \t\n")))
+			{
+				fprintf(stderr,"Error in PV list file (line %d): "
+						"missing argument to '%s' command\n",line,cmd);
+				continue;
+			}
+			if(strcasecmp(hname,"ALLOW")==0 &&
+			   strcasecmp(rname,"DENY")==0)
+			{
+				eval_order = GATE_ALLOW_FIRST;
+			}
+			else if(strcasecmp(hname,"DENY")==0 &&
+					strcasecmp(rname,"ALLOW")==0)
+			{
+				eval_order = GATE_DENY_FIRST;
 			}
 			else
-				fprintf(stderr,"No command given in PV list file (line %d)\n",line);
+			{
+				fprintf(stderr,"Error in PV list file (line %d): "
+						"invalid argument to '%s' command\n",line,cmd);
+			}
+			continue;
+		}
+
+		if(strcasecmp(cmd,"ALIAS")==0)                               // ALIAS extra arg
+		{
+			// Additional (first) argument: real PV name
+			if(!(rname=strtok(NULL," \t\n")))
+			{
+				fprintf(stderr,"Error in PV list file (line %d): "
+						"missing real name in ALIAS command\n",line);
+				continue;
+			}
+		}
+								                                     // ASG / ASL
+		if((asg=strtok(NULL," \t\n")))
+		{
+			if((asl=strtok(NULL," \t\n")) &&
+			   (sscanf(asl,"%d",&lev)!=1)) lev=1;
+		}
+		else
+		{
+			asg=(char*)default_group;
+			lev=1;
+		}
+
+		if(strcasecmp(cmd,"ALLOW")==0   ||                           // ALLOW / ALIAS
+		   strcasecmp(cmd,"ALIAS")==0   ||
+		   strcasecmp(cmd,"PATTERN")==0 ||
+		   strcasecmp(cmd,"PV")==0)
+		{
+			pe = new gateAsEntry(name,rname,asg,lev);
+			if(pe->init(allow_list,line)==aitFalse) delete pe;
+			continue;
+		}
+
+		else                                                         // invalid
+		{
+			fprintf(stderr,"Error in PV list file (line %d): "
+					"invalid command '%s'\n",line,cmd);
 		}
 	}
+
 	fclose(fd);
-
-	// fix all the pattern lists so that they always search the special patterns
-	for(i=0;i<128;i++)
-	{
-		for(pe=pat_table[i];pe && pe->next;pe=pe->next);
-		if(pe)
-			pe->next=head_pat;
-		else
-			pat_table[i]=head_pat;
-	}
-
 	return 0;
 }
 
-aitBool gateAs::noAccess(const char* pv, const char* host) const
+aitBool gateAs::getAlias(const char* pv, char* rname, int len)
 {
-	gateAsDeny* pd;
-	aitBool rc=aitFalse;
+	gateAsEntry* pe;
+	char c;
+	int in, ir, j, n;
 
-	for(pd=head_deny;pd && rc==aitFalse;pd=pd->next)
+	pe = findEntryInList(pv,allow_list);
+
+	if(pe && pe->alias)						// Build real name fom substitution pattern
 	{
-		if( (strcmp(pd->name,pv)==0 || patmatch((char*)pd->name,(char*)pv))
-			&&
-			(!pd->host || strcmp(pd->host,host)==0) )
-			rc=aitTrue;
+		ir = 0;
+		for(in=0;ir<len;in++)
+		{
+			if((c = pe->alias[in]) == '\\')
+			{
+				c = pe->alias[++in];
+				if(c >= '0' && c <= '9')
+				{
+					n = c - '0';
+					if(pe->regs.start[n] >= 0)
+					{
+						for(j=pe->regs.start[n];
+							ir<len && j<pe->regs.end[n];
+							j++)
+							rname[ir++] = pv[j];
+						if(ir==len)
+						{
+							rname[ir-1] = '\0';
+							break;
+						}
+					}
+					continue;
+				}
+			}
+			rname[ir++] = c;
+			if(c) continue; else break;
+		}
+		if(ir==len) rname[ir-1] = '\0';
+		gateDebug3(6,"gateAs::getAlias() PV %s matches %s -> real name %s\n",
+				   pv, pe->name, rname);
+		return aitTrue;
 	}
-
-	return rc;
-}
-
-const char* gateAs::getAlias(const char* pv) const
-{
-	gateAsAlias* pa;
-	for(pa=head_alias;pa && strcmp(pa->name,pv)!=0;pa=pa->next);
-      // KE: Why is (const char*) needed here?
-	return pa?pa->alias:(const char*)NULL;
+	else								// Not an alias: PV name _is_ real name
+	{
+		strncpy(rname, pv, len);
+		return aitFalse;
+	}
 }
 
 gateAsNode* gateAs::getInfo(gateAsEntry* e,const char* u,const char* h)
@@ -277,29 +289,18 @@ gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 	return node;
 }
 
-gateAsEntry* gateAs::findEntry(const char* pv, const char* host) const
+gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
 {
-	gateAsEntry* pe;
+	gateAsList* pl=NULL;
 
-	if(noAccess(pv,host)==aitTrue)
-		pe=NULL;
-	else
-	{
-		for(pe=head_pv;pe && strcmp(pe->name,pv)!=0;pe=pe->next);
-		if(pe==NULL)
-		{
-			for(pe=pat_table[pv[0]];
-				pe&&patmatch((char*)pe->name,(char*)pv)==0;
-				pe=pe->next);
-		}
-	}
+	if(deny_from_table.find(host,pl)==0 &&			// DENY FROM
+	   findEntryInList(pv, *pl)) return NULL;
 
-	return pe;
+	if(eval_order == GATE_ALLOW_FIRST &&			// DENY takes precedence
+	   findEntryInList(pv, deny_list)) return NULL;
+
+	return findEntryInList(pv, allow_list);
 }
-
-aitBool gateAs::rules_installed = aitFalse;
-aitBool gateAs::use_default_rules = aitFalse;
-FILE* gateAs::rules_fd = NULL;
 
 long gateAs::initialize(const char* afile)
 {
@@ -389,39 +390,59 @@ int gateAs::readFunc(char* buf, int max)
 
 void gateAs::report(FILE* fd)
 {
-	int i;
-	gateAsDeny* pd;
-	gateAsAlias* pa;
+	tsSLIter<gateAsEntry>* pi;
 	gateAsEntry* pe;
+	gateAsList* pl=NULL;
+	tsSLIter<gateAsHost>* phl;
+	gateAsHost* ph;
+	time_t t;
+	time(&t);
 
-	fprintf(fd,"\n======== Denied PV Report  ========\n");
-	for(pd=head_deny;pd;pd=pd->next)
+	fprintf(fd,"-----------------------------------------------------------------\n"
+		   "Configuration Report: %s",ctime(&t));
+	fprintf(fd,"\n======================= Allowed PV Report =======================\n");
+	fprintf(fd," Pattern                        ASG       ASL Alias\n");
+	pi = new tsSLIter<gateAsEntry>(allow_list);
+	while((pe=pi->next()))
 	{
-		if(pd->host) fprintf(fd," %s from host %s\n",pd->name,pd->host);
-		else fprintf(fd," %s\n",pd->name);
+		fprintf(fd," %-30s %-10s %d ",pe->name,pe->group,pe->level);
+		if(pe->alias) fprintf(fd," %s\n",pe->alias);
+		else fprintf(fd,"\n");
 	}
+	delete pi;
 
-	fprintf(fd,"\n======== PV Alias Report   ========\n");
-	for(pa=head_alias;pa;pa=pa->next)
-		fprintf(fd," %s -> %s\n",pa->name,pa->alias);
-
-	fprintf(fd,"\n======== PV Pattern Report ========\n");
-	for(i=0;i<128;i++)
+	fprintf(fd,"\n======================= Denied PV Report  =======================\n");
+	pi = new tsSLIter<gateAsEntry>(deny_list);
+	if((pe=pi->next())) {
+		fprintf(fd,"\n==== Denied from ALL Hosts:\n");
+		do
+			fprintf(fd," %s\n",pe->name);
+		while((pe=pi->next()));
+	}
+	delete pi;
+	phl = new tsSLIter<gateAsHost>(host_list);
+	while((ph=phl->next()))
 	{
-		for(pe=pat_table[i];pe && pe->next;pe=pe->next)
-			fprintf(fd," %s %s %d\n",pe->name,pe->group,pe->level);
+		fprintf(fd,"\n==== Denied from Host %s:\n",ph->host);
+		if(deny_from_table.find(ph->host,pl)==0)
+		{
+			pi = new tsSLIter<gateAsEntry>(*pl);
+			while((pe=pi->next()))
+				fprintf(fd," %s\n",pe->name);
+			delete pi;
+		}
 	}
+	delete phl;
 
-//for(pe=head_pat;pe;pe=pe->next)
-//	fprintf(fd," %s %s %d\n",pe->name,pe->group,pe->level);
+	if(eval_order==GATE_DENY_FIRST)
+		fprintf(fd,"\nEvaluation order: deny, allow\n");
+	else
+		fprintf(fd,"\nEvaluation order: allow, deny\n");
+		
+	if(rules_installed==aitTrue) fprintf(fd,"Access Rules are installed.\n");
+	if(use_default_rules==aitTrue) fprintf(fd,"Using default access rules.\n");
 
-	fprintf(fd,"\n======== PV Report         ========\n");
-	for(pe=head_pv;pe;pe=pe->next)
-		fprintf(fd," %s %s %d -> %s\n",pe->name,pe->group,pe->level,
-			pe->alias?pe->alias:"NO_ALIAS");
-
-	if(rules_installed==aitTrue) fprintf(fd,"\nRules are installed\n");
-	if(use_default_rules==aitTrue) fprintf(fd,"\nUsing default rules\n");
+	fprintf(fd,"-----------------------------------------------------------------\n");
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

@@ -17,8 +17,6 @@
 #include "gatePv.h"
 
 class gateServer;
-class gatePvData;
-class gateVcData;
 class gateAs;
 class gateStat;
 class gdd;
@@ -148,6 +146,7 @@ public:
 	void newAs(void);
 	void report(void);
 	void report2(void);
+	void refreshBeacon(void);
 	gateAs* getAs(void) { return as_rules; }
 	casEventMask select_mask;
 	casEventMask alh_mask;
@@ -224,18 +223,6 @@ private:
 
 	gateAs* as_rules;
 
-#if 0
-      // KE: Not used
-	gateStat* pv_alive;	        // <host>.alive
-	gateStat* pv_active;	        // <host>.active
-	gateStat* pv_total;		// <host>.total
-	gateStat* pv_fd;		// <host>.total
-
-	char* name_alive;
-	char* name_active;
-	char* name_total;
-	char* name_fd;
-#endif
 	static void exCB(EXCEPT_ARGS args);
 	static void fdCB(void* ua, int fd, int opened);
 

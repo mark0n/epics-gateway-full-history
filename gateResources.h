@@ -10,12 +10,18 @@
 #define GATE_PV_ACCESS_FILE "gateway.access"
 #define GATE_COMMAND_FILE   "gateway.command"
 
-#define GATE_CONNECT_TIMEOUT  1
-#define GATE_INACTIVE_TIMEOUT (60*60*2)
-#define GATE_DEAD_TIMEOUT     (60*2)
+#define GATE_CONNECT_TIMEOUT      1
+#define GATE_INACTIVE_TIMEOUT   (60*60*2)
+#define GATE_DEAD_TIMEOUT       (60*2)
+#define GATE_DISCONNECT_TIMEOUT (60*60*2)
+#define GATE_RECONNECT_INHIBIT  (10)
 
 #define GATE_REALLY_SMALL    0.0000001
 #define GATE_CONNECT_SECONDS 1
+
+#define GATE_MAX_PVNAME_LENGTH 64u
+#define GATE_MAX_HOSTNAME_LENGTH 64u
+#define GATE_MAX_PVLIST_LINE_LENGTH 1024u
 
 #include <sys/time.h>
 
@@ -44,11 +50,15 @@ public:
 	void setConnectTimeout(time_t sec)	{ connect_timeout=sec; }
 	void setInactiveTimeout(time_t sec)	{ inactive_timeout=sec; }
 	void setDeadTimeout(time_t sec)		{ dead_timeout=sec; }
+	void setDisconnectTimeout(time_t sec)	{ disconnect_timeout=sec; }
+	void setReconnectInhibit(time_t sec)	{ reconnect_inhibit=sec; }
 
-	int debugLevel(void) const			{ return debug_level; }
+	int debugLevel(void) const		{ return debug_level; }
 	time_t connectTimeout(void) const	{ return connect_timeout; }
 	time_t inactiveTimeout(void) const	{ return inactive_timeout; }
 	time_t deadTimeout(void) const		{ return dead_timeout; }
+	time_t disconnectTimeout(void) const	{ return disconnect_timeout; }
+	time_t reconnectInhibit(void) const	{ return reconnect_inhibit; }
 
 	const char* listFile(void) const { return pvlist_file?pvlist_file:"NULL"; }
 	const char* accessFile(void) const { return access_file?access_file:"NULL"; }
@@ -70,6 +80,7 @@ private:
 	char *access_file,*pvlist_file,*command_file;
 	int debug_level,ro;
 	time_t connect_timeout,inactive_timeout,dead_timeout;
+	time_t disconnect_timeout,reconnect_inhibit;
 	gateAs* as;
 };
 
@@ -98,3 +109,11 @@ extern gateResources* global_resources;
 #endif
 
 #endif
+
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

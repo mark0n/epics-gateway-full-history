@@ -21,9 +21,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.11  2000/04/05 15:59:33  lange
+ * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
  *
  *********************************************************************-*/
-
 
 // Used in put() to specify callback or not
 #define GATE_NOCALLBACK 0
@@ -51,7 +52,8 @@ typedef enum {
 	gatePvDead,
 	gatePvInactive,
 	gatePvActive,
-	gatePvConnect
+	gatePvConnect,
+	gatePvDisconnect
 } gatePvState;
 
 // Other state information is boolean:
@@ -64,6 +66,7 @@ class gdd;
 class gateVcData;
 class gatePvData;
 class gateServer;
+class gateAsEntry;
 
 // This class is used by gatePvData to keep track of which associated
 // gateVcData initiated a put.  It stores the vcID of the gateVcData
@@ -153,6 +156,7 @@ protected:
 	void setActiveTime(void);
 	void setDeathTime(void);
 	void setAliveTime(void);
+	void setReconnectTime(void);
 	void setTimes(void);
 
 private:
@@ -205,6 +209,7 @@ private:
 	time_t no_connect_time; // when no one connected to held PV
 	time_t dead_alive_time; // when PV went dead / came alive
 	time_t last_trans_time; // last transaction occurred at this time
+	static time_t first_reconnect_time; // first timestamp of a reconnect storm
 
 	static void connectCB(CONNECT_ARGS args);	// connection callback
 	static void accessCB(ACCESS_ARGS args);		// access security callback
@@ -269,6 +274,7 @@ inline void gatePvData::setTimes(void)
 	no_connect_time=dead_alive_time;
 	last_trans_time=dead_alive_time;
 }
+
 inline void gatePvData::setDeathTime(void)
 {
 	time(&dead_alive_time);

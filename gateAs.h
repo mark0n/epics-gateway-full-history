@@ -1,5 +1,25 @@
-#ifndef GATEAS_H
-#define GATEAS_H
+#ifndef _GATEAS_H_
+#define _GATEAS_H_
+
+/*+*********************************************************************
+ *
+ * File:       gateAs.h
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     Access Security part - handles all Gateway configuration:
+ *             - Reads PV list file
+ *             - Reads Access Security file
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *********************************************************************-*/
 
 #include <stdio.h>
 #include <string.h>
@@ -7,61 +27,118 @@
 
 extern "C" {
 #include "asLib.h"
+#include "gpHash.h"
+#include "regex.h"
 }
+
+#include "tsSLList.h"
+#include "tsHash.h"
 #include "aitTypes.h"
 
-#ifndef TRUE
-#define TRUE 1
-#endif
+/*
+ * Standard FALSE and TRUE macros
+ */
 #ifndef FALSE
 #define FALSE 0
 #endif
+#ifndef TRUE
+#define TRUE 1
+#endif
 
-class gateAsEntry
+#define GATE_DENY_FIRST 0
+#define GATE_ALLOW_FIRST 1
+
+class gateAsEntry;
+class gateAsHost;
+
+typedef tsSLList<gateAsEntry> gateAsList;
+typedef tsSLList<gateAsHost> gateHostList;
+
+
+//  ----------------- AS host (to build up host list) ------------------ 
+
+class gateAsHost : public tsSLNode<gateAsHost>
 {
 public:
-	gateAsEntry(void)
-	  { level=1; name=NULL; alias=NULL; group=NULL; next=NULL; as=NULL; }
-	gateAsEntry(const char* nm,const char* g,int l,gateAsEntry*& n)
+	const char* host;
+
+	gateAsHost(void) : host(NULL) { }
+	gateAsHost(const char* name) : host(name) { }
+};
+
+//  ------------ AS entry (deny or deny from or alias or allow) ------------ 
+
+class gateAsEntry : public tsSLNode<gateAsEntry>
+{
+private:
+	aitBool compilePattern(int line)
 	{
-		level=l; name=nm; alias=NULL; group=g; next=n; n=this; as=NULL;
-		if(asAddMember(&as,(char*)group)!=0) as=NULL;
+		const char *err;
+		pat_buff.translate=0; pat_buff.fastmap=0;
+		pat_buff.allocated=0; pat_buff.buffer=0;
+		if((err = re_compile_pattern(name, strlen(name), &pat_buff)))
+		{
+			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, name, err);
+			return aitFalse;
+		}
+		return aitTrue;
+	}
+
+public:
+	gateAsEntry(void) :
+		name(NULL), alias(NULL), group(NULL), level(1), as(NULL) { }
+
+								               // ALLOW / ALIAS
+	gateAsEntry(const char* pvname,			   //   PV name pattern (regex)
+				const char* rname,             //   Real name substitution pattern
+				const char* g, int l) :        //   ASG / ASL
+		name(pvname), alias(rname), group(g), level(l) { }
+
+												// DENY / DENY FROM
+	gateAsEntry(const char* pvname) :			//   PV name pattern (regex)
+		name(pvname), alias(NULL), group(NULL), level(1), as(NULL) { }
+
+	aitBool init(gateAsList& n,                 // Where this entry is added to
+				 int line)						// Line number
+	{
+		if(compilePattern(line)==aitFalse) return aitFalse;
+		n.add(*this);
+		if(asAddMember(&as,(char*)group) != 0) as=NULL;
 		else asPutMemberPvt(as,this);
+		return aitTrue;
+	}
+
+	aitBool init(const char* host,				// Host name to deny
+				 tsHash<gateAsList>& h,         // Where this entry is added to
+				 gateHostList& hl,				// Where a new key should be added
+				 int line)						// Line number
+	{
+		gateAsList* l;
+
+		if(compilePattern(line)==aitFalse) return aitFalse;
+		if(h.find(host,l)==0)
+			l->add(*this);
+		else
+		{
+			l = new gateAsList;
+			l->add(*this);
+			h.add(host,*l);
+			hl.add(*(new gateAsHost(host)));
+		}
+		return aitTrue;
 	}
 
 	const char* name;
 	const char* alias;
 	const char* group;
-	ASMEMBERPVT as;
 	int level;
-	gateAsEntry* next;
+	ASMEMBERPVT as;
+	char pat_valid;
+	struct re_pattern_buffer pat_buff;
+	struct re_registers regs;
 };
 
-class gateAsDeny
-{
-public:
-	gateAsDeny(void)
-		{ next=NULL; name=NULL; host=NULL; }
-	gateAsDeny(const char* pvname, const char* hostname, gateAsDeny*& n)
-	    { name=pvname; host=hostname; next=n; n=this; }
-
-	const char* name;
-	const char* host;
-	gateAsDeny* next;
-};
-
-class gateAsAlias
-{
-public:
-	gateAsAlias(void)
-		{ next=NULL; name=NULL; alias=NULL; }
-	gateAsAlias(const char* pvalias,const char* pvname,gateAsAlias*& n)
-		{ name=pvalias; alias=pvname; next=n; n=this; }
-
-	const char* alias;
-	const char* name;
-	gateAsAlias* next;
-};
+//  -------------- AS node (information for CAS Channels) -------------- 
 
 class gateAsNode
 {
@@ -81,7 +158,6 @@ public:
 		{ if(asc) asRemoveClient(&asc); asc=NULL; }
 
 	aitBool readAccess(void)  const
-		// { return aitTrue; }
 		{ return (asc==NULL||asCheckGet(asc))?aitTrue:aitFalse; }
 	aitBool writeAccess(void) const
 		{ return (asc&&asCheckPut(asc))?aitTrue:aitFalse; }
@@ -106,18 +182,20 @@ private:
 	void (*user_func)(void*);
 };
 
-class gateAsLines
+class gateAsLine : public tsSLNode<gateAsLine>
 {
 public:
-	gateAsLines(void)
-		{ buf=NULL; next=NULL; }
-	gateAsLines(int len,gateAsLines*& n)
-		{ buf=new char[len+1]; next=n; n=this; }
-	~gateAsLines(void)
+	gateAsLine(void) : buf(NULL) { }
+	gateAsLine(const char* line, int len, tsSLList<gateAsLine>& n) :
+		buf(new char[len+1])
+	{
+		strncpy(buf,line,len);
+		n.add(*this);
+	}
+	~gateAsLine(void)
 		{ delete [] buf; }
 
 	char* buf;
-	gateAsLines* next;
 };
 
 class gateAs
@@ -131,10 +209,9 @@ public:
 	gateAsNode* getInfo(const char* pv,const char* usr,const char* hst);
 	gateAsNode* getInfo(gateAsEntry* e,const char* usr,const char* hst);
 
-	gateAsEntry* findEntry(const char* pv,const char* host) const;
+	gateAsEntry* findEntry(const char* pv,const char* host);
 
-	const char* getAlias(const char* pv) const;
-	aitBool noAccess(const char* pv,const char* host) const;
+	aitBool getAlias(const char* pv, char* buff, int len);
 	int readPvList(const char* pvlist_file);
 
 	void report(FILE*);
@@ -143,17 +220,15 @@ public:
 
 	static const char* default_group;
 	static const char* default_pattern;
+
 private:
-	int initPvList(const char* pvlist_file);
+	gateAsList deny_list;
+	gateAsList allow_list;
+	gateHostList host_list;
+	tsSLList<gateAsLine> line_list;
+	tsHash<gateAsList> deny_from_table;
 
-	gateAsDeny* head_deny;
-	gateAsAlias* head_alias;
-	gateAsEntry* head_pat; // anything that starts with special char
-	gateAsEntry* head_pv;
-	gateAsEntry* default_entry;
-	gateAsLines* head_lines;
-
-	gateAsEntry** pat_table; // 127 entries, one for each character
+	static unsigned char eval_order;
 
 	// only one set of access security rules allowed in a program
 	static aitBool rules_installed;
@@ -161,9 +236,32 @@ private:
 	static FILE* rules_fd;
 	static long initialize(const char* as_file_name);
 	static int readFunc(char* buf, int max_size);
+
+	void deleteAsList(gateAsList& list)
+	{
+		tsSLIterRm<gateAsEntry>* pi = new tsSLIterRm<gateAsEntry>(list);
+		while(pi->next()) pi->remove();
+		delete pi;
+	}
+	void deleteAsList(tsSLList<gateAsLine>& list)
+	{
+		tsSLIterRm<gateAsLine>* pi = new tsSLIterRm<gateAsLine>(list);
+		while(pi->next()) pi->remove();
+		delete pi;
+	}
+	gateAsEntry* findEntryInList(const char* pv, gateAsList& list) const
+	{
+		tsSLIter<gateAsEntry>* pi = new tsSLIter<gateAsEntry>(list);
+		gateAsEntry* pe;
+
+		while((pe=pi->next()) &&
+			  (re_match(&pe->pat_buff,pv,strlen(pv),0,&pe->regs) != (int)strlen(pv)));
+		delete pi;
+		return pe;
+	}
 };
 
-#endif
+#endif /* _GATEAS_H_ */
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */

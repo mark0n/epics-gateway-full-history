@@ -1,20 +1,31 @@
-// Author: Jim Kowalkowski
-// Date: 2/96
+static char RcsId[] = "@(#)$Id$";
+
+/*+*********************************************************************
+ *
+ * File:       gateVc.cc
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     VC = Server tool side (upper half) of Proxy Gateway
+ *             Variable. Handles all CAS related stuff:
+ *             - Satisfies CA Server API
+ *             - Keeps graphic enum, value and ALH data
+ *             - Keeps queues for async read and write operations
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *********************************************************************-*/
 
 #define DEBUG_STATE 0
 #define DEBUG_VC_DELETE 0
 #define DEBUG_GDD 0
 #define DEBUG_EVENT_DATA 0
-
-// This controls whether we copy the put request to the event_data
-// after we know the put is successful.  The alternative is to rely on
-// the eventCB to update the value.  Doing the alternative eliminates
-// a lot of checking on whether the value after the put is really what
-// was requested.  (Even though it returns ECA_NORMAL, it might have
-// exceeded DRVH, etc., etc.  Record support does not notify channel
-// access when it modifies the request value.)  Not copying seems to
-// work.
-#define COPY_ON_PUT 0
 
 #include <stdio.h>
 #include <string.h>
@@ -114,8 +125,8 @@ const char* gateChan::getHost(void) { return node->host(); }
 
 void gateChan::report(void)
 {
-	printf("  %-12.12s %-36.36s read=%s write=%s\n",getUser(),getHost(),
-		readAccess()?"true":"false",writeAccess()?"true":"false");
+	printf("  %s@%s (%s access)\n",getUser(),getHost(),
+		   readAccess()?(writeAccess()?"read/write":"read only"):"no");
 }
 
 void gateChan::post_rights(void* v)
@@ -141,7 +152,6 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	pv_state(gateVcClear),
 	mrg(m),
 	pv_name(strDup(name)),
-	pv_string((const char*)pv_name),
 	in_list_flag(0),
 	prev_post_value_changes(0),
 	post_value_changes(0),
@@ -242,7 +252,7 @@ void gateVcData::report(void)
 	tsDLFwdIter<gateChan> iter(chan);
 	gateChan* p;
 
-	printf("%-30.30s - event rate=%f\n",pv_name,pv->eventRate());
+	printf("%-30s event rate = %5.2f\n",pv_name,pv->eventRate());
 
 	for(p=iter.first();p;p=iter.next())
 		p->report();
@@ -881,85 +891,17 @@ caStatus gateVcData::putCB(int putStatus)
 {
 	gateDebug2(10,"gateVcData::putCB() status=%d name=%s\n",status,name());
 
-	if(putStatus == ECA_NORMAL) {
-		// Put is complete and successful, copy the request to the
-		// event_data
-		if(event_data) {
-#if COPY_ON_PUT
-#if DEBUG_GDD
-			heading("gateVcData::putCB",name());
-			dumpdd(1,"event_data(before)",name(),event_data);
-#endif
-			// Check if the value is in range.  Should not have to do
-			// this, but the callback gets ECA_NORMAL even if the
-			// value exceeds DRVH or DRVL.  Only do this for the
-			// native types that have attributes.  (Excludes
-			// DBF_STRING and DBF_ENUM.)			
-			gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
-			gdd &dd=pending_write->DD();
-			int copy=1;
-			if(pv_data && pv_data->applicationType() == gddAppType_attributes) {
-				double ucl=pv_data[gddAppTypeIndex_attributes_controlHigh];
-				double lcl=pv_data[gddAppTypeIndex_attributes_controlLow];
-				unsigned long count=pv->totalElements();
-				aitIndex sz;
-				gddStatus stat;
-				if(dd.isScalar()) {
-					sz=1;
-				} else {
-					sz=dd.getDataSizeElements();
-				}
-				double *pValue =new double(sz);
-				dd.get(pValue);     // No status to check
-				if(sz > count) sz=count;
-				for(int i=0; i < sz; i++) {
-					if(pValue[i] > ucl) pValue[i]=ucl;
-					if(pValue[i] < lcl) pValue[i]=lcl;
-				}
-				stat=dd.put(pValue);
-				if(stat) copy=0;     // Failure
-				delete [] pValue;
-			}
+	if(putStatus == ECA_NORMAL)
+		pending_write->postIOCompletion(S_casApp_success);
 
-			// Copy the request value to the event_data
-			if(copy) {
-				table.smartCopy(event_data,&dd);
-				pending_write->postIOCompletion(S_casApp_success);
-			} else {
-				// KE:  There is no S_casApp code for failure, return -1 for now
-				//   (J.Hill suggestion)
-				pending_write->postIOCompletion(-1);
-			}
-#if DEBUG_EVENT_DATA
-			if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
-				heading("gateVcData::putCB",name());
-				dumpdd(99,"event_data",name(),event_data);
-			}
-#endif
-#if DEBUG_GDD
-			dumpdd(2,"dd",name(),&dd);
-			dumpdd(3,"event_data(after)",name(),event_data);
-#endif
-#else     // COPY_ON_PUT
-			pending_write->postIOCompletion(S_casApp_success);
-#endif     // COPY_ON_PUT
-			
-		} else {
-			// Was successful, we just decided to not do anything with it
-			pending_write->postIOCompletion(S_casApp_success);
-		}
-#if 0
-		// Flush any postponed reads
-		if(rio.count()) flushAsyncReadQueue();
-#endif
-	} else if(putStatus == ECA_DISCONNCHID || ECA_DISCONN) {
+	else if(putStatus == ECA_DISCONNCHID || ECA_DISCONN)
 		// IOC disconnected has a meaningful code
 		pending_write->postIOCompletion(S_casApp_canceledAsyncIO);
-	} else {
+
+	else
 		// KE:  There is no S_casApp code for failure, return -1 for now
 		//   (J.Hill suggestion)
 		pending_write->postIOCompletion(-1);
-	}
 
 	// Set the pending_write pointer to NULL indicating the pending
 	// write is finished. (The gatePendingWrite instantiation will be

@@ -1,8 +1,27 @@
-/* Author: Jim Kowalkowski
- * Date: 2/96 */
+#ifndef _GATEVC_H_
+#define _GATEVC_H_
 
-#ifndef GATE_VC_H
-#define GATE_VC_H
+/*+*********************************************************************
+ *
+ * File:       gateVc.h
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     VC = Server tool side (upper half) of Proxy Gateway
+ *             Variable. Handles all CAS related stuff:
+ *             - Satisfies CA Server API
+ *             - Keeps graphic enum, value and ALH data
+ *             - Keeps queues for async read and write operations
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *********************************************************************-*/
 
 #include <sys/types.h>
 #include <sys/time.h>
@@ -80,7 +99,6 @@ public:
 
 	void report(void);
     const char* name(void) const { return pv_name; }  // KE: Duplicates getName
-    aitString& nameString(void) { return pv_string; }
     void* PV(void) const { return pv; }
     void setPV(gatePvData* pvIn)  { pv=pvIn; }
     gateVcState getState(void) const { return pv_state; }
@@ -103,10 +121,6 @@ public:
 	virtual void vcDelete(void);
 	virtual void vcPostEvent(void);
 	virtual void vcData(void);
-#if 0
-	// KE: Not used.
-	virtual void vcPutComplete(gateBool);
-#endif	
 
 	void vcRemove(void);
 	void ack(void);
@@ -126,15 +140,6 @@ public:
 
 	void markNoList(void) { in_list_flag=0; }
 	void markInList(void) { in_list_flag=1; }
-
-#if 0
-	// KE: Not used
-	caStatus readValue(gdd&);
-	caStatus writeValue(gdd&);
-	caStatus readAttribute(aitUint32 index, gdd&);
-	caStatus readContainer(gdd&);
-	caStatus processGdd(gdd&);
-#endif	
 
 	void setTransTime(void);
 	time_t timeLastTrans(void) const;
@@ -157,10 +162,6 @@ protected:
 private:
 	static unsigned long nextID;
 	unsigned long vcID;
-#if 0
-	// KE: Not used
-	int event_count;
-#endif	
 	aitBool read_access,write_access;
 	time_t time_last_trans;
 	time_t time_last_alh_trans;
@@ -169,7 +170,6 @@ private:
 	gateVcState pv_state;
 	gateServer* mrg;     // The gateServer that manages this gateVcData
 	const char* pv_name;     // The name of the process variable
-	aitString pv_string;
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;

@@ -3,6 +3,10 @@
 TOP = ../../..
 include $(TOP)/config/CONFIG_EXTENSIONS
 
+# Use of GNU regex library (version 0.12) for patterns and aliasing
+GNU_REGEX_LOCATION = ../../../../regex-0.12
+
+
 #EPICS_BASE = /home/phoebus/JBA/epics/beta10AsFix
 #EPICS_BASE = /usr/local/epics/baseR3.13.0.beta12
 #EPICS_BASE = /home/phoebus/JBA/epics/base_07_23_98
@@ -16,10 +20,8 @@ include $(TOP)/config/CONFIG_EXTENSIONS
 OPTIMIZE = YES
 ifeq ($(OPTIMIZE),YES)
   HOST_OPT = YES
-#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
 else
   HOST_OPT = NO
-#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
 endif
 
 # Compiler options
@@ -30,11 +32,11 @@ SHARED_LIBRARIES=NO
 CXXCMPLR=STRICT
 
 # Purify
-#CXX = purify -first-only -chain-length=25 $($(CPLUSPLUS)_$(CXXCMPLR))
+# CXX = purify -first-only -chain-length=25 -collector='/opt/gcc/lib/gcc-lib/hppa2.0-hp-hpux10.20/2.95.2/collect2' $($(CPLUSPLUS)_$(CXXCMPLR))
 
 # Quantify -collection-granularity=function runs faster than default=line
 # Quantify -use-machine=sparcstation_5 sets timing for Nike
-#CCC = quantify -collection-granularity=function -use-machine=sparcstation_5:85MHz CC 
+# CCC = quantify -collection-granularity=function -use-machine=sparcstation_5:85MHz CC 
 
 # Turn on debug mode
 # USR_CXXFLAGS += -DDEBUG_MODE
@@ -51,10 +53,15 @@ USR_CXXFLAGS += -DENUM_HACK
 # Install exception handler and print exceptions to log file
 USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
 
-#PROD_LIBS += gate ca cas As Com gdd
-PROD_LIBS += ca cas As Com gdd
-#gate_DIR = .
-#gate_DIR = $(INSTALL_LIB)
+USR_INCLUDES += -I$(GNU_REGEX_LOCATION)
+
+
+PROD_LIBS += gate ca cas As Com gdd
+
+gate_DIR = .
+
+
+LIBRARY = gate
 
 LIBSRCS += gatePv.cc
 LIBSRCS += gateResources.cc
@@ -62,18 +69,15 @@ LIBSRCS += gateServer.cc
 LIBSRCS += gateAs.cc
 LIBSRCS += gateVc.cc
 LIBSRCS += gateAsyncIO.cc
-LIBSRCS += strmatch.cc
 LIBSRCS += gateAsCa.cc
 LIBSRCS += gateStat.cc
 
-SRCS += gateway.cc
-SRCS += $(LIBSRCS)
-
-#LIBRARY = gate
 
 PROD = gateway
 
+SRCS += gateway.cc
+
+
 include $(TOP)/config/RULES.Host
 
-xxxx:
-	$(EPICS_BASE)
+LIBOBJS += $(GNU_REGEX_LOCATION)/regex.o

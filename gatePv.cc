@@ -20,6 +20,8 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.28  2000/04/05 15:59:33  lange
+ * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
  *
  *********************************************************************-*/
 
@@ -58,7 +60,7 @@ static char RcsId[] = "@(#)$Id$";
 #define GETDD(ap) gddApplicationTypeTable::AppTable().getDD(GR->ap)
 
 const char* const gatePvData::pv_state_names[] =
-	{ "dead", "inactive", "active", "connecting" };
+	{ "dead", "inactive", "active", "connecting", "disconnected" };
 
 // ------------------------- gdd destructors --------------------------------
 
@@ -117,6 +119,8 @@ public:
 };
 
 // ------------------------- pv data methods ------------------------
+
+time_t gatePvData::first_reconnect_time = 0;
 
 gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
@@ -259,6 +263,7 @@ int gatePvData::activate(gateVcData* vcd)
 		if(ca_read_access(chID)) rc=get();
 		else rc=0;
 		break;
+	case gatePvDisconnect:
 	case gatePvDead:
 		gateDebug1(3,"gatePvData::activate() %s PV ?\n",getStateName());
 		vc=NULL; // NOTE: be sure vc does not respond
@@ -302,16 +307,10 @@ int gatePvData::deactivate(void)
 		markAddRemoveNotNeeded();
 		vc=NULL;
 		break;
-	case gatePvInactive:
-		// error - should not get request to deactive an inactive PV
-		gateDebug1(2,"gatePvData::deactivate() %s PV ?\n",getStateName());
-		rc=-1;
-		break;
-	case gatePvDead:
+	default:
 		gateDebug1(3,"gatePvData::deactivate() %s PV ?\n",getStateName());
 		rc=-1;
 		break;
-	default: break;
 	}
 
 	return rc;
@@ -369,6 +368,9 @@ int gatePvData::life(void)
 		}
 #endif
 		break;
+
+	case gatePvDisconnect:
+		setReconnectTime();
 	case gatePvDead:
 		gateDebug1(3,"gatePvData::life() %s PV\n",getStateName());
 		setAliveTime();
@@ -377,11 +379,13 @@ int gatePvData::life(void)
 		mrg->setStat(statAlive,++mrg->total_alive);
 #endif
 		break;
+
 	case gatePvInactive:
 	case gatePvActive:
 		gateDebug1(2,"gatePvData::life() %s PV ?\n",getStateName());
 		rc=-1;
 		break;
+
 	default:
 		break;
 	}
@@ -401,15 +405,14 @@ int gatePvData::death(void)
 	gateDebug1(3,"gatePvData::death() %s PV\n",getStateName());
 	switch(getState())
 	{
-	case gatePvInactive:
-#ifdef STAT_PVS
-		mrg->setStat(statAlive,--mrg->total_alive);
-#endif
-		break;
 	case gatePvActive:
 		if(vc) delete vc; // get rid of VC
 #ifdef STAT_PVS
 		mrg->setStat(statActive,--mrg->total_active);
+#endif
+	case gatePvInactive:
+		setState(gatePvDisconnect);
+#ifdef STAT_PVS
 		mrg->setStat(statAlive,--mrg->total_alive);
 #endif
 		break;
@@ -423,6 +426,7 @@ int gatePvData::death(void)
 		// Server's connectCleanup() will remove the PV from the
 		// connecting PV list
 		mrg->pvAdd(pv_name,*this);
+		setState(gatePvDead);
 
 #if DEBUG_PV_LIST
 		{
@@ -446,7 +450,6 @@ int gatePvData::death(void)
 	}
 
 	vc=NULL;
-	setState(gatePvDead);
 	setDeathTime();
 	markNoAbort();
 	markAddRemoveNotNeeded();
@@ -731,6 +734,17 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 		
 		pPver = new pvExistReturn(er);
 		asynce->postIOCompletion(*pPver);
+	}
+}
+
+void gatePvData::setReconnectTime(void)
+{
+	time(&dead_alive_time);
+	if(!first_reconnect_time
+	   || (dead_alive_time-first_reconnect_time) >= global_resources->reconnectInhibit())
+	{
+		mrg->refreshBeacon();
+		first_reconnect_time=0;
 	}
 }
 

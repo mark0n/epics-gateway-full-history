@@ -101,6 +101,8 @@ void operator delete(void* x)
 #define PARM_UID         17
 #define PARM_PREFIX      18
 #define PARM_GID         19
+#define PARM_RECONNECT   20
+#define PARM_DISCONNECT  21
 
 #define HOME_DIR_SIZE    300
 #define GATE_LOG         "gateway.log"
@@ -126,26 +128,28 @@ struct parm_stuff
 typedef struct parm_stuff PARM_STUFF;
 
 static PARM_STUFF ptable[] = {
-    { "-debug",             6, PARM_DEBUG,       "value" },
-    { "-log",               4, PARM_LOG,         "file_name" },
-    { "-pvlist",            7, PARM_PVLIST,      "file_name" },
-    { "-access",            7, PARM_ACCESS,      "file_name" },
-    { "-command",           8, PARM_COMMAND,     "file_name" },
-    { "-home",              5, PARM_HOME,        "directory" },
-    { "-sip",               4, PARM_SERVER_IP,   "IP_address" },
-    { "-cip",               4, PARM_CLIENT_IP,   "IP_address_list" },
-    { "-sport",             6, PARM_SERVER_PORT, "CA_server_port" },
-    { "-cport",             6, PARM_CLIENT_PORT, "CA_client_port" },
-    { "-connect_timeout",  16, PARM_CONNECT,     "seconds" },
-    { "-inactive_timeout", 17, PARM_INACTIVE,    "seconds" },
-    { "-dead_timeout",     13, PARM_DEAD,        "seconds" },
-    { "-server",            9, PARM_SERVER,      "(start as server)" },
-    { "-uid",               4, PARM_UID,         "user_id_number" },
-    { "-gid",               4, PARM_GID,         "group_id_number" },
-    { "-ro",                3, PARM_RO,          NULL },
-    { "-prefix",            7, PARM_PREFIX,      "statistics prefix" },
-    { "-help",              5, PARM_HELP,        NULL },
-    { NULL,                -1, -1,               NULL }
+    { "-debug",               6, PARM_DEBUG,       "value" },
+    { "-log",                 4, PARM_LOG,         "file_name" },
+    { "-pvlist",              7, PARM_PVLIST,      "file_name" },
+    { "-access",              7, PARM_ACCESS,      "file_name" },
+    { "-command",             8, PARM_COMMAND,     "file_name" },
+    { "-home",                5, PARM_HOME,        "directory" },
+    { "-sip",                 4, PARM_SERVER_IP,   "IP_address" },
+    { "-cip",                 4, PARM_CLIENT_IP,   "IP_address_list" },
+    { "-sport",               6, PARM_SERVER_PORT, "CA_server_port" },
+    { "-cport",               6, PARM_CLIENT_PORT, "CA_client_port" },
+    { "-connect_timeout",    16, PARM_CONNECT,     "seconds" },
+    { "-inactive_timeout",   17, PARM_INACTIVE,    "seconds" },
+    { "-dead_timeout",       13, PARM_DEAD,        "seconds" },
+    { "-disconnect_timeout", 19, PARM_DISCONNECT,  "seconds" },
+    { "-reconnect_inhibit",  18, PARM_RECONNECT,   "seconds" },
+    { "-server",              9, PARM_SERVER,      "(start as server)" },
+    { "-uid",                 4, PARM_UID,         "user_id_number" },
+    { "-gid",                 4, PARM_GID,         "group_id_number" },
+    { "-ro",                  3, PARM_RO,          NULL },
+    { "-prefix",              7, PARM_PREFIX,      "statistics prefix" },
+    { "-help",                5, PARM_HELP,        NULL },
+    { NULL,                  -1, -1,               NULL }
 };
 
 typedef void (*SIG_FUNC)(int);
@@ -258,6 +262,8 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
 	fprintf(fd,"# dead timeout=%ld\n",global_resources->deadTimeout());
 	fprintf(fd,"# connect timeout=%ld\n",global_resources->connectTimeout());
+	fprintf(fd,"# disconnect timeout=%ld\n",global_resources->disconnectTimeout());
+	fprintf(fd,"# reconnect inhibit time=%ld\n",global_resources->reconnectInhibit());
 	fprintf(fd,"# inactive timeout=%ld\n",global_resources->inactiveTimeout());
 	fprintf(fd,"# user id=%d\n",getuid());
 	fprintf(fd,"# group id=%d\n",getgid());
@@ -368,6 +374,8 @@ int main(int argc, char** argv)
 	int connect_tout=-1;
 	int inactive_tout=-1;
 	int dead_tout=-1;
+	int disconnect_tout=-1;
+	int reconnect_tinhib=-1;
 	char* home_dir=NULL;
 	char* pvlist_file=NULL;
 	char* access_file=NULL;
@@ -593,6 +601,34 @@ int main(int argc, char** argv)
 						}
 					}
 					break;
+				case PARM_DISCONNECT:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							if(sscanf(argv[i],"%d",&disconnect_tout)<1)
+								no_error=0;
+							else
+								not_done=0;
+						}
+					}
+					break;
+				case PARM_RECONNECT:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							if(sscanf(argv[i],"%d",&reconnect_tinhib)<1)
+								no_error=0;
+							else
+								not_done=0;
+						}
+					}
+					break;
 				case PARM_PREFIX:
 					if(++i>=argc) no_error=0;
 					else
@@ -704,6 +740,8 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tcommand=%s\n",gr->commandFile());
 		fprintf(stderr,"\tdead=%ld\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%ld\n",gr->connectTimeout());
+		fprintf(stderr,"\tdisconnect=%ld\n",gr->disconnectTimeout());
+		fprintf(stderr,"\treconnect=%ld\n",gr->reconnectInhibit());
 		fprintf(stderr,"\tinactive=%ld\n",gr->inactiveTimeout());
 		fprintf(stderr,"\tuser id=%d\n",getuid());
 		fprintf(stderr,"\tgroup id=%d\n",getgid());
@@ -718,6 +756,8 @@ int main(int argc, char** argv)
 	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
 	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
 	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
+	if(disconnect_tout>=0)	gr->setDisconnectTimeout(disconnect_tout);
+	if(reconnect_tinhib>=0)	gr->setReconnectInhibit(reconnect_tinhib);
 	if(access_file)			gr->setAccessFile(access_file);
 	if(pvlist_file)			gr->setListFile(pvlist_file);
 	if(command_file)		gr->setCommandFile(command_file);
@@ -727,17 +767,19 @@ int main(int argc, char** argv)
 	if(gr->debugLevel()>10)
 	{
 		fprintf(stderr,"\noption dump:\n");
-		fprintf(stderr," home=<%s>\n",home_directory);
-		fprintf(stderr," log file=<%s>\n",log_file);
-		fprintf(stderr," access file=<%s>\n",gr->accessFile());
-		fprintf(stderr," list file=<%s>\n",gr->listFile());
-		fprintf(stderr," command file=<%s>\n",gr->commandFile());
-		fprintf(stderr," debug level=%d\n",gr->debugLevel());
-		fprintf(stderr," connect timeout =%ld\n",gr->connectTimeout());
-		fprintf(stderr," inactive timeout =%ld\n",gr->inactiveTimeout());
-		fprintf(stderr," dead timeout =%ld\n",gr->deadTimeout());
-		fprintf(stderr," user id=%d\n",getuid());
-		fprintf(stderr," group id=%d\n",getgid());
+		fprintf(stderr," home = <%s>\n",home_directory);
+		fprintf(stderr," log file = <%s>\n",log_file);
+		fprintf(stderr," access file = <%s>\n",gr->accessFile());
+		fprintf(stderr," list file = <%s>\n",gr->listFile());
+		fprintf(stderr," command file = <%s>\n",gr->commandFile());
+		fprintf(stderr," debug level = %d\n",gr->debugLevel());
+		fprintf(stderr," connect timeout = %ld\n",gr->connectTimeout());
+		fprintf(stderr," disconnect timeout = %ld\n",gr->disconnectTimeout());
+		fprintf(stderr," reconnect inhibit time = %ld\n",gr->reconnectInhibit());
+		fprintf(stderr," inactive timeout = %ld\n",gr->inactiveTimeout());
+		fprintf(stderr," dead timeout = %ld\n",gr->deadTimeout());
+		fprintf(stderr," user id= %d\n",getuid());
+		fprintf(stderr," group id= %d\n",getgid());
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
 		fflush(stderr);
@@ -801,9 +843,19 @@ void print_instructions(void)
 	pr(stderr," will hold requests for PVs that are not found on the real\n");
 	pr(stderr," network that the gateway is using.  Even if a client's\n");
 	pr(stderr," requested PV is not found on the real network, the gateway\n");
-	pr(stderr," marks the PV dead and holds the request and continues trying\n");
+	pr(stderr," marks the PV dead, holds the request and continues trying\n");
 	pr(stderr," to connect for this long.\n\n");
 	
+	pr(stderr,"-disconnect_timeout seconds:  The amount of time that the gateway\n");
+	pr(stderr," will hold requests for PVs that were connected but have been\n");
+	pr(stderr," disconnected. When a disconnected PV reconnects, the gateway will\n");
+	pr(stderr," broadcast a beacon signal to inform the clients that they may\n");
+	pr(stderr," reconnect to the gateway.\n\n");
+
+	pr(stderr,"-reconnect_inhibit seconds:  The minimum amount of time between\n");
+	pr(stderr," additional beacons that the gateway will send to its clients\n");
+	pr(stderr," when channels from the real network reconnect.\n\n");
+
 	pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
 	pr(stderr," and start a daemon that watches the gateway and automatically\n");
 	pr(stderr," restarted it if it dies.\n");

@@ -266,10 +266,12 @@ void gateServer::report(void)
 	gateVcData *node;
 	time_t t;
 	time(&t);
-	printf("Active virtual connection report: %s\n",ctime(&t));
+
+	printf("-----------------------------------------------------------------\n"
+		   "Active Virtual Connection Report: %s",ctime(&t));
 	for(node=vc_list.first();node;node=node->getNext())
 		node->report();
-	printf("--------------------------------------------------------\n");
+	printf("-----------------------------------------------------------------\n");
 	fflush(stdout);
 }
 
@@ -278,13 +280,14 @@ void gateServer::report2(void)
 	gatePvNode* node;
 	time_t t,diff;
 	double rate;
-	int tot_dead=0,tot_inactive=0,tot_active=0,tot_connect=0;
+	int tot_dead=0,tot_inactive=0,tot_active=0,tot_connect=0,tot_disconnect=0;
 
 	time(&t);
 	diff=t-start_time;
 	rate=diff?(double)exist_count/(double)diff:0;
 
-	printf("\n");
+	printf("-----------------------------------------------------------------\n");
+	printf("PV Summary Report: %s\n",ctime(&t));
 	printf("Exist test rate = %f\n",rate);
 	printf("Total real PV count = %d\n",(int)pv_list.count());
 	printf("Total connecting PV count = %d\n",(int)pv_con_list.count());
@@ -298,23 +301,32 @@ void gateServer::report2(void)
 		case gatePvInactive: tot_inactive++; break;
 		case gatePvActive: tot_active++; break;
 		case gatePvConnect: tot_connect++; break;
+		case gatePvDisconnect: tot_disconnect++; break;
 		}
 	}
 
 	printf("Total dead PVs: %d\n",tot_dead);
+	printf("Total disconnected PVs: %d\n",tot_disconnect);
 	printf("Total inactive PVs: %d\n",tot_inactive);
 	printf("Total active PVs: %d\n",tot_active);
 	printf("Total connecting PVs: %d\n",tot_connect);
-	printf("\n");
 
-	printf("Dead PVs report: %s\n",ctime(&t));
+	printf("\nDead PVs:\n");
 	for(node=pv_list.first();node;node=node->getNext())
 	{
 		if(node->getData()->getState()== gatePvDead &&
 		    node->getData()->name())
-			printf("%s\n",node->getData()->name());
+			printf(" %s\n",node->getData()->name());
 	}
-	printf("--------------------------------------------------------\n");
+
+	printf("\nDisconnected PVs:\n");
+	for(node=pv_list.first();node;node=node->getNext())
+	{
+		if(node->getData()->getState()== gatePvDisconnect &&
+		    node->getData()->name())
+			printf(" %s\n",node->getData()->name());
+	}
+	printf("-----------------------------------------------------------------\n");
 	fflush(stdout);
 }
 
@@ -363,13 +375,6 @@ gateServer::gateServer(unsigned pvcount, char *prefix ) :
 #endif
 	SEVCHK(ca_add_exception_event(exCB,NULL),"CA add exception event");
 
-#if 0
-	pv_alive=NULL;
-	pv_active=NULL;
-	pv_total=NULL;
-	pv_fd=NULL;
-#endif
-
 	select_mask|=(alarmEventMask|valueEventMask|logEventMask);
 	alh_mask|=alarmEventMask;
 
@@ -377,13 +382,6 @@ gateServer::gateServer(unsigned pvcount, char *prefix ) :
 #if statCount
 	// Initialize stats
 	initStats(prefix);
-#if 0
-	total_alive=0u;
-	total_active=0u;
-	total_pv=0u;
-	total_vc=0u;
-	total_fd=0u;
-#endif
 #ifdef RATE_STATS
 	client_event_count=0;
 	post_event_count=0;
@@ -441,6 +439,12 @@ gateServer::~gateServer(void)
 
 	SEVCHK(ca_flush_io(),"CA flush io");
 	SEVCHK(ca_task_exit(),"CA task exit");
+}
+
+void gateServer::refreshBeacon(void)
+{
+	gateDebug0(5,"gateServer::refreshBeacon()\n");
+	caServer::refreshBeacon();
 }
 
 void gateServer::checkEvent(void)
@@ -692,9 +696,9 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&c,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
-	const char* real_name;
 	gateAsEntry* node;
-	char hostname[64u];
+	char real_name[GATE_MAX_PVNAME_LENGTH];
+	char hostname[GATE_MAX_HOSTNAME_LENGTH];
 
 	++exist_count;
 
@@ -709,21 +713,17 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 	}
 #endif
 
-	getClientHostName(c, hostname, sizeof (hostname));
+	if(as_rules->getAlias(pvname, real_name, sizeof(real_name)) == aitTrue)
+		gateDebug2(5,"gateServer::pvExistTest() PV %s has real name %s\n",
+				   pvname,real_name);
+
+	getClientHostName(c, hostname, sizeof(hostname));
 
 	// see if requested name is allowed
 	if(!(node=getAs()->findEntry(pvname,hostname)))
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",pvname);
 		return pverDoesNotExistHere;
-	}
-
-	if((real_name=as_rules->getAlias(pvname))==NULL)
-		real_name=pvname;
-	else
-	{
-		gateDebug2(5,"gateServer::pvExistTest() PV %s has real name %s\n",
-			pvname,real_name);
 	}
 
 	// see if we are connected already to real PV
@@ -790,7 +790,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 {
 	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
 	gateVcData* rc;
-	const char* real_name;
+	char real_name[GATE_MAX_PVNAME_LENGTH];
 
 #if statCount
 	// trap (and create if needed) server stats PVs
@@ -806,13 +806,9 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	}
 #endif
 
-	if((real_name=as_rules->getAlias(pvname))==NULL)
-		real_name=pvname;
-	else
-	{
+	if(as_rules->getAlias(pvname, real_name, sizeof(real_name)) == aitTrue)
 		gateDebug2(5,"gateServer::createPV() PV %s has real name %s\n",
-			pvname,real_name);
-	}
+				   pvname,real_name);
 
 	if(vcFind(real_name,rc)<0)
 	{
