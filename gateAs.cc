@@ -134,7 +134,10 @@ int gateAs::readPvList(const char* lfile)
 							lev=1;
 					}
 					else
+					{
 						asg=default_group;
+						lev=1;
+					}
 
 					if(strcmp(cmd,"PATTERN")==0)
 						pe=new gateAsEntry(name,asg,lev,head_pat);
@@ -244,7 +247,11 @@ long gateAs::initialize(const char* afile)
 	if(afile)
 	{
 		if((rules_fd=fopen(afile,"r"))==NULL)
+		{
 			use_default_rules=aitTrue;
+			rc=asInitialize(readFunc);
+			if(rc) fprintf(stderr,"Failed to set default security rules\n");
+		}
 		else
 		{
 			rc=asInitialize(readFunc);

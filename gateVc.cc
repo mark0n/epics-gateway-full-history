@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.13  1997/02/11 21:47:07  jbk
+// Access security updates, bug fixes
+//
 // Revision 1.12  1996/12/17 14:32:35  jbk
 // Updates for access security
 //
@@ -62,7 +65,17 @@
 
 // ------------------------gateChan
 
-gateChan::~gateChan(void) { delete node; }
+gateChan::gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n)
+	:casChannel(ctx),vc(v),node(n)
+{
+	vc.addChan(this);
+}
+
+gateChan::~gateChan(void)
+{
+	vc.removeChan(this);
+	delete node;
+}
 
 void gateChan::setOwner(const char* const u, const char* const h)
 	{ node->changeInfo(u,h); }
@@ -76,6 +89,11 @@ aitBool gateChan::writeAccess(void) const
 const char* gateChan::getUser(void) { return node->user(); }
 const char* gateChan::getHost(void) { return node->host(); }
 
+void gateChan::report(void)
+{
+	printf("  %-12.12s %-36.36s read=%s write=%s\n",getUser(),getHost(),
+		readAccess()?"true":"false",writeAccess()?"true":"false");
+}
 
 // ------------------------gateVcData
 
@@ -89,6 +107,7 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	else
 		write_access=aitTrue;
 
+	time_last_trans=0;
 	read_access=aitTrue;
 	mrg=m;
 	data=NULL;
@@ -153,7 +172,8 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const u, const char * const h)
 {
 	gateDebug0(5,"~gateVcData::createChannel()\n");
-	return new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,u,h));
+	gateChan* c =  new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,u,h));
+	return c;
 }
 
 unsigned gateVcData::maxSimultAsyncOps(void) const
@@ -168,8 +188,13 @@ void gateVcData::dumpValue(void)
 
 void gateVcData::report(void)
 {
-	printf("%-30.30s %-12.12s %-36.36s\n",
-		pv_name,"NoUserAvailable","NoHostAvailable");
+	tsDLFwdIter<gateChan> iter(chan);
+	gateChan* p;
+
+	printf("%-30.30s\n",pv_name);
+
+	for(p=iter.first();p;p=iter.next())
+		p->report();
 }
 
 void gateVcData::dumpAttributes(void)
@@ -436,7 +461,11 @@ void gateVcData::vcEvent(void)
 	if(needPosting())
 	{
 		gateDebug0(2,"gateVcData::vcEvent() posting event\n");
-		postEvent(select,*event_data);
+		if(timeLastTrans()>=1) // hardcoded to 1 second for monitor updates
+		{
+			postEvent(select,*event_data);
+			setTransTime();
+		}
 	}
 }
 

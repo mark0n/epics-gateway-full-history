@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.11  1996/12/17 14:32:37  jbk
+ * Updates for access security
+ *
  * Revision 1.10  1996/12/11 13:04:09  jbk
  * All the changes needed to implement access security.
  * Bug fixes for createChannel and access security stuff
@@ -72,11 +75,10 @@ class gateAsEntry;
 
 // ----------------------- vc channel stuff -------------------------------
 
-class gateChan : public casChannel
+class gateChan : public casChannel, public tsDLNode<gateChan>
 {
 public:
-	gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n)
-		:casChannel(ctx),vc(v),node(n) { }
+	gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n);
 	~gateChan(void);
 
 	virtual aitBool readAccess(void) const;
@@ -85,6 +87,7 @@ public:
 
 	const char* getUser(void);
 	const char* getHost(void);
+	void report(void);
 private:
 	gateAsNode* node; // I must delete this when done using it
 	gateVcData& vc;
@@ -130,6 +133,8 @@ public:
 	aitEnum nativeType(void) const;
 	aitIndex maximumElements(void) const;
 	gateAsEntry* getEntry(void) { return entry; }
+	void addChan(gateChan*);
+	void removeChan(gateChan*);
 
 	void setReadAccess(aitBool b);
 	void setWriteAccess(aitBool b);
@@ -162,6 +167,9 @@ public:
 	caStatus readContainer(gdd&);
 	caStatus processGdd(gdd&);
 
+	void setTransTime(void);
+	time_t timeLastTrans(void) const;
+
 	int needPosting(void);
 	int needInitialPosting(void);
 	void markInterested(void);
@@ -172,6 +180,7 @@ protected:
 	gatePvData* pv;
 private:
 	aitBool read_access,write_access;
+	time_t time_last_trans;
 	int status;
 	gateAsEntry* entry;
 	gateVcState pv_state;
@@ -181,6 +190,7 @@ private:
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;
+	tsDLList<gateChan> chan;
 	tsDLList<gateAsyncR> rio;	// NULL unless read posting required and connect
 	tsDLList<gateAsyncW> wio;	// NULL unless write posting required and connect
 	gdd* data;
@@ -199,6 +209,13 @@ inline void gateVcData::markInterested(void)
 	{ prev_post_value_changes=post_value_changes; post_value_changes=1; }
 inline void gateVcData::markNotInterested(void)
 	{ prev_post_value_changes=post_value_changes; post_value_changes=0; }
+
+inline void gateVcData::setTransTime(void) { time(&time_last_trans); }
+inline time_t gateVcData::timeLastTrans(void) const
+	{ return time(NULL)-time_last_trans; }
+
+inline void gateVcData::addChan(gateChan* c) { chan.add(*c); }
+inline void gateVcData::removeChan(gateChan* c) { chan.remove(*c); }
 
 // ---------------------- async read/write pending operation ------------------
 

@@ -78,6 +78,7 @@ public:
 		{ if(asc) asRemoveClient(&asc); asc=NULL; }
 
 	aitBool readAccess(void)  const
+		// { return aitTrue; }
 		{ return (asc==NULL||asCheckGet(asc))?aitTrue:aitFalse; }
 	aitBool writeAccess(void) const
 		{ return (asc&&asCheckPut(asc))?aitTrue:aitFalse; }
