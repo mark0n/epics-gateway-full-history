@@ -28,6 +28,12 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.48  2002/12/18 23:46:49  evans
+ * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
+ * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
+ * not called.  (Causes fdmanager to exit on fd activity.)  Fixed
+ * flushAsyncETQueue to not malloc the pvExistReturn.
+ *
  * Revision 1.47  2002/10/09 21:55:48  evans
  * Is working on Linux.  Replaced putenv with epicsSetEnv and eliminated
  * sigignore.
@@ -518,7 +524,7 @@ void gateFd::callBack(void)
 	// file descriptor
 	ca_poll();
 #endif
-#if DEBUG_TIMES
+#if DEBUG_TIMES && 0
 	epicsTime end(epicsTime::getCurrent());
 	printf("  gateFd::callBack: pend: %.3f\n",
 	  (double)(end-begin));
@@ -1269,6 +1275,14 @@ void gateServer::initStats(char *prefix)
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
+# if USE_FDS
+		case statFd:
+			stat_table[i].name="fd";
+			stat_table[i].init_value=&total_fd;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
+			break;
+# endif
 #endif
 #ifdef RATE_STATS
 		case statClientEventRate:
