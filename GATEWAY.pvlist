@@ -47,7 +47,9 @@
 #     with the regex library for details on regular expressions.)
 #  3) Any PV not included in an ALLOW command is not allowed access. If no PV list
 #     file is specified on the command line, a default rule ".* ALLOW" will be created.
-#  4) See EPICS access security documentation for creating an access security
+#  4) The patterns are matched in reverse order. I.e. you should always specify general
+#     rules before specific rules.
+#  5) See EPICS access security documentation for creating an access security
 #     file for the PV gateway.
 #
 # Below:
