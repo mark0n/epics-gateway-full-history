@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.22  1997/06/09 18:02:35  jba
+// Removed unused variables, changed delete to free for name_* vars.
+//
 // Revision 1.21  1997/05/20 15:48:26  jbk
 // changes for the latest CAS library in EPICS 3.13.beta9
 //
@@ -258,11 +261,11 @@ gateServer::~gateServer(void)
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
 
-	free(name_alive);
-	free(name_active);
-	free(name_total);
-	free(name_fd);
-	free(host_name);
+	delete [] name_alive;
+	delete [] name_active;
+	delete [] name_total;
+	delete [] name_fd;
+	delete [] host_name;
 
 	while((pv_node=pv_list.first()))
 	{
