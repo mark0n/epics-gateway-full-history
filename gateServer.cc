@@ -474,7 +474,7 @@ gateFd::~gateFd(void)
 {
 	gateDebug0(5,"~gateFd()\n");
 #if DEBUG_TIMES && DEBUG_FD
-	printf("%s gateFd::~gateFd: count=%d\n",timeStamp(),++count);
+	printf("%s gateFd::~gateFd: count=%d\n",timeStamp(),--count);
 #endif
 }
 
