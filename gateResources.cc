@@ -16,6 +16,7 @@
 #include "gateResources.h"
 #include "gateAs.h"
 #include "gddAppTable.h"
+#include "dbMapper.h"
 
 gateResources* global_resources;
 
@@ -46,6 +47,8 @@ gateResources::gateResources(void)
 
 	gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
 
+	gddMakeMapDBR(tt);
+
 	appValue=tt.getApplicationType("value");
 	appUnits=tt.getApplicationType("units");
 	appEnum=tt.getApplicationType("enums");
@@ -53,6 +56,8 @@ gateResources::gateResources(void)
 	appFixed=tt.getApplicationType("fixed");
 	appAttributes=tt.getApplicationType("attributes");
 	appMenuitem=tt.getApplicationType("menuitem");
+	// RL: Should this rather be included in the type table?
+	appSTSAckString=gddDbrToAit[DBR_STSACK_STRING].app;
 }
 
 gateResources::~gateResources(void)
@@ -69,6 +74,7 @@ int gateResources::appMenuitem=0;
 int gateResources::appFixed=0;
 int gateResources::appUnits=0;
 int gateResources::appAttributes=0;
+int gateResources::appSTSAckString=0;
 
 int gateResources::setListFile(char* file)
 {

@@ -1,5 +1,27 @@
-// Author: Jim Kowalkowski
-// Date: 2/96
+static char RcsId[] = "@(#)$Id$";
+
+/*+*********************************************************************
+ *
+ * File:       gatePv.cc
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     PV = Client side (lower half) of Proxy Gateway Channel
+ *             Handles all CAC related stuff:
+ *             - Connections (and exception handling)
+ *             - Monitors (value and ALH data)
+ *             - Put operations (Gets are answered by the VC)
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *
+ *********************************************************************-*/
 
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
@@ -34,6 +56,9 @@
 // quick access to global_resources
 #define GR global_resources
 #define GETDD(ap) gddApplicationTypeTable::AppTable().getDD(GR->ap)
+
+const char* const gatePvData::pv_state_names[] =
+	{ "dead", "inactive", "active", "connecting" };
 
 // ------------------------- gdd destructors --------------------------------
 
@@ -93,61 +118,15 @@ public:
 
 // ------------------------- pv data methods ------------------------
 
-// KE: This is the only constructor used
 gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
-	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
+	gateDebug2(5,"gatePvData(gateServer=%p,name=%s)\n",m,name);
 	initClear();
 #ifdef STAT_PVS
 	m->setStat(statPvTotal,++m->total_pv);
 #endif
 	init(m,e,name);
 }
-
-#if 0
-// KE: Not used
-gatePvData::gatePvData(gateServer* m,const char* name)
-{
-	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
-	initClear();
-#ifdef STAT_PVS
-	m->setStat(statPvTotal,++m->total_pv);
-#endif
-	init(m,m->getAs()->findEntry(name),name);
-}
-#endif
-
-#if 0
-// KE: Not used
-gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
-{
-	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateVcData=%8.8x,name=%s)\n",
-		(int)m,(int)d,name);
-	initClear();
-#ifdef STAT_PVS
-	m->setStat(statPvTotal,++m->total_pv);
-#endif
-	setVC(d);
-	markAddRemoveNeeded();
-	init(m,m->getAs()->findEntry(name),name);
-}
-#endif
-
-#if 0
-// KE: Not used
-gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
-{
-	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateExistData=%8.8x,name=%s)\n",
-		(int)m,(int)d,name);
-	initClear();
-#ifdef STAT_PVS
-	m->setStat(statPvTotal,++m->total_pv);
-#endif
-	markAckNakNeeded();
-	addET(d);
-	init(m,m->getAs()->findEntry(name),name);
-}
-#endif
 
 gatePvData::~gatePvData(void)
 {
@@ -160,6 +139,7 @@ gatePvData::~gatePvData(void)
 	}
 #endif
 	unmonitor();
+	alhUnmonitor();
 	status=ca_clear_channel(chID);
 	SEVCHK(status,"clear channel");
 	delete [] pv_name;
@@ -179,15 +159,16 @@ void gatePvData::initClear(void)
 	status=0;
 	markNotMonitored();
 	markNoGetPending();
+	markAlhNotMonitored();
+	markAlhNoGetPending();
 	markNoAbort();
-	markAckNakNotNeeded();
 	markAddRemoveNotNeeded();
 	setState(gatePvDead);
 }
 
 void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 {
-	gateDebug2(5,"gatePvData::init(gateServer=%8.8x,name=%s)\n",(int)m,name);
+	gateDebug2(5,"gatePvData::init(gateServer=%p,name=%s)\n",m,name);
 	gateDebug1(5,"gatePvData::init entry name=%s)\n",n->name);
 	mrg=m;
 	ae=n;
@@ -204,12 +185,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		SEVCHK(status,"gatePvData::init() - search and connect");
 	}
 
-#if 0
-      // KE: Only want to check for ECA_NORMAL here, status=0 is otherwise meaningless
-	if(status==0 || status==ECA_NORMAL)
-#else
 	if(status==ECA_NORMAL)
-#endif
 	{
 		status=ca_replace_access_rights_event(chID,accessCB);
 		if(status==ECA_NORMAL)
@@ -228,9 +204,12 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	{
 		// what do I do here? Nothing for now, let creator fix trouble
 	}
-	else {
-		status = mrg->conAdd(pv_name,*this); // put into connecting PV list
+	else
+	{
+		// Put PV into connecting list
+		status = mrg->conAdd(pv_name,*this);
 		if(status) printf("Put into connecting list failed for %s\n",pv_name);
+
 #if DEBUG_PV_CON_LIST
 		long now;
 		time(&now);
@@ -238,11 +217,12 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		char timeStampStr[20];  // 16 should be enough
 		strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		
-		printf("%s gatePvData::init: [%ld,%ld,%ld]: name=%s\n",
+		printf("%s gatePvData::init: [%d,%d,%d]: name=%s\n",
 		  timeStampStr,
 		  mrg->pvConList()->count(),mrg->pvList()->count(),
 		  mrg->vcList()->count(),pv_name);
 #endif
+
 	}
 	
 #if OMIT_CHECK_EVENT
@@ -258,8 +238,8 @@ aitEnum gatePvData::nativeType(void) const
 
 int gatePvData::activate(gateVcData* vcd)
 {
-	gateDebug2(5,"gatePvData::activate(gateVcData=%8.8x) name=%s\n",
-	  (int)vcd,name());
+	gateDebug2(5,"gatePvData::activate(gateVcData=%p) name=%s\n",
+	  vcd,name());
 #ifdef STAT_PVS
 	mrg->setStat(statActive,++mrg->total_active);
 #endif
@@ -269,7 +249,7 @@ int gatePvData::activate(gateVcData* vcd)
 	switch(getState())
 	{
 	case gatePvInactive:
-		gateDebug0(3,"gatePvData::activate() Inactive PV\n");
+		gateDebug1(10,"gatePvData::activate() %s PV\n",getStateName());
 		markAddRemoveNeeded();
 		vc=vcd;
 		setState(gatePvActive);
@@ -280,15 +260,15 @@ int gatePvData::activate(gateVcData* vcd)
 		else rc=0;
 		break;
 	case gatePvDead:
-		gateDebug0(3,"gatePvData::activate() PV is dead\n");
+		gateDebug1(3,"gatePvData::activate() %s PV ?\n",getStateName());
 		vc=NULL; // NOTE: be sure vc does not respond
 		break;
 	case gatePvActive:
-		gateDebug0(2,"gatePvData::activate() an active PV?\n");
+		gateDebug1(2,"gatePvData::activate() %s PV ?\n",getStateName());
 		break;
 	case gatePvConnect:
 		// already pending, just return
-		gateDebug0(3,"gatePvData::activate() connect pending PV?\n");
+		gateDebug1(3,"gatePvData::activate() %s PV ?\n",getStateName());
 		markAddRemoveNeeded();
 		break;
 	}
@@ -309,26 +289,26 @@ int gatePvData::deactivate(void)
 	switch(getState())
 	{
 	case gatePvActive:
-		gateDebug0(20,"gatePvData::deactivate() active PV\n");
+		gateDebug1(10,"gatePvData::deactivate() %s PV\n",getStateName());
 		unmonitor();
+		alhUnmonitor();
 		setState(gatePvInactive);
 		vc=NULL;
 		setInactiveTime();
 		break;
 	case gatePvConnect:
 		// delete from the connect pending list
-		gateDebug0(20,"gatePvData::deactivate() connecting PV?\n");
-		markAckNakNotNeeded();
+		gateDebug1(10,"gatePvData::deactivate() %s PV ?\n",getStateName());
 		markAddRemoveNotNeeded();
 		vc=NULL;
 		break;
 	case gatePvInactive:
 		// error - should not get request to deactive an inactive PV
-		gateDebug0(2,"gatePvData::deactivate() inactive PV?\n");
+		gateDebug1(2,"gatePvData::deactivate() %s PV ?\n",getStateName());
 		rc=-1;
 		break;
 	case gatePvDead:
-		gateDebug0(3,"gatePvData::deactivate() dead PV?\n");
+		gateDebug1(3,"gatePvData::deactivate() %s PV ?\n",getStateName());
 		rc=-1;
 		break;
 	default: break;
@@ -340,29 +320,20 @@ int gatePvData::deactivate(void)
 // Called in the connectCB if ca_state is cs_conn
 int gatePvData::life(void)
 {
-	gateDebug1(5,"gatePvData::life() name=%s\n",name());
-
-#if 0
-	// KE: not used
-	gateExistData* et;
-#endif
 	int rc=0;
 	event_count=0;
+
+	gateDebug1(5,"gatePvData::life() name=%s\n",name());
 
 	switch(getState())
 	{
 	case gatePvConnect:
-		gateDebug0(3,"gatePvData::life() connecting PV\n");
+		gateDebug1(3,"gatePvData::life() %s PV\n",getStateName());
 		setTimes();
 
-		// move from the connect pending list to PV list
-		// need to index quickly into the PV connect pending list here
-		// probably using the hash list
-		// * No, don't use hash list, just add the PV to real PV list and
-		// let the ConnectCleanup() routine just delete active PVs from 
-		// the connecting PV list
-		// mrg->CDeletePV(pv_name,x);
-		
+		// Add PV from the connect pending list to PV list
+		// The server's connectCleanup() routine will just delete active
+		// PVs from the connecting PV list
 		mrg->pvAdd(pv_name,*this);
 
 		if(needAddRemove())	{
@@ -375,18 +346,8 @@ int gatePvData::life(void)
 			markNoAbort();
 		}
 
-		if(needAckNak()) {
-#if 0
-			// KE: not used
-			// I know this is not used, but it does not seem
-			// right. Who deletes or destroys the et node?
-			while((et=et_list.first())) {
-				et->ack();
-				et_list.remove(*et);
-			}
-#endif
-			markAckNakNotNeeded();
-		}
+		// Flush any accumulated exist tests
+		if(eio.count()) flushAsyncETQueue(pverExistsHere);
 
 #ifdef STAT_PVS
 		mrg->setStat(statAlive,++mrg->total_alive);
@@ -400,29 +361,16 @@ int gatePvData::life(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::life: [%ld,%ld,%ld]: name=%s",
+		    printf("%s gatePvData::life: [%d,%d,%d]: name=%s "
+				   "state=gatePvConnect->%s\n",
 		      timeStampStr,
 		      mrg->pvConList()->count(),mrg->pvList()->count(),
-		      mrg->vcList()->count(),pv_name);
-		    switch(getState()) {
-		    case gatePvConnect:
-			printf(" state=%s\n","gatePvConnect->gatePvConnect");
-			break;
-		    case gatePvActive:
-			printf(" state=%s\n","gatePvConnect->gatePvActive");
-			break;
-		    case gatePvInactive:
-			printf(" state=%s\n","gatePvConnect->gatePvInactive");
-			break;
-		    case gatePvDead:
-			printf(" state=%s\n","gatePvConnect->gatePvDead");
-			break;
-		    }
+		      mrg->vcList()->count(),pv_name,getStateName());
 		}
 #endif
 		break;
 	case gatePvDead:
-		gateDebug0(3,"gatePvData::life() dead PV\n");
+		gateDebug1(3,"gatePvData::life() %s PV\n",getStateName());
 		setAliveTime();
 		setState(gatePvInactive);
 #ifdef STAT_PVS
@@ -430,63 +378,52 @@ int gatePvData::life(void)
 #endif
 		break;
 	case gatePvInactive:
-		gateDebug0(3,"gatePvData::life() inactive PV\n");
-		rc=-1;
-		break;
 	case gatePvActive:
-		gateDebug0(3,"gatePvData::life() active PV\n");
+		gateDebug1(2,"gatePvData::life() %s PV ?\n",getStateName());
 		rc=-1;
 		break;
-	default: break;
+	default:
+		break;
 	}
+
 	return rc;
 }
 
 // Called in the connectCB if ca_state is not cs_conn
+// or from the gateServer's connectCleanup if the connect timeout has elapsed
 int gatePvData::death(void)
 {
-	gateDebug1(5,"gatePvData::death() name=%s\n",name());
-
-#if 0
-	// KE: not used
-	gateExistData* et;
-#endif
 	int rc=0;
 	event_count=0;
 
+	gateDebug1(5,"gatePvData::death() name=%s\n",name());
+
+	gateDebug1(3,"gatePvData::death() %s PV\n",getStateName());
 	switch(getState())
 	{
 	case gatePvInactive:
-		gateDebug0(3,"gatePvData::death() inactive PV\n");
 #ifdef STAT_PVS
 		mrg->setStat(statAlive,--mrg->total_alive);
 #endif
 		break;
 	case gatePvActive:
-		gateDebug0(3,"gatePvData::death() active PV\n");
 		if(vc) delete vc; // get rid of VC
 #ifdef STAT_PVS
+		mrg->setStat(statActive,--mrg->total_active);
 		mrg->setStat(statAlive,--mrg->total_alive);
 #endif
 		break;
 	case gatePvConnect:
-		gateDebug0(3,"gatePvData::death() connecting PV\n");
-		// still on connecting list, add to the PV list as dead
-		if(needAckNak())
-		{
-#if 0
-			// KE: not used
-			// I know this is not used, but it does not seem
-			// right. Who deletes or destroys the et node?
-			while((et=et_list.first()))
-			{
-				et->nak();
-				et_list.remove(*et);
-			}
-#endif
-		}
+		// Flush any accumulated exist tests
+		if(eio.count()) flushAsyncETQueue(pverDoesNotExistHere);
+
 		if(needAddRemove() && vc) delete vc; // should never be the case
+
+		// Leave PV on connecting list, add to the PV list as dead
+		// Server's connectCleanup() will remove the PV from the
+		// connecting PV list
 		mrg->pvAdd(pv_name,*this);
+
 #if DEBUG_PV_LIST
 		{
 		    long now;
@@ -495,29 +432,15 @@ int gatePvData::death(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::death: [%ld,%ld,%ld]: name=%s",
+		    printf("%s gatePvData::death: [%d,%d,%d]: name=%s "
+				   "state=%s->gatePvDead\n",
 		      timeStampStr,
 		      mrg->pvConList()->count(),mrg->pvList()->count(),
-		      mrg->vcList()->count(),pv_name);
-		}
-		switch(getState()) {
-		case gatePvConnect:
-		    printf(" state=%s\n","gatePvConnect->gatePvDead");
-		    break;
-		case gatePvActive:
-		    printf(" state=%s\n","gatePvActive->gatePvDead");
-		    break;
-		case gatePvInactive:
-		    printf(" state=%s\n","gatePvInactive->gatePvDead");
-		    break;
-		case gatePvDead:
-		    printf(" state=%s\n","gatePvDead->gatePvDead");
-		    break;
+		      mrg->vcList()->count(),pv_name,getStateName());
 		}
 #endif
 		break;
-	case gatePvDead:
-		gateDebug0(3,"gatePvData::death() dead PV\n");
+	default:
 		rc=-1;
 		break;
 	}
@@ -526,10 +449,10 @@ int gatePvData::death(void)
 	setState(gatePvDead);
 	setDeathTime();
 	markNoAbort();
-	markAckNakNotNeeded();
 	markAddRemoveNotNeeded();
 	markNoGetPending();
 	unmonitor();
+	alhUnmonitor();
 
 	return rc;
 }
@@ -545,6 +468,21 @@ int gatePvData::unmonitor(void)
 		SEVCHK(rc,"gatePvData::Unmonitor(): clear event");
 		if(rc==ECA_NORMAL) rc=0;
 		markNotMonitored();
+	}
+	return rc;
+}
+
+int gatePvData::alhUnmonitor(void)
+{
+	gateDebug1(5,"gatePvData::alhUnmonitor() name=%s\n",name());
+	int rc=0;
+
+	if(alhMonitored())
+	{
+		rc=ca_clear_event(alhID);
+		SEVCHK(rc,"gatePvData::alhUnmonitor(): clear alh event");
+		if(rc==ECA_NORMAL) rc=0;
+		markAlhNotMonitored();
 	}
 	return rc;
 }
@@ -585,6 +523,38 @@ int gatePvData::monitor(void)
 	return rc;
 }
 
+int gatePvData::alhMonitor(void)
+{
+	gateDebug1(5,"gatePvData::alhMonitor() name=%s\n",name());
+	int rc=0;
+
+	if(!alhMonitored())
+	{
+		if(ca_read_access(chID))
+		{
+			gateDebug1(5,"gatePvData::alhMonitor() type=%d\n",DBR_STSACK_STRING);
+			rc=ca_add_masked_array_event(DBR_STSACK_STRING,0,chID,alhCB,this,
+				0.0,0.0,0.0,&alhID,DBE_ALARM);
+			SEVCHK(rc,"gatePvData::alhMonitor() add event");
+
+			if(rc==ECA_NORMAL)
+			{
+				rc=0;
+				markAlhMonitored();
+#if OMIT_CHECK_EVENT
+#else
+				checkEvent();
+#endif
+			}
+			else
+				rc=-1;
+		}
+		else
+			rc=-1;
+	}
+	return rc;
+}
+
 int gatePvData::get(void)
 {
 	gateDebug1(5,"gatePvData::get() name=%s\n",name());
@@ -594,7 +564,7 @@ int gatePvData::get(void)
 	switch(getState())
 	{
 	case gatePvActive:
-		gateDebug0(3,"gatePvData::get() active PV\n");
+		gateDebug1(3,"gatePvData::get() %s PV\n",getStateName());
 		if(!pendingGet())
 		{
 			gateDebug0(3,"gatePvData::get() issuing CA get cb\n");
@@ -611,14 +581,8 @@ int gatePvData::get(void)
 #endif
 		}
 		break;
-	case gatePvInactive:
-		gateDebug0(2,"gatePvData::get() inactive PV?\n");
-		break;
-	case gatePvConnect:
-		gateDebug0(2,"gatePvData::get() connecting PV?\n");
-		break;
-	case gatePvDead:
-		gateDebug0(2,"gatePvData::get() dead PV?\n");
+	default:
+		gateDebug1(2,"gatePvData::get() %s PV ?\n",getStateName());
 		break;
 	}
 	if(rc==ECA_NORMAL) return 0;
@@ -636,29 +600,43 @@ int gatePvData::get(void)
 // for failure.
 int gatePvData::put(gdd* dd, int docallback)
 {
-	gateDebug2(5,"gatePvData::put(gdd=%8.8x) name=%s\n",(int)dd,name());
+	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",dd,name());
 	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-	chtype cht=gddAitToDbr[dd->primitiveType()];
+	chtype cht;
 	gatePvCallbackId *cbid;
 	aitString* str;
 	void *pValue;
 	unsigned long count;
 	static int full=0;
 
+	switch(dd->applicationType())
+	{
+	case gddAppType_ackt:
+		cht = DBR_PUT_ACKT;
+		break;
+	case gddAppType_acks:
+		cht = DBR_PUT_ACKS;
+		break;
+	default:
+		cht = gddAitToDbr[dd->primitiveType()];
+		break;
+	}
+
 #if DEBUG_GDD
-		printf("gatePvData::put(%s): at=%d pt=%d ft=%d[%s] name=%s\n",
-		  docallback?"callback":"nocallback",
-		  dd->applicationType(),
-		  dd->primitiveType(),
-		  fieldType(),dbr_type_to_text(fieldType()),
-		  ca_name(chID));
+	printf("gatePvData::put(%s): at=%d pt=%d dbr=%ld ft=%ld[%s] name=%s\n",
+		   docallback?"callback":"nocallback",
+		   dd->applicationType(),
+		   dd->primitiveType(),
+		   cht,
+		   fieldType(),dbr_type_to_text(fieldType()),
+		   ca_name(chID));
 #endif
 	
 	switch(getState())
 	{
 	case gatePvActive:
 		caStatus stat;
-		gateDebug0(2,"gatePvData::put() active PV\n");
+		gateDebug1(3,"gatePvData::put() %s PV\n",getStateName());
 		// Don't let the callback list grow forever
 		if(callback_list.count() > 5000u) {
 			// Only print this when it becomes full
@@ -708,8 +686,8 @@ int gatePvData::put(gdd* dd, int docallback)
 			// use it as the puser for the callback, which is putCB.
 			cbid=new gatePvCallbackId(vc->getVcID(),this);
 #if DEBUG_PUT
-			printf("gatePvData::put: cbid=%x this=%x id=%d pv=%x\n",
-			  cbid,this,cbid->getID(),cbid->getPV());
+			printf("gatePvData::put: cbid=%p this=%p dbr=%ld id=%ld pv=%p\n",
+			  cbid,this,cht,cbid->getID(),cbid->getPV());
 #endif		
 			if(!cbid) return S_casApp_noMemory;
 			callback_list.add(*cbid);
@@ -724,16 +702,9 @@ int gatePvData::put(gdd* dd, int docallback)
 		checkEvent();
 #endif
 		return (stat==ECA_NORMAL)?S_casApp_success:-1;
-	case gatePvInactive:
-		gateDebug0(2,"gatePvData::put() inactive PV\n");
-		return -1;
-	case gatePvConnect:
-		gateDebug0(2,"gatePvData::put() connecting PV\n");
-		return -1;
-	case gatePvDead:
-		gateDebug0(2,"gatePvData::put() dead PV\n");
-		return -1;
+
 	default:
+		gateDebug1(2,"gatePvData::put() %s PV\n",getStateName());
 		return -1;
 	}
 }
@@ -744,11 +715,30 @@ double gatePvData::eventRate(void)
 	return t?(double)event_count/(double)t:0;
 }
 
+// The asynchronous exist test queue is filled from the server's
+// pvExistTest() when the gatePvData is in connecting state.
+// This routine, called from life() or death(), flushes the queue.
+void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
+{
+	gateDebug1(10,"gateVcData::flushAsyncETQueue() name=%s\n",name());
+	gateAsyncE* asynce;
+	pvExistReturn* pPver;
+
+	while((asynce=eio.first()))	{
+		gateDebug1(1,"gateVcData::flushAsyncETQueue() posting %p\n",
+				   asynce);
+		asynce->removeFromQueue();
+		
+		pPver = new pvExistReturn(er);
+		asynce->postIOCompletion(*pPver);
+	}
+}
+
 void gatePvData::connectCB(CONNECT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 
-	gateDebug1(5,"gatePvData::connectCB(gatePvData=%8.8x)\n",(int)pv);
+	gateDebug1(5,"gatePvData::connectCB(gatePvData=%p)\n",pv);
 	gateDebug0(9,"conCB: -------------------------------\n");
 	gateDebug1(9,"conCB: name=%s\n",ca_name(args.chid));
 	gateDebug1(9,"conCB: type=%d\n",ca_field_type(args.chid));
@@ -852,8 +842,7 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 // gatePvConnectId.  We will leave it this way for now.
 void gatePvData::putCB(EVENT_ARGS args)
 {
-	gateDebug1(5,"gatePvData::putCB(gatePvData=%8.8x)\n",
-			   (unsigned int)ca_puser(args.chid));
+	gateDebug1(5,"gatePvData::putCB(gatePvData=%p)\n",ca_puser(args.chid));
 
 	// Get the callback id
 	gatePvCallbackId* cbid=(gatePvCallbackId *)args.usr;
@@ -873,7 +862,7 @@ void gatePvData::putCB(EVENT_ARGS args)
 	}
 
 #if DEBUG_PUT
-		printf("gatePvData::putCB: cbid=%x user=%x id=%d pv=%x\n",
+		printf("gatePvData::putCB: cbid=%p user=%p id=%ld pv=%p\n",
 		  cbid,ca_puser(args.chid),cbid->getID(),cbid->getPV());
 #endif		
 
@@ -894,11 +883,6 @@ void gatePvData::putCB(EVENT_ARGS args)
 
     // The originating vc is still around.  Let it handle it.
 	pv->vc->putCB(args.status);
-		
-	// KE: Not sure what this does, if anything
-	// Clean it up later
-	// notice that put with callback never fails here (always ack'ed)
-	pv->vc->ack(); // inform the VC
 }
 
 // This is the callback registered with ca_add_array_event in the
@@ -907,8 +891,8 @@ void gatePvData::putCB(EVENT_ARGS args)
 void gatePvData::eventCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
-	gateDebug2(5,"gatePvData::eventCB(gatePvData=%8.8x) type=%d\n",
-		(unsigned int)pv, (unsigned int)args.type);
+	gateDebug2(5,"gatePvData::eventCB(gatePvData=%p) type=%d\n",
+		pv, (unsigned int)args.type);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -916,7 +900,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 #endif
 
 #if DEBUG_BEAM
-	printf("gatePvData::eventCB: status=%d %s\n",
+	printf("gatePvData::eventCB(): status=%d %s\n",
 	  args.status,
 	  pv->name());
 #endif
@@ -926,22 +910,66 @@ void gatePvData::eventCB(EVENT_ARGS args)
 		// only sends event_data and does ADD transactions
 		if(pv->active())
 		{
-			gateDebug0(5,"gatePvData::eventCB() active pv\n");
+			gateDebug1(5,"gatePvData::eventCB() %s PV\n",pv->getStateName());
 			if((dd=pv->runEventCB((void *)(args.dbr))))
 			{
 #if DEBUG_BEAM
-				printf("  dd=%x needAddRemove=%d\n",
+				printf("  dd=%p needAddRemove=%d\n",
 					   dd,
 					   pv->needAddRemove());
 #endif
+				pv->vc->setEventData(dd);
+
 				if(pv->needAddRemove())
 				{
 					gateDebug0(5,"gatePvData::eventCB() need add/remove\n");
 					pv->markAddRemoveNotNeeded();
-					pv->vc->vcAdd(dd);
+					pv->vc->vcAdd();
 				}
 				else
-					pv->vc->setEventData(dd);
+					// Post the event
+					pv->vc->vcPostEvent();
+			}
+		}
+		++(pv->event_count);
+	}
+	// hopefully more monitors will come in that are successful
+}
+
+// This is the callback registered with ca_add_event in the
+// alhMonitor routine.  If conditions are right, it calls the routines
+// that copy the data into the GateVcData's alh_data.
+void gatePvData::alhCB(EVENT_ARGS args)
+{
+	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
+	gateDebug2(5,"gatePvData::alhCB(gatePvData=%p) type=%d\n",
+		pv, (unsigned int)args.type);
+	gdd* dd;
+
+#ifdef RATE_STATS
+	++pv->mrg->client_event_count;
+#endif
+
+#if DEBUG_BEAM
+	printf("gatePvData::alhCB(): status=%d %s\n",
+	  args.status,
+	  pv->name());
+#endif
+
+	if(args.status==ECA_NORMAL)
+	{
+		// only sends alh_data and does ADD transactions
+		if(pv->active())
+		{
+			gateDebug1(5,"gatePvData::alhCB() %s PV\n",pv->getStateName());
+			if((dd=pv->eventSTSAckStringCB((dbr_stsack_string*)args.dbr)))
+			{
+#if DEBUG_BEAM
+				printf("  dd=%p needAddRemove=%d\n",
+					   dd,
+					   pv->needAddRemove());
+#endif
+				pv->vc->setAlhData(dd);
 			}
 		}
 		++(pv->event_count);
@@ -952,7 +980,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 void gatePvData::getCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
-	gateDebug1(5,"gatePvData::getCB(gatePvData=%8.8x)\n", (unsigned int)pv);
+	gateDebug1(5,"gatePvData::getCB(gatePvData=%p)\n",pv);
 	gdd* dd;
 
 #ifdef RATE_STATS
@@ -965,7 +993,7 @@ void gatePvData::getCB(EVENT_ARGS args)
 		// get only sends pv_data
 		if(pv->active())
 		{
-			gateDebug0(5,"gatePvData::getCB() pv active\n");
+			gateDebug1(5,"gatePvData::getCB() %s PV\n",pv->getStateName());
 			if((dd=pv->runDataCB((void *)(args.dbr)))) pv->vc->setPvData(dd);
 			pv->monitor();
 		}
@@ -1153,6 +1181,7 @@ gdd* gatePvData::dataLongCB(void *dbr)
 //  DBR_TIME_FLOAT
 //  DBR_TIME_LONG
 //  DBR_TIME_SHORT (DBR_TIME_INT)
+//  DBR_STSACK_STRING (alarm info)
 
 gdd* gatePvData::eventStringCB(void *dbr)
 {
@@ -1321,6 +1350,26 @@ gdd* gatePvData::eventShortCB(void *dbr)
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
 	return value;
+}
+
+gdd* gatePvData::eventSTSAckStringCB(dbr_stsack_string *ts)
+{
+	gateDebug0(10,"gatePvData::eventSTSAckStringCB\n");
+	gdd* dd = GETDD(appSTSAckString);
+	gdd& vdd = dd[gddAppTypeIndex_dbr_stsack_string_value];
+
+	// DBR_STSACK_STRING response
+	// (the value gdd carries the severity and status information)
+
+	dd[gddAppTypeIndex_dbr_stsack_string_ackt] = ts->ackt;
+	dd[gddAppTypeIndex_dbr_stsack_string_acks] = ts->acks;
+
+	aitString* str = (aitString*)vdd.dataAddress();
+	str->copy(ts->value);
+
+	vdd.setStatSevr(ts->status,ts->severity);
+
+	return dd;
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

@@ -8,12 +8,12 @@
 
 
 #define GATEWAY_VERSION       1
-#define GATEWAY_REVISION      1
+#define GATEWAY_REVISION      2
 #define GATEWAY_MODIFICATION  0
 
-#define GATEWAY_VERSION_STRING	"PV Gateway Version 1.1.0Beta4"
+#define GATEWAY_VERSION_STRING	"PV Gateway Version 1.2.0"
 
 #define GATEWAY_CREDITS_STRING  \
-          "Developed at Argonne National Laboratory\n\n" \
-          "Authors: Jim Kowalkowski, Janet Anderson,\n" \
-          "         and Kenneth Evans, Jr.\n\n"
+          "Developed at Argonne National Laboratory and BESSY\n\n" \
+          "Authors: Jim Kowalkowski, Janet Anderson, Kenneth Evans, Jr. (APS)\n" \
+          "         Ralph Lange (BESSY)\n\n"

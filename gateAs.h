@@ -41,11 +41,12 @@ class gateAsDeny
 {
 public:
 	gateAsDeny(void)
-		{ next=NULL; name=NULL; }
-	gateAsDeny(const char* pvname,gateAsDeny*& n)
-		{ name=pvname; next=n; n=this; }
+		{ next=NULL; name=NULL; host=NULL; }
+	gateAsDeny(const char* pvname, const char* hostname, gateAsDeny*& n)
+	    { name=pvname; host=hostname; next=n; n=this; }
 
 	const char* name;
+	const char* host;
 	gateAsDeny* next;
 };
 
@@ -130,10 +131,10 @@ public:
 	gateAsNode* getInfo(const char* pv,const char* usr,const char* hst);
 	gateAsNode* getInfo(gateAsEntry* e,const char* usr,const char* hst);
 
-	gateAsEntry* findEntry(const char* pv) const;
+	gateAsEntry* findEntry(const char* pv,const char* host) const;
 
-	const char* getAlias(const char* pv_name) const;
-	aitBool noAccess(const char* pv_name) const;
+	const char* getAlias(const char* pv) const;
+	aitBool noAccess(const char* pv,const char* host) const;
 	int readPvList(const char* pvlist_file);
 
 	void report(FILE*);
@@ -166,7 +167,8 @@ private:
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

@@ -41,6 +41,7 @@
 void gateAsCa(void);
 
 // ---------------------------- utilities ------------------------------------
+
 static char *timeStamp(void)
   // Gets current time and puts it in a static array
   // The calling program should copy it to a safe place
@@ -107,7 +108,6 @@ void gateServer::mainLoop(void)
 	osiTime delay(0u,10000000u);     // (sec, nsec) (10 ms)
 	//	osiTime delay(0u,0u);    // (sec, nsec) (0 ms, select will not block)
 	SigFunc old;
-//	unsigned char cnt=0;    RL: unused
 
 	printf("Statistics PV prefix is %s\n",stat_prefix);
 
@@ -180,7 +180,7 @@ void gateServer::mainLoop(void)
 		end=osiTime::getCurrent();
 		cleanTime+=(end-begin);
 		if((end-lastPrintTime).getSec() > GATE_TIME_STAT_INTERVAL) {
-			printf("%s gateServer::mainLoop: [%ld,%ld,%ld] loops: %lu process: %.3f pend: %.3f clean: %.3f\n",
+			printf("%s gateServer::mainLoop: [%d,%d,%d] loops: %lu process: %.3f pend: %.3f clean: %.3f\n",
 			  timeStamp(),
 			  pv_con_list.count(),pv_list.count(),vc_list.count(),
 			  nLoops,
@@ -338,8 +338,11 @@ void gateFd::callBack(void)
 	printf("  gateFd::callBack: pend: %.3f\n",
 	  (double)(end-begin));
 #endif
-
 }
+
+#if DEBUG_TIMES
+int gateFd::count(0);
+#endif	
 
 // ----------------------- server methods --------------------
 
@@ -368,6 +371,7 @@ gateServer::gateServer(unsigned pvcount, char *prefix ) :
 #endif
 
 	select_mask|=(alarmEventMask|valueEventMask|logEventMask);
+	alh_mask|=alarmEventMask;
 
 	exist_count=0;
 #if statCount
@@ -404,13 +408,6 @@ gateServer::~gateServer(void)
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
 
-#if 0
-// KE: Not used
-	delete [] name_alive;
-	delete [] name_active;
-	delete [] name_total;
-	delete [] name_fd;
-#endif
 #if statCount
 	delete [] stat_prefix;
 #endif
@@ -459,8 +456,8 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 	gateServer* s = (gateServer*)ua;
 	fdReg* reg;
 
-	gateDebug3(5,"gateServer::fdCB(gateServer=%8.8x,fd=%d,opened=%d)\n",
-		(int)ua,fd,opened);
+	gateDebug3(5,"gateServer::fdCB(gateServer=%p,fd=%d,opened=%d)\n",
+		ua,fd,opened);
 
 	if((opened))
 	{
@@ -571,12 +568,8 @@ void gateServer::connectCleanup(void)
 #endif
 	
 #if DEBUG_PV_CONNNECT_CLEANUP 
-#if 0
-	printf("."); fflush(stdout);
-#else
-	printf("gateServer::connectCleanup: connect=%d dead=%ld inactive=%ld elapsed=%ld\n",
+	printf("gateServer::connectCleanup: connect=%ld dead=%ld inactive=%ld elapsed=%ld\n",
 	  timeConnectCleanup(),timeDeadCheck(),timeInactiveCheck(),time(NULL)-start_time);
-#endif
 #endif
 	for(node=pv_con_list.first();node;)
 	{
@@ -587,25 +580,13 @@ void gateServer::connectCleanup(void)
 		{
 			gateDebug1(3,"gateServer::connectCleanup() cleaning up PV %s\n",
 				pv->name());
-			int status = pv_con_list.remove(pv->name(),cnode); // clean from connecting list
+			// clean from connecting list
+			int status = pv_con_list.remove(pv->name(),cnode);
 #if DEBUG_PV_CON_LIST
-			printf("gateServer::connectCleanup: %ld of %ld [%ld,%ld,%ld]: name=%s time=%d count=%d",
+			printf("gateServer::connectCleanup: %ld of %ld [%d,%d,%d]: "
+				   "name=%s time=%ld count=%d state=%s\n",
 			  pos,total,pv_con_list.count(),pv_list.count(),vc_list.count(),
-			  pv->name(),pv->timeConnecting(),pv->totalElements());
-			switch(pv->getState()) {
-			case gatePvConnect:
-			    printf(" state=%s\n","gatePvConnect");
-			    break;
-			case gatePvActive:
-			    printf(" state=%s\n","gatePvActive");
-			    break;
-			case gatePvInactive:
-			    printf(" state=%s\n","gatePvInactive");
-			    break;
-			case gatePvDead:
-			    printf(" state=%s\n","gatePvDead");
-			    break;
-			}
+			  pv->name(),pv->timeConnecting(),pv->totalElements(),pv->getStateName());
 #endif
 			if(status) printf("Clean from connecting PV list failed for pvname=%s.\n",
 				pv->name());
@@ -668,25 +649,11 @@ void gateServer::inactiveDeadCleanup(void)
 			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
-			printf("%s gateServer::inactiveDeadCleanup(dead): [%ld,%ld,%ld]: "
-			  "name=%s time=%d count=%d",
+			printf("%s gateServer::inactiveDeadCleanup(dead): [%d,%d,%d]: "
+			  "name=%s time=%ld count=%d state=%s\n",
 			  timeStampStr,
 			  pv_con_list.count(),pv_list.count(),vc_list.count(),
-			  pv->name(),pv->timeDead(),pv->totalElements());
-			switch(pv->getState()) {
-			case gatePvConnect:
-			    printf(" state=%s\n","gatePvConnect");
-			    break;
-			case gatePvActive:
-			    printf(" state=%s\n","gatePvActive");
-			    break;
-			case gatePvInactive:
-			    printf(" state=%s\n","gatePvInactive");
-			    break;
-			case gatePvDead:
-			    printf(" state=%s\n","gatePvDead");
-			    break;
-			}
+			  pv->name(),pv->timeDead(),pv->totalElements(),pv->getStateName());
 #endif
 			if(status) printf("Clean dead from PV list failed for pvname=%s.\n",
 				pv->name());
@@ -704,25 +671,11 @@ void gateServer::inactiveDeadCleanup(void)
 			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
-			printf("%s gateServer::inactiveDeadCleanup(inactive): [%ld,%ld,%ld]: "
-			  "name=%s time=%d count=%d",
+			printf("%s gateServer::inactiveDeadCleanup(inactive): [%d,%d,%d]: "
+			  "name=%s time=%ld count=%d state=%s\n",
 			  timeStampStr,
 			  pv_con_list.count(),pv_list.count(),vc_list.count(),
-			  pv->name(),pv->timeInactive(),pv->totalElements());
-			switch(pv->getState()) {
-			case gatePvConnect:
-			    printf(" state=%s\n","gatePvConnect");
-			    break;
-			case gatePvActive:
-			    printf(" state=%s\n","gatePvActive");
-			    break;
-			case gatePvInactive:
-			    printf(" state=%s\n","gatePvInactive");
-			    break;
-			case gatePvDead:
-			    printf(" state=%s\n","gatePvDead");
-			    break;
-			}
+			  pv->name(),pv->timeInactive(),pv->totalElements(),pv->getStateName());
 #endif
 			if(status) printf("Clean inactive from PV list failed for pvname=%s.\n",
 				pv->name());
@@ -734,18 +687,14 @@ void gateServer::inactiveDeadCleanup(void)
 	if(in_check)	setInactiveCheckTime();
 }
 
-#if NODEBUG
-pvExistReturn gateServer::pvExistTest(const casCtx& /*c*/,const char* pvname)
-#else
-pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
-#endif
+pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 {
-	gateDebug2(5,"gateServer::pvExistTest(ctx=%8.8x,pv=%s)\n",(int)&c,pvname);
+	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&c,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
 	const char* real_name;
 	gateAsEntry* node;
-//	char* stat_name=NULL;          RL: unused
+	char hostname[64u];
 
 	++exist_count;
 
@@ -760,8 +709,10 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	}
 #endif
 
+	getClientHostName(c, hostname, sizeof (hostname));
+
 	// see if requested name is allowed
-	if(!(node=getAs()->findEntry(pvname)))
+	if(!(node=getAs()->findEntry(pvname,hostname)))
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",pvname);
 		return pverDoesNotExistHere;
@@ -785,26 +736,24 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 		case gatePvActive:
 	  	{
 			// return as pv->name()
-			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",real_name);
+			gateDebug2(5,"gateServer::pvExistTest() %s exists (%s)\n",
+					   real_name,pv->getStateName());
 			rc=pverExistsHere;
 			break;
 	  	}
-		case gatePvDead:
-			// no pv name returned
-			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",real_name);
-			rc=pverDoesNotExistHere;
-			break;
 		default:
-			gateDebug1(5,"gateServer::pvExistTest() %s Unknown?\n",real_name);
-			// don't know yet - wait till connect complete
+			// no pv name returned
+			gateDebug2(5,"gateServer::pvExistTest() %s is %s\n",
+					   real_name,pv->getStateName());
 			rc=pverDoesNotExistHere;
 			break;
 		}
 	}
 	else if(conFind(real_name,pv)==0)
 	{
-		gateDebug1(5,"gateServer::pvExistTest() %s is connecting\n",real_name);
-		rc=pverDoesNotExistHere;
+		gateDebug1(5,"gateServer::pvExistTest() %s Connecting (new async ET)\n",real_name);
+		pv->addET(c);
+		rc=pverAsyncCompletion;
 	}
 	else
 	{
@@ -812,23 +761,23 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 		gateDebug1(5,"gateServer::pvExistTest() %s new\n",pvname);
 		pv=new gatePvData(this,node,real_name);
 		
- 	        // KE: The state should be gatePvConnect for a new gatePvData
 		switch(pv->getState())
 		{
+		case gatePvConnect:
+			gateDebug2(5,"gateServer::pvExistTest() %s %s (new async ET)\n",
+					   pvname,pv->getStateName());
+			pv->addET(c);
+			rc=pverAsyncCompletion;
+			break;
 		case gatePvInactive:
 		case gatePvActive:
-			gateDebug1(5,"gateServer::pvExistTest() %s OK\n",pvname);
+			gateDebug2(5,"gateServer::pvExistTest() %s %s ?\n",
+					   pvname,pv->getStateName());
 			rc=pverExistsHere;
 			break;
-		case gatePvDead:
-			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",pvname);
-			rc=pverDoesNotExistHere;
-			break;
-		case gatePvConnect:
-			gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",pvname);
-			rc=pverDoesNotExistHere;
-			break;
 		default:
+			gateDebug2(5,"gateServer::pvExistTest() %s %s ?\n",
+					   pvname,pv->getStateName());
 			rc=pverDoesNotExistHere;
 			break;
 		}

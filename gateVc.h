@@ -10,6 +10,8 @@
 #include "casdef.h"
 #include "aitTypes.h"
 
+#include "gateAsyncIO.h"
+
 typedef enum {
 	gateVcClear,
 	gateVcConnect,
@@ -28,9 +30,6 @@ class gateServer;
 class gateAs;
 class gateAsNode;
 class gateAsEntry;
-class gateAsyncR;
-class gateAsyncW;
-class gatePendingWrite;
 
 // ----------------------- vc channel stuff -------------------------------
 
@@ -112,9 +111,10 @@ public:
 	void vcRemove(void);
 	void ack(void);
 	void nak(void);
-	void vcAdd(gdd*);
+	void vcAdd(void);
 	void setEventData(gdd *dd); // Sets event_data from GatePvData::eventCB
 	void setPvData(gdd *dd);    // Sets pv_data from GatePvData::getCB
+	void setAlhData(gdd *dd);   // Sets event_data from GatePvData::alhCB
 	void copyState(gdd &dd);    // Copies pv_data and event_data to dd
 
 	// Asynchronous IO
@@ -138,6 +138,8 @@ public:
 
 	void setTransTime(void);
 	time_t timeLastTrans(void) const;
+	void setAlhTransTime(void);
+	time_t timeLastAlhTrans(void) const;
 
 	int needPosting(void);
 	int needInitialPosting(void);
@@ -146,6 +148,7 @@ public:
 	int getStatus(void) { return status; }
 
 	casEventMask select_mask;
+	casEventMask alh_mask;
 	
 protected:
 	void setState(gateVcState s) { pv_state=s; }
@@ -160,6 +163,7 @@ private:
 #endif	
 	aitBool read_access,write_access;
 	time_t time_last_trans;
+	time_t time_last_alh_trans;
 	int status;
 	gateAsEntry* entry;
 	gateVcState pv_state;
@@ -192,70 +196,12 @@ inline void gateVcData::markNotInterested(void)
 inline void gateVcData::setTransTime(void) { time(&time_last_trans); }
 inline time_t gateVcData::timeLastTrans(void) const
 	{ return time(NULL)-time_last_trans; }
+inline void gateVcData::setAlhTransTime(void) { time(&time_last_alh_trans); }
+inline time_t gateVcData::timeLastAlhTrans(void) const
+	{ return time(NULL)-time_last_alh_trans; }
 
 inline void gateVcData::addChan(gateChan* c) { chan.add(*c); }
 inline void gateVcData::removeChan(gateChan* c) { chan.remove(*c); }
-
-// ---------------------- async read/write pending operation ------------------
-
-class gateAsyncR : public casAsyncReadIO, public tsDLNode<gateAsyncR>
-{
-public:
-	gateAsyncR(const casCtx &ctx, gdd& ddIn, tsDLList<gateAsyncR> *rioIn) :
-	  casAsyncReadIO(ctx),dd(ddIn),rio(rioIn)
-	  { dd.reference(); }
-
-	virtual ~gateAsyncR(void);
-
-	gdd& DD(void) const { return dd; }
-	void removeFromQueue(void) {
-		if(rio) {
-			// We trust the server library to remove the asyncIO
-			// before removing the gateVcData and hence the rio queue
-			rio->remove(*this);
-			rio=NULL;
-		}
-	}
-private:
-	gdd& dd;
-	tsDLList<gateAsyncR> *rio;
-};
-
-class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
-{
-public:
-	gateAsyncW(const casCtx &ctx, gdd& ddIn, tsDLList<gateAsyncW> *wioIn) :
-	  casAsyncWriteIO(ctx),dd(ddIn),wio(wioIn)
-	  { dd.reference(); }
-
-	virtual ~gateAsyncW(void);
-
-	gdd& DD(void) const { return dd; }
-	void removeFromQueue(void) {
-		if(wio) {
-			// We trust the server library to remove the asyncIO
-			// before removing the gateVcData and hence the wio queue
-			wio->remove(*this);
-			wio=NULL;
-		}
-	}
-private:
-	gdd& dd;
-	tsDLList<gateAsyncW> *wio;
-};
-
-class gatePendingWrite : public casAsyncWriteIO
-{
-public:
-	gatePendingWrite(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
-		{ dd.reference(); }
-
-	virtual ~gatePendingWrite(void);
-
-	gdd& DD(void) const { return dd; }
-private:
-	gdd& dd;
-};
 
 #endif
 

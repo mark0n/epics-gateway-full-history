@@ -1,9 +1,9 @@
 
 # Valid forms of the lines in this file:
-#  1) pv_name_or_pattern DENY
+#  1) pv_name_or_pattern DENY    [host ...]
 #  2) pv_alias_name      ALIAS   actual_pv_name
-#  3) pv_name            PV      access_security_group access_security_level
-#  4) pv_pattern         PATTERN access_security_group access_security_level
+#  3) pv_name            PV      [access_security_group [access_security_level]]
+#  4) pv_pattern         PATTERN [access_security_group [access_security_level]]
 #
 # pv_name_or_pattern:
 #  Standard EPICS PV name or a pattern which can be used to match a group of
@@ -31,6 +31,8 @@
 #  The gateway will completely ignore requests for this PV name or
 #  any PV that matches the pattern.  Can be used to block the gateway
 #  from responsing to groups of PVs.
+#  Naming hosts will block the PVs only for the given hosts (useful to prevent
+#  loops caused by forwarding to other gateways)
 #
 # ALIAS:
 #  Define a PV alias.  The gateway will transparently translate the PV
@@ -54,6 +56,7 @@
 #
 # Below:
 #  - anything starting with ID is not allowed
+#  - don't answer to any request from host gw1
 #  - scummy translated to jbk_ai1 on real network and users are allowed
 #    access according to access security rules for group jims_group
 #  - requests for PVs starting with jbk_ will be allowed according to rules
@@ -63,8 +66,8 @@
 #  - all other PVs will be allowed and given read permission to everyone
 
 ID*     DENY
+*       DENY    gw1
 scummy  ALIAS   jbk_ai1
 scummy  PV      jims_group 0
 food    PV      jims_group
 jbk_*   PATTERN jims_group 0
-

@@ -17,6 +17,8 @@
 #define GATE_REALLY_SMALL    0.0000001
 #define GATE_CONNECT_SECONDS 1
 
+#include <sys/time.h>
+
 #include "gateVersion.h"
 
 class gateAs;
@@ -62,6 +64,7 @@ public:
 	static int appFixed;
 	static int appUnits;
 	static int appAttributes;
+	static int appSTSAckString;
 
 private:
 	char *access_file,*pvlist_file,*command_file;

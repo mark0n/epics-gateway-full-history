@@ -4,7 +4,7 @@
 #define DEBUG_STATE 0
 #define DEBUG_VC_DELETE 0
 #define DEBUG_GDD 0
-#define DEBUG_EVENT_DATA 1
+#define DEBUG_EVENT_DATA 0
 
 // This controls whether we copy the put request to the event_data
 // after we know the put is successful.  The alternative is to rely on
@@ -68,17 +68,20 @@ void dumpdd(int step, const char *desc, const char * /*name*/, gdd *dd)
 	fflush(stderr);
 	printf("(%d) ***********************************************************\n",
 	  step);
-	printf("%-25s at=%d[%s] pt=%d[%s]\n",
-	  desc,
-	  dd->applicationType(),
-	  gddApplicationTypeTable::AppTable().getName(dd->applicationType()),
-	  dd->primitiveType(),
-	  aitName[dd->primitiveType()]
-		);
-	fflush(stdout);
-	dd->dump(); fflush(stderr);
-	printf(" relatedgdd=%p\n",dd->related());
-	printf("--------------------------------------\n");
+	if (!dd) {
+		printf("%-25s ===== no gdd here (NULL pointer) =====\n",
+			   desc);
+	} else {
+		printf("%-25s at=%d[%s] pt=%d[%s]\n",
+			   desc,
+			   dd->applicationType(),
+			   gddApplicationTypeTable::AppTable().getName(dd->applicationType()),
+			   dd->primitiveType(),
+			   aitName[dd->primitiveType()]
+			);
+		fflush(stdout);
+		dd->dump(); fflush(stderr);
+	}
 	fflush(stdout);
 }
 
@@ -132,6 +135,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 #endif
 	read_access(aitTrue),
 	time_last_trans(0),
+	time_last_alh_trans(0),
 	status(0),
 	entry(NULL),
 	pv_state(gateVcClear),
@@ -148,6 +152,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 
 	select_mask|=(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
+	alh_mask|=mrg->alarmEventMask;
 
 	// Important Note: The exist test should have been performed for this
 	// PV already, which means that the gatePvData exists and is connected
@@ -328,26 +333,15 @@ void gateVcData::ack(void)
 #endif
 }
 
+
 // This function is called by the gatePvData::eventCB to copy the gdd
 // generated there into the event_data when needAddRemove is True,
 // otherwise setEventData is called.  For ENUM's the event_data's
 // related gdd is set to the pv_data, which holds the enum strings.
-void gateVcData::vcAdd(gdd* dd)
+void gateVcData::vcAdd(void)
 {
 	// an add indicates that the pv_data and event_data are ready
-	gateDebug2(1,"gateVcData::vcAdd(gdd=%8.8x) name=%s\n",(int)dd,name());
-
-	// Set the event_data
-	if(event_data) event_data->unreference();
-	event_data=dd;
-	if(pv->fieldType() == DBR_ENUM) event_data->setRelated(pv_data);
-
-#if DEBUG_EVENT_DATA
-		if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
-			heading("gateVcData::vcAdd",name());
-			dumpdd(99,"event_data",name(),event_data);
-		}
-#endif
+	gateDebug1(1,"gateVcData::vcAdd() name=%s\n",name());
 
 	switch(getState())
 	{
@@ -357,11 +351,11 @@ void gateVcData::vcAdd(gdd* dd)
 		vcNew();
 		break;
 	case gateVcReady:
-		gateDebug0(1,"gateVcData::vcAdd() ready\n");
+		gateDebug0(1,"gateVcData::vcAdd() ready ?\n");
 	case gateVcClear:
-		gateDebug0(1,"gateVcData::vcAdd() clear\n");
+		gateDebug0(1,"gateVcData::vcAdd() clear ?\n");
 	default:
-		gateDebug0(1,"gateVcData::vcAdd() default state\n");
+		gateDebug0(1,"gateVcData::vcAdd() default state ?\n");
 	}
 }
 
@@ -371,15 +365,49 @@ void gateVcData::vcAdd(gdd* dd)
 // is set to the pv_data, which holds the enum strings.
 void gateVcData::setEventData(gdd* dd)
 {
-	gateDebug2(10,"gateVcData::setEventData(gdd=%8.8x) name=%s\n",(int)dd,name());
+	gddApplicationTypeTable& app_table=gddApplicationTypeTable::AppTable();
+	gdd* ndd=event_data;
 
-	// Set the event_data
-	if(event_data) event_data->unreference();
-	event_data=dd;
+	gateDebug2(10,"gateVcData::setEventData(dd=%p) name=%s\n",dd,name());
+
+#if DEBUG_GDD
+	heading("gateVcData::setEventData",name());
+	dumpdd(1,"dd (incoming)",name(),dd);
+#endif
+
+	if(event_data)
+	{
+		// Containers get special treatment (for performance reasons)
+		if(event_data->isContainer())
+		{
+			// If the gdd has already been posted, clone a new one
+			if(event_data->isConstant())
+			{
+				ndd = app_table.getDD(event_data->applicationType());
+				app_table.smartCopy(ndd,event_data);
+				event_data->unreference();
+			}
+			// Fill in the new value
+			app_table.smartCopy(ndd,dd);
+			event_data = ndd;
+			dd->unreference();
+		}
+		// Scalar and atomic data: Just replace the event_data
+		else
+		{
+			event_data = dd;
+			ndd->unreference();
+		}
+	}
+	// No event_data present: just set it to the incoming gdd
+	else
+		event_data = dd;
+
 	if(pv->fieldType() == DBR_ENUM) event_data->setRelated(pv_data);
 
-	// Post the event
-	vcPostEvent();
+#if DEBUG_GDD
+	dumpdd(4,"event_data(after)",name(),event_data);
+#endif
 
 #if DEBUG_EVENT_DATA
 	if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
@@ -387,11 +415,7 @@ void gateVcData::setEventData(gdd* dd)
 		dumpdd(99,"event_data",name(),event_data);
 	}
 #endif
-#if DEBUG_GDD
-	heading("gateVcData::setEventData",name());
-	dumpdd(1,"dd",name(),dd);
-	dumpdd(2,"event_data(after)",name(),event_data);
-#endif
+
 #if DEBUG_STATE
 	switch(getState())
 	{
@@ -406,6 +430,95 @@ void gateVcData::setEventData(gdd* dd)
 		break;
 	default:
 		gateDebug0(2,"gateVcData::setEventData() default state\n");
+		break;
+	}
+#endif
+}
+
+// This function is called by the gatePvData::alhCB to copy the ackt and
+// acks fields of the gdd generated there into the event_data. If ackt
+// or acks are changed, an event is generated
+void gateVcData::setAlhData(gdd* dd)
+{
+	gddApplicationTypeTable& app_table=gddApplicationTypeTable::AppTable();
+	gdd* ndd=event_data;
+	int ackt_acks_changed=1;
+
+	gateDebug2(10,"gateVcData::setAlhData(dd=%p) name=%s\n",dd,name());
+
+#if DEBUG_GDD
+	heading("gateVcData::setAlhData",name());
+	dumpdd(1,"dd (incoming)",name(),dd);
+	dumpdd(2,"event_data(before)",name(),event_data);
+#endif
+
+	if(event_data)
+	{
+		// If the event_data is already an ALH Container, ackt/acks are adjusted
+		if(event_data->applicationType() == gddAppType_dbr_stsack_string)
+		{
+			// If the gdd has already been posted, clone a new one
+			if(event_data->isConstant())
+			{
+				ndd = app_table.getDD(event_data->applicationType());
+				app_table.smartCopy(ndd,event_data);
+				event_data->unreference();
+			}
+			// Check for acks and ackt changes and fill in the new values
+			unsigned short oldacks = ndd[gddAppTypeIndex_dbr_stsack_string_acks];
+			unsigned short oldackt = ndd[gddAppTypeIndex_dbr_stsack_string_ackt];
+			unsigned short newacks = dd[gddAppTypeIndex_dbr_stsack_string_acks];
+			unsigned short newackt = dd[gddAppTypeIndex_dbr_stsack_string_ackt];
+
+			ndd[gddAppTypeIndex_dbr_stsack_string_ackt].put(&dd[gddAppTypeIndex_dbr_stsack_string_ackt]);
+			ndd[gddAppTypeIndex_dbr_stsack_string_acks].put(&dd[gddAppTypeIndex_dbr_stsack_string_acks]);
+
+			if(oldacks == newacks && oldackt == newackt) ackt_acks_changed=0;
+			event_data= ndd;
+			dd->unreference();
+		}
+		// If event_data is a value: use the incoming gdd and adjust the value
+		else
+		{
+			event_data = dd;
+
+#if DEBUG_GDD
+			dumpdd(31,"event_data(before fill in)",name(),event_data);
+#endif
+			// But replace the (string) value with the old value
+			app_table.smartCopy(event_data,ndd);
+			ndd->unreference();
+
+#if DEBUG_GDD
+			dumpdd(32,"event_data(old value filled in)",name(),event_data);
+#endif
+		}
+	}
+	// No event_data present: just set it to the incoming gdd
+	else
+		event_data = dd;
+	
+#if DEBUG_GDD
+	dumpdd(4,"event_data(after)",name(),event_data);
+#endif
+
+	// Post the extra alarm data event if necessary
+	if(ackt_acks_changed) vcPostEvent();
+
+#if DEBUG_STATE
+	switch(getState())
+	{
+	case gateVcConnect:
+		gateDebug0(2,"gateVcData::setAlhData() connecting\n");
+		break;
+	case gateVcClear:
+		gateDebug0(2,"gateVcData::setAlhData() clear\n");
+		break;
+	case gateVcReady:
+		gateDebug0(2,"gateVcData::setAlhData() ready\n");
+		break;
+	default:
+		gateDebug0(2,"gateVcData::setAlhData() default state\n");
 		break;
 	}
 #endif
@@ -466,18 +579,13 @@ void gateVcData::copyState(gdd &dd)
 	dumpdd(3,"dd(after pv_data)",name(),&dd);
 #endif
 
-#if 0
-	// Insure the event_data has the related gdd set.  Not sure why
-	// this is necessary here.  It should have been set elsewhere.
-	if(pv->fieldType() == DBR_ENUM) event_data->setRelated(pv_data);
-#endif
-
 	// The event_data gdd has an application type of value for all DBF
 	// types.  The primitive type and whether it is scalar or atomic
 	// varies with the DBR type.  See the eventXxxCB gatePvData
-	// routines.
+	// routines.  If the pv is alh monitored, the event_data is a
+	// container type (gddAppType_dbr_stsack_string)
 	if(event_data) table.smartCopy(&dd,event_data);
-
+	
 #if DEBUG_EVENT_DATA
 	if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
 		heading("gateVcData::copyState",name());
@@ -485,7 +593,7 @@ void gateVcData::copyState(gdd &dd)
 	}
 #endif
 #if DEBUG_GDD
-	dumpdd(4,"event_data",name(),event_data);
+	if(event_data) dumpdd(4,"event_data",name(),event_data);
 	dumpdd(5,"dd(after event_data)",name(),&dd);
 #endif
 }
@@ -498,20 +606,12 @@ void gateVcData::vcNew(void)
 	if(wio.count()) flushAsyncWriteQueue(GATE_NOCALLBACK);
 	if(rio.count()) flushAsyncReadQueue();
 
-	// If interest register went from not interested to interested,
-	// then post the event_data here
-	if(needInitialPosting()) {
-		postEvent(select_mask,*event_data);
-#ifdef RATE_STATS
-		mrg->post_event_count++;
-#endif
 #if DEBUG_EVENT_DATA
 		if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
 			heading("gateVcData::vcNew",name());
 			dumpdd(99,"event_data",name(),event_data);
 		}
 #endif
-	}
 }
 
 // The asynchronous io queues are filled when the vc is not ready.
@@ -536,7 +636,8 @@ void gateVcData::flushAsyncReadQueue(void)
 	gateAsyncR* asyncr;
 
 	while((asyncr=rio.first()))	{
-		gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)asyncr);
+		gateDebug2(1,"gateVcData::flushAsyncReadQueue() posting asyncr %p (DD at %p)\n",
+				   asyncr,&asyncr->DD());
 		asyncr->removeFromQueue();
 		
 #if DEBUG_GDD
@@ -559,7 +660,8 @@ void gateVcData::vcPostEvent(void)
 
 	if(needPosting())
 	{
-		gateDebug0(2,"gateVcData::vcPostEvent() posting event\n");
+		gateDebug1(2,"gateVcData::vcPostEvent() posting event (event_data at %p)\n",
+				     event_data);
 		if(event_data->isAtomic())
 		{
 			t=timeLastTrans();
@@ -649,6 +751,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 {
 	gateDebug1(10,"gateVcData::read() name=%s\n",name());
 	static const aitString str = "Not Supported by Gateway";
+	unsigned wait_for_alarm_info=0;
 
 #if DEBUG_GDD
 	heading("gateVcData::read",name());
@@ -660,8 +763,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	switch(at) {
 	case gddAppType_ackt:
 	case gddAppType_acks:
-	case gddAppType_dbr_stsack_string:
-		fprintf(stderr,"%s gateVcData::read: "
+		fprintf(stderr,"%s gateVcData::read(): "
 		  "Got unsupported app type %d for %s\n",
 		  timeStamp(),at,name());
 		fflush(stderr);
@@ -669,10 +771,17 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 		break;
 	case gddAppType_className:
 		dd.put(str);
-		return S_casApp_success;
+		return S_casApp_noSupport;
 		break;
+	case gddAppType_dbr_stsack_string:
+		if((event_data && !(event_data->applicationType()==gddAppType_dbr_stsack_string))
+		   || !pv->alhMonitored())
+		{
+			pv->alhMonitor();
+			wait_for_alarm_info = 1;
+		}
 	default:
-		if(!ready()) {
+		if(!ready() || wait_for_alarm_info) {
 			// Specify async return if PV not ready
 			gateDebug0(10,"gateVcData::read() pv not ready\n");
 			// the read will complete when the connection is complete
@@ -701,9 +810,9 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 
 caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 {
+	int docallback=GATE_DOCALLBACK;
+
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
-// 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
-//  RL: unused
 
 #if DEBUG_GDD
 	heading("gateVcData::write",name());
@@ -713,8 +822,6 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 	// Branch on application type
 	unsigned at=dd.applicationType();
 	switch(at) {
-	case gddAppType_ackt:
-	case gddAppType_acks:
 	case gddAppType_className:
 	case gddAppType_dbr_stsack_string:
 		fprintf(stderr,"%s gateVcData::write: "
@@ -723,9 +830,11 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 		fflush(stderr);
 		return S_casApp_noSupport;
 		break;
+	case gddAppType_ackt:
+	case gddAppType_acks:
+		docallback = GATE_NOCALLBACK;
 	default:
 		if(global_resources->isReadOnly()) return S_casApp_success;
-		
 		if(!ready()) {
 			// Handle async return if PV not ready
 			gateDebug0(10,"gateVcData::write() pv not ready\n");
@@ -746,18 +855,24 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 			return S_casApp_postponeAsyncIO;
 		} else {
 			// Initiate a put
-			caStatus stat = pv->put(&dd,GATE_DOCALLBACK);
+			caStatus stat = pv->put(&dd, docallback);
 			if(stat != S_casApp_success) return stat;
 
-			// Start a pending write
+			if(docallback)
+			{
+				
+				// Start a pending write
 #if DEBUG_GDD
-			fflush(stderr);
-			printf("pending_write\n");
-			fflush(stdout);
+				fflush(stderr);
+				printf("pending_write\n");
+				fflush(stdout);
 #endif
-			pending_write = new gatePendingWrite(ctx,dd);
-			if(!pending_write) return S_casApp_noMemory;
-			else return S_casApp_asyncCompletion;
+				pending_write = new gatePendingWrite(ctx,dd);
+				if(!pending_write) return S_casApp_noMemory;
+				else return S_casApp_asyncCompletion;
+			}
+			else
+				return S_casApp_success;
 		}
 	}
 }
@@ -924,32 +1039,6 @@ void gateVcData::postAccessRights(void)
 
 	for(p=iter.first();p;p=iter.next())
 		p->postAccessRightsEvent();
-}
-
-// ------------------------------- aync read/write pending methods ----------
-
-gateAsyncR::~gateAsyncR(void)
-{
-	gateDebug0(10,"~gateAsyncR()\n");
-	// If it is in the gateVcData rio queue, take it out
-	removeFromQueue();
-	// Unreference the dd
-	dd.unreference();
-}
-
-gateAsyncW::~gateAsyncW(void)
-{
-	gateDebug0(10,"~gateAsyncW()\n");
-	// If it is in the gateVcData wio queue, take it out
-	removeFromQueue();
-	// Unreference the dd
-	dd.unreference();
-}
-
-gatePendingWrite::~gatePendingWrite(void)
-{
-	gateDebug0(10,"~gatePendingWrite()\n");
-	dd.unreference();
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

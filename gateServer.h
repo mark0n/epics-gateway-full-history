@@ -49,7 +49,6 @@ public:
 #if DEBUG_TIMES
 	gateFd(const int fdIn,const fdRegType typ,gateServer& s):
 	  fdReg(fdIn,typ),server(s) {
-	    static int count=0;
 	    printf("gateFd::gateFd: [%d] fd=%d\n",++count,fdIn);
 	}
 #else    
@@ -60,6 +59,11 @@ public:
 private:
 	virtual void callBack(void);
 	gateServer& server;
+
+#if DEBUG_TIMES
+	static int count;
+#endif	
+
 };
 
 // ---------------------- stats -----------------------------
@@ -146,6 +150,7 @@ public:
 	void report2(void);
 	gateAs* getAs(void) { return as_rules; }
 	casEventMask select_mask;
+	casEventMask alh_mask;
 
 	time_t start_time;
 	unsigned long exist_count;
@@ -321,7 +326,8 @@ inline int gateServer::vcDelete(const char* name, gateVcData*& vc)
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

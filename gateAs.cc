@@ -126,7 +126,13 @@ int gateAs::readPvList(const char* lfile)
 			if((cmd=strtok(NULL," \t\n")))
 			{
 				if(strcasecmp(cmd,"DENY")==0)
-					pd=new gateAsDeny(name,head_deny);
+					// DENY has arbitrary number of arguments
+		            if((rname=strtok(NULL," \t\n")))
+						do						
+							pd=new gateAsDeny(name,rname,head_deny);
+						while ((rname=strtok(NULL," \t\n")));
+					else
+						pd=new gateAsDeny(name,NULL,head_deny);
 				else
 				{
 					// check for ALIAS command (has one extra argument)
@@ -220,20 +226,17 @@ int gateAs::readPvList(const char* lfile)
 	return 0;
 }
 
-aitBool gateAs::noAccess(const char* pv) const
+aitBool gateAs::noAccess(const char* pv, const char* host) const
 {
 	gateAsDeny* pd;
 	aitBool rc=aitFalse;
 
 	for(pd=head_deny;pd && rc==aitFalse;pd=pd->next)
 	{
-		if(strcmp(pd->name,pv)==0)
+		if( (strcmp(pd->name,pv)==0 || patmatch((char*)pd->name,(char*)pv))
+			&&
+			(!pd->host || strcmp(pd->host,host)==0) )
 			rc=aitTrue;
-		else
-		{
-			if(patmatch((char*)pd->name,(char*)pv))
-				rc=aitTrue;
-		}
 	}
 
 	return rc;
@@ -264,7 +267,7 @@ gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 	gateAsEntry* pe;
 	gateAsNode* node;
 
-	if((pe=findEntry(pv)))
+	if((pe=findEntry(pv,h)))
 		node=new gateAsNode(pe,u,h);
 	else
 		node=NULL;
@@ -274,11 +277,11 @@ gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 	return node;
 }
 
-gateAsEntry* gateAs::findEntry(const char* pv) const
+gateAsEntry* gateAs::findEntry(const char* pv, const char* host) const
 {
 	gateAsEntry* pe;
 
-	if(noAccess(pv)==aitTrue)
+	if(noAccess(pv,host)==aitTrue)
 		pe=NULL;
 	else
 	{
@@ -391,15 +394,18 @@ void gateAs::report(FILE* fd)
 	gateAsAlias* pa;
 	gateAsEntry* pe;
 
-	fprintf(fd,"\n=====Denied PV Report=====\n");
+	fprintf(fd,"\n======== Denied PV Report  ========\n");
 	for(pd=head_deny;pd;pd=pd->next)
-		fprintf(fd," %s\n",pd->name);
+	{
+		if(pd->host) fprintf(fd," %s from host %s\n",pd->name,pd->host);
+		else fprintf(fd," %s\n",pd->name);
+	}
 
-	fprintf(fd,"\n=====PV Alias Report=====\n");
+	fprintf(fd,"\n======== PV Alias Report   ========\n");
 	for(pa=head_alias;pa;pa=pa->next)
 		fprintf(fd," %s -> %s\n",pa->name,pa->alias);
 
-	fprintf(fd,"\n=====PV Pattern Report=====\n");
+	fprintf(fd,"\n======== PV Pattern Report ========\n");
 	for(i=0;i<128;i++)
 	{
 		for(pe=pat_table[i];pe && pe->next;pe=pe->next)
@@ -409,7 +415,7 @@ void gateAs::report(FILE* fd)
 //for(pe=head_pat;pe;pe=pe->next)
 //	fprintf(fd," %s %s %d\n",pe->name,pe->group,pe->level);
 
-	fprintf(fd,"\n=====PV Report=====\n");
+	fprintf(fd,"\n======== PV Report         ========\n");
 	for(pe=head_pv;pe;pe=pe->next)
 		fprintf(fd," %s %s %d -> %s\n",pe->name,pe->group,pe->level,
 			pe->alias?pe->alias:"NO_ALIAS");
@@ -420,7 +426,8 @@ void gateAs::report(FILE* fd)
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

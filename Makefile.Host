@@ -16,10 +16,10 @@ include $(TOP)/config/CONFIG_EXTENSIONS
 OPTIMIZE = YES
 ifeq ($(OPTIMIZE),YES)
   HOST_OPT = YES
-  EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
+#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
 else
   HOST_OPT = NO
-  EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
+#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
 endif
 
 # Compiler options
@@ -61,7 +61,7 @@ LIBSRCS += gateResources.cc
 LIBSRCS += gateServer.cc
 LIBSRCS += gateAs.cc
 LIBSRCS += gateVc.cc
-LIBSRCS += gateExist.cc
+LIBSRCS += gateAsyncIO.cc
 LIBSRCS += strmatch.cc
 LIBSRCS += gateAsCa.cc
 LIBSRCS += gateStat.cc

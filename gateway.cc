@@ -806,7 +806,10 @@ void print_instructions(void)
 	
 	pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
 	pr(stderr," and start a daemon that watches the gateway and automatically\n");
-	pr(stderr," restarted it if it dies\n");
+	pr(stderr," restarted it if it dies.\n");
+	
+	pr(stderr,"-prefix string: Set the prefix for the gateway statistics PVs.\n");
+	pr(stderr," Defaults to the hostname the gateway is running on.\n");
 	
 	pr(stderr,"-uid number: Run the server with this id, server does a\n");
 	pr(stderr," setuid(2) to this user id number.\n\n");

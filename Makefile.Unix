@@ -5,6 +5,11 @@
 # $Id$
 #
 # $Log$
+# Revision 1.13  1998/09/24 20:58:37  jba
+# Real name is now used for access security pattern matching.
+# Fixed PV Pattern Report
+# New gdd api changes
+#
 # Revision 1.12  1998/03/09 14:42:02  jba
 # Upon USR1 signal gateway now executes commands specified in a
 # gateway.command file.
@@ -46,9 +51,9 @@ include $(EPICS)/config/CONFIG_EXTENSIONS
 #EPICS_BASE = /usr/local/epics/baseR3.13.0.beta11
 #EPICS_BASE = /home/phoebus/JBA/epics/beta10AsFix
 #EPICS_BASE = /home/phoebus/JBA/epics/base
-EPICS_BASE = /usr/local/epics/baseR3.13.0.beta12
+#EPICS_BASE = /usr/local/epics/baseR3.13.0.beta12
 
-#USR_INCLUDES += -I$(EPICS_BASE_INCLUDE)/os/$(T_A)
+USR_INCLUDES += -I$(EPICS_BASE_INCLUDE)/os/$(T_A)
 
 #USR_CCFLAGS += -DEXPL_TEMPL
 
@@ -58,17 +63,17 @@ CXXCMPLR=STRICT
 #OPTIM_YES=-g
 #CCC = purify -chain-length=20 CC
 
-DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
+DEPENDS_RULE.cc = -$(COMPILE.cc) -M $(SRCS.cc) >> .DEPENDS
 DEPLIBS = $(EPICS_BASE_LIB)/libAs.a $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
 USR_LDLIBS = -lgate -lca -lcas -lAs -lCom -lgdd
 # USR_CCFLAGS = -DDEBUG_MODE
 # CMPLR =
 
 SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc ../gateAs.cc \
-	      ../gateVc.cc ../gateway.cc ../gateExist.cc ../strmatch.cc \
+	      ../gateVc.cc ../gateway.cc ../gateAsyncIO.cc ../strmatch.cc \
 		  ../gateAsCa.cc ../gateStat.cc
 
-LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o \
+LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateAsyncIO.o \
 		  strmatch.o gateAs.o gateAsCa.o gateStat.o
 
 LIBNAME = libgate.a
