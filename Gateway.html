@@ -15,7 +15,7 @@
 
 <h2 style="text-align: center">Kenneth Evans, Jr.</h2>
 
-<h2 style="text-align: center">August 2003</h2>
+<h2 style="text-align: center">November 2003</h2>
 <br>
 
 
@@ -430,6 +430,18 @@ lines can be pasted to a shell to do the other actions. The file<strong>
 gateway.restart</strong> can be used to kill the current Gateway, whether in
 server mode or not. These files and features are not available on WIN32.</p>
 
+<p>The Gateway can also create a file named <strong>gateway.reserve</strong>.
+It does this to get around a problem that a process can only open files with
+file descriptors (FDs) below a certain limit (256 on Solaris). If there are
+connections to more than roughly this number of IOCs, not uncommon in a
+production environment, there is no FD available to reread the <a
+href="#AccessSecurity">access security</a> and <a href="#Report">command</a>
+files. The Gateway gets around this by reserving a FD pointing to
+<strong>gateway.reserve</strong>. Do not delete
+<strong>gateway.reserve</strong>. Also note that if reading the access
+security fails, the access security will go to the default, not what it was
+before the failure.</p>
+
 <h2><a name="Using">Using the Gateway</a></h2>
 
 <p>To use the Gateway as your process variable server, it is usually only
@@ -463,6 +475,9 @@ process variable <strong>gateway.newAsFlag</strong> (see<a
 href="#ProcessVariables"> Gateway Process Variables</a>) or by using the
 command file (see <a href="#Report">Reports</a>). This causes the two files
 to be reread and the access security to be changed accordingly.</p>
+
+<p>Note that if reading the access security fails, the access security will
+go to the default, not what it was before the failure.</p>
 
 <p>The access security rules specified in <strong>gateway.access</strong> are
 the same as used for access security in IOCs. In fact, both IOCs and the

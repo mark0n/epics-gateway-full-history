@@ -307,7 +307,7 @@ void gateServer::mainLoop(void)
 			setStat(statReport3Flag,0ul);
 		}
 		if(newAs_flag) {
-			printf("%s Reading access security file\n",timeStamp());
+			printf("%s Reading access security files\n",timeStamp());
 			newAs();
 			newAs_flag=0;
 			setStat(statNewAsFlag,0ul);
@@ -347,9 +347,11 @@ void gateServer::gateCommands(const char* cfile)
 	FILE* fp;
 	char inbuf[200];
 	char *cmd,*ptr;
-	time_t t;
+	int r1Flag=0,r2Flag=0,r3Flag=0,asFlag=0;
 
 	if(cfile) {
+		printf("%s Reading command file: %s\n",timeStamp(),cfile);
+
 		errno=0;
 #ifdef RESERVE_FOPEN_FD
 		fp=global_resources->fopen(cfile,"r");
@@ -371,28 +373,45 @@ void gateServer::gateCommands(const char* cfile)
 		if((ptr=strchr(inbuf,'#'))) *ptr='\0';
 		cmd=strtok(inbuf," \t\n");
 		while(cmd) {
-			if(strcmp(cmd,"R1")==0) {
-				report1();
-			} else if(strcmp(cmd,"R2")==0) {
-				report2();
-			} else if(strcmp(cmd,"R3")==0) {
-				as->report(stdout);
-			} else if(strcmp(cmd,"AS")==0) {
-				time(&t);
-				printf("Reading access security file: %s\n",ctime(&t));
-				newAs();
-			} else {
-				printf("Invalid command %s\n",cmd);
+			if(strcmp(cmd,"R1")==0) r1Flag=1;
+			else if(strcmp(cmd,"R2")==0) r2Flag=1;
+			else if(strcmp(cmd,"R3")==0) r3Flag=1;
+			else if(strcmp(cmd,"AS")==0) asFlag=1;
+			else {
+				printf("  Invalid command %s\n",cmd);
+				fflush(stdout);
 			}
 			cmd=strtok(NULL," \t\n");
 		}
 	}
+
+	// Free the reserved file descriptor before we read access
+	// security
 #ifdef RESERVE_FOPEN_FD
 	global_resources->fclose(fp);
 #else
 	fclose(fp);
 #endif
-	fflush(stdout);
+
+	// Now do the commands
+	if(r1Flag) {
+		report1();
+		fflush(stdout);
+	}
+	if(r2Flag) {
+		report2();
+		fflush(stdout);
+	}
+	if(asFlag) {
+		printf("%s Reading access security files\n",timeStamp());
+		newAs();	
+		fflush(stdout);
+	}
+	// Do the report after the new access security
+	if(r3Flag) {
+		as->report(stdout);
+		fflush(stdout);
+	}
 	
 	return;
 }
