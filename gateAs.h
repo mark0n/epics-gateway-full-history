@@ -19,6 +19,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.12  2000/05/03 17:08:30  lange
+ * Minor Bugfix, enhanced report functions.
+ *
  * Revision 1.11  2000/05/02 13:49:39  lange
  * Uses GNU regex library (0.12) for pattern matching;
  * Fixed some CAS beacon problems (reconnecting IOCs)
@@ -28,6 +31,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
+
+// Patch for regex.h not testing __cplusplus, only __STDC__
+#ifndef __STDC__
+#define __STDC__ 1
+#endif
 
 extern "C" {
 #include "asLib.h"
