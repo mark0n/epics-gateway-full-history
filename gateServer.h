@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.10  1996/12/17 14:32:32  jbk
+ * Updates for access security
+ *
  * Revision 1.9  1996/12/11 13:04:07  jbk
  * All the changes needed to implement access security.
  * Bug fixes for createChannel and access security stuff
@@ -146,7 +149,6 @@ private:
 	time_t last_inactive_cleanup;	// checked inactive PVs for cleanup here
 	time_t last_connect_cleanup;	// cleared out connect pending list here
 
-	gateFd* fd_table[255]; // pukey, sucky, disgusting, horrid, vomituous
 	gateAs* as_rules;
 
 	static void exCB(EXCEPT_ARGS args);

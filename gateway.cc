@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.11  1997/01/12 20:33:22  jbk
+// Limit the size of core files
+//
 // Revision 1.10  1996/12/11 13:04:11  jbk
 // All the changes needed to implement access security.
 // Bug fixes for createChannel and access security stuff
@@ -313,8 +316,8 @@ static int startEverything(void)
 	else
 	{
 		lim.rlim_cur=1000000;
-		if(setrlimit(RLIMIT_NOFILE,&lim)<0)
-			fprintf(stderr,"Failed to set FD limit %d\n",
+		if(setrlimit(RLIMIT_CORE,&lim)<0)
+			fprintf(stderr,"Failed to set core limit to %d\n",
 				(int)lim.rlim_cur);
 	}
 

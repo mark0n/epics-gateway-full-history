@@ -6,6 +6,7 @@
 #include <fcntl.h>
 
 #include "gateAs.h"
+#include "gateResources.h"
 
 extern int patmatch(char *pattern, char *string);
 
@@ -185,21 +186,24 @@ const char* gateAs::getAlias(const char* pv) const
 	return pa?pa->alias:NULL;
 }
 
-gateAsNode* gateAs::getInfo(gateAsEntry* e,int asl,const char* u,const char* h)
+gateAsNode* gateAs::getInfo(gateAsEntry* e,const char* u,const char* h)
 {
-	return new gateAsNode(e,asl,u,h);
+	gateDebug3(12,"entry=%8.8x user=%s host=%s\n",(int)e,u,h);
+	return new gateAsNode(e,u,h);
 }
 
-gateAsNode* gateAs::getInfo(const char* pv,int asl,const char* u,const char* h)
+gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 {
 	gateAsEntry* pe;
 	gateAsNode* node;
 
 	if((pe=findEntry(pv)))
-		node=new gateAsNode(pe,asl,u,h);
+		node=new gateAsNode(pe,u,h);
 	else
 		node=NULL;
 
+	gateDebug3(12,"pv=%s user=%s host=%s\n",pv,u,h);
+	gateDebug1(12," node=%8.8x\n",(int)node);
 	return node;
 }
 

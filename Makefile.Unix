@@ -5,6 +5,10 @@
 # $Id$
 #
 # $Log$
+# Revision 1.7  1996/12/11 13:03:58  jbk
+# All the changes needed to implement access security.
+# Bug fixes for createChannel and access security stuff
+#
 # Revision 1.6  1996/11/07 14:11:01  jbk
 # Set up to use the latest CA server library.
 # Push the ulimit for FDs up to maximum before starting CA server
@@ -23,7 +27,7 @@ EPICS = ../../../..
 include Target.include
 include $(EPICS)/config/CONFIG_EXTENSIONS
 
-OPTIM_YES=-g
+# OPTIM_YES=-g
 # CCC=purify CC
 # CC=purify cc
 
@@ -34,10 +38,11 @@ USR_LDLIBS = -lgate -lca -lcas -lAs -lCom -lgdd
 # CMPLR =
 
 SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc ../gateAs.cc \
-	      ../gateVc.cc ../gateway.cc ../gateExist.cc ../strmatch.cc
+	      ../gateVc.cc ../gateway.cc ../gateExist.cc ../strmatch.cc \
+		  ../gateAsCa.cc
 
 LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o \
-		  strmatch.o gateAs.o
+		  strmatch.o gateAs.o gateAsCa.o
 
 LIBNAME = libgate.a
 

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.12  1997/01/12 20:34:08  jbk
+// bug fix
+//
 // Revision 1.11  1996/12/17 14:32:21  jbk
 // Updates for access security
 //
@@ -401,15 +404,21 @@ int gatePvData::monitor(void)
 		// gets only 1 element:
 		// rc=ca_add_event(eventType(),chan,eventCB,this,&event);
 		// gets native element count number of elements:
-		rc=ca_add_array_event(eventType(),0,chan,eventCB,this,
-			0.0,0.0,0.0,&event);
-		SEVCHK(rc,"gatePvData::Monitor() add event");
 
-		if(rc==ECA_NORMAL)
+		if(ca_read_access(chan))
 		{
-			rc=0;
-			markMonitored();
-			checkEvent();
+			rc=ca_add_array_event(eventType(),0,chan,eventCB,this,
+				0.0,0.0,0.0,&event);
+			SEVCHK(rc,"gatePvData::Monitor() add event");
+
+			if(rc==ECA_NORMAL)
+			{
+				rc=0;
+				markMonitored();
+				checkEvent();
+			}
+			else
+				rc=-1;
 		}
 		else
 			rc=-1;

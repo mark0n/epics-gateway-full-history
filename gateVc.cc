@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.12  1996/12/17 14:32:35  jbk
+// Updates for access security
+//
 // Revision 1.11  1996/12/11 13:04:08  jbk
 // All the changes needed to implement access security.
 // Bug fixes for createChannel and access security stuff
@@ -62,7 +65,7 @@
 gateChan::~gateChan(void) { delete node; }
 
 void gateChan::setOwner(const char* const u, const char* const h)
-	{ node->changeInfo(1,u,h); }
+	{ node->changeInfo(u,h); }
 
 aitBool gateChan::readAccess(void) const
 	{ return (node->readAccess()&&vc.readAccess())?aitTrue:aitFalse; }
@@ -150,7 +153,7 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const u, const char * const h)
 {
 	gateDebug0(5,"~gateVcData::createChannel()\n");
-	return new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,1,u,h));
+	return new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,u,h));
 }
 
 unsigned gateVcData::maxSimultAsyncOps(void) const
@@ -328,6 +331,11 @@ int gateVcData::put(gdd* dd)
 	gateDebug2(10,"gateVcData::put(gdd=%8.8x) name=%s\n",(int)dd,name());
 	// value()->put(dd);
 	pv->put(dd);
+	if(value())
+	{
+		gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+		table.smartCopy(value(),dd);
+	}
 	return 0;
 }
 
@@ -336,6 +344,11 @@ int gateVcData::putDumb(gdd* dd)
 	gateDebug2(10,"gateVcData::putDumb(gdd=%8.8x) name=%s\n",(int)dd,name());
 	// if(value()) value()->put(dd);
 	if(pv) pv->putDumb(dd);
+	if(value())
+	{
+		gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+		table.smartCopy(value(),dd);
+	}
 	return 0;
 }
 
@@ -346,6 +359,8 @@ void gateVcData::vcNew(void)
 	casEventMask select(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
 	gateAsyncW* asyncw;
 	gateAsyncR* asyncr;
+	aitUint16 val;
+	aitFixedString* fs;
 
 	// what do I do here? should do async completion to createPV
 	// or should be async complete if there is a pending read
@@ -374,8 +389,38 @@ void gateVcData::vcNew(void)
 		{
 			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)asyncr);
 			rio.remove(*asyncr);
-			if(value())			table.smartCopy(&asyncr->DD(),value());
-			if(attributes())	table.smartCopy(&asyncr->DD(),attributes());
+
+#if 0
+			if(attributes() &&
+				attributes()->applicationType()==global_resources->appEnum &&
+				asyncr->DD().applicationType()==global_resources->appValue)
+			{
+				if(asyncr->DD().primitiveType()==aitEnumInvalid)
+					asyncr->DD().setPrimType(aitEnumString);
+
+				if((asyncr->DD().primitiveType()==aitEnumString ||
+					asyncr->DD().primitiveType()==aitEnumFixedString))
+				{
+					if(value())
+					{
+						// hideous special case for reading enum as string
+						attributes()->getRef(fs);
+						value()->getConvert(val);
+						asyncr->DD().put(fs[val]);
+					}
+				}
+				else
+				{
+					if(value()) table.smartCopy(&asyncr->DD(),value());
+				}
+			}
+			else
+#endif
+			{
+				if(value())			table.smartCopy(&asyncr->DD(),value());
+				if(attributes())	table.smartCopy(&asyncr->DD(),attributes());
+			}
+
 			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
 		}
 	}
@@ -430,6 +475,8 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	gateDebug1(10,"gateVcData::read() name=%s\n",name());
 	caStatus rc=S_casApp_success;
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+	aitFixedString* fs;
+	aitInt16 val;
 
 	// ---- handle async return if PV not ready
 	if(!ready())
@@ -441,8 +488,36 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	}
 	else
 	{
-		if(value()) table.smartCopy(&dd,value());
-		if(attributes()) table.smartCopy(&dd,attributes());
+#if 0
+		if(attributes() &&
+			attributes()->applicationType()==global_resources->appEnum &&
+			dd.applicationType()==global_resources->appValue)
+		{
+			if(dd.primitiveType()==aitEnumInvalid)
+				dd.setPrimType(aitEnumString);
+
+			if((dd.primitiveType()==aitEnumString ||
+				dd.primitiveType()==aitEnumFixedString))
+			{
+				if(value())
+				{
+					// hideous special case for reading enum as string
+					attributes()->getRef(fs);
+					value()->getConvert(val);
+					dd.put(fs[val]);
+				}
+			}
+			else
+			{
+				if(value()) table.smartCopy(&dd,value());
+			}
+		}
+		else
+#endif
+		{
+			if(value())			table.smartCopy(&dd,value());
+			if(attributes())	table.smartCopy(&dd,attributes());
+		}
 	}
 
 	return rc;
@@ -522,12 +597,20 @@ void gateVcData::setWriteAccess(aitBool b)
 gateAsyncR::~gateAsyncR(void)
 {
 	gateDebug0(10,"~gateAsyncR()\n");
+	// fflush(stderr);
+	// fprintf(stderr,"~gateAsyncR()\n");
+	// fflush(stderr);
+	// dd.dump();
 	dd.unreference();
 }
 
 gateAsyncW::~gateAsyncW(void)
 {
 	gateDebug0(10,"~gateAsyncW()\n");
+	// fflush(stderr);
+	// fprintf(stderr,"~gateAsyncW()\n");
+	// fflush(stderr);
+	// dd.dump();
 	dd.unreference();
 }
 

@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.17  1996/12/17 14:32:29  jbk
+// Updates for access security
+//
 // Revision 1.16  1996/12/11 13:04:06  jbk
 // All the changes needed to implement access security.
 // Bug fixes for createChannel and access security stuff
@@ -72,6 +75,8 @@
 
 #include <signal.h>
 
+void gateAsCa(void);
+
 // ---------------------------- genereral main processing function -----------
 
 typedef void (*SigFunc)(int);
@@ -95,7 +100,7 @@ void gatewayServer(void)
 {
 	gateDebug0(5,"gateServer::gatewayServer()\n");
 
-	gateServer* server = new gateServer(32u,5u,2000u);
+	gateServer* server = new gateServer(32u,5000u,5000u);
 	server->mainLoop();
 	delete server;
 }
@@ -108,6 +113,8 @@ void gateServer::mainLoop(void)
 	unsigned char cnt=0;
 
 	as_rules=global_resources->getAs();
+	gateAsCa(); // putrid hack for access security calculation rules
+	// as_rules->report(stdout);
 
 	save_usr1=signal(SIGUSR1,sig_usr1);
 	// this is horrible, CA server has sigpipe problem for now
@@ -167,8 +174,6 @@ gateServer::gateServer(unsigned namelen,unsigned pvcount,unsigned simio):
 	setDeadCheckTime();
 	setInactiveCheckTime();
 	setConnectCheckTime();
-
-	for(i=0;i<(sizeof(fd_table)/sizeof(gateFd*));i++) fd_table[i]=NULL;
 }
 
 gateServer::~gateServer(void)
@@ -215,19 +220,18 @@ void gateServer::checkEvent(void)
 void gateServer::fdCB(void* ua, int fd, int opened)
 {
 	gateServer* s = (gateServer*)ua;
+	fdReg* reg;
+
 	gateDebug3(5,"gateServer::fdCB(gateServer=%8.8x,fd=%d,opened=%d)\n",
 		(int)ua,fd,opened);
 
 	if((opened))
-		s->fd_table[fd]=new gateFd(fd,fdrRead,*s);
+		reg=new gateFd(fd,fdrRead,*s);
 	else
 	{
 		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
-		if((s->fd_table[fd]))
-		{
-			delete s->fd_table[fd];
-			s->fd_table[fd]=NULL;
-		}
+		reg=fileDescriptorManager.lookUpFD(fd,fdrRead);
+		delete reg;
 	}
 }
 

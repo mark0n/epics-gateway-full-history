@@ -67,10 +67,10 @@ class gateAsNode
 public:
 	gateAsNode(void)
 		{ asc=NULL; }
-	gateAsNode(gateAsEntry* e,int asl,const char* user, const char* host)
+	gateAsNode(gateAsEntry* e,const char* user, const char* host)
 	{
 		asc=NULL;
-		if(e&&asAddClient(&asc,e->as,asl,(char*)user,(char*)host)==0)
+		if(e&&asAddClient(&asc,e->as,e->level,(char*)user,(char*)host)==0)
 			asPutClientPvt(asc,e);
 	}
 
@@ -84,8 +84,8 @@ public:
 
 	gateAsEntry* getEntry(void)
 		{ return asc?(gateAsEntry*)asGetClientPvt(asc):NULL; }
-	long changeInfo(int asl,const char* user, const char* host)
-		{ return asChangeClient(asc,asl,(char*)user,(char*)host); }
+	long changeInfo(const char* user, const char* host)
+		{ return asChangeClient(asc,getEntry()->level,(char*)user,(char*)host);}
 
 	const char* user(void) { return (const char*)asc->user; }
 	const char* host(void) { return (const char*)asc->host; }
@@ -116,8 +116,8 @@ public:
 	~gateAs(void);
 
 	// user must delete the gateAsNode that the following function returns
-	gateAsNode* getInfo(const char* pv,int asl,const char* usr,const char* hst);
-	gateAsNode* getInfo(gateAsEntry* e,int asl,const char* usr,const char* hst);
+	gateAsNode* getInfo(const char* pv,const char* usr,const char* hst);
+	gateAsNode* getInfo(gateAsEntry* e,const char* usr,const char* hst);
 
 	gateAsEntry* findEntry(const char* pv) const;
 
