@@ -62,6 +62,7 @@ static void print_instructions(void);
 static int manage_gateway(void);
 static int setEnv(const char *var, const char *val, char **envString);
 static int setEnv(const char *var, const int ival, char **envString);
+static void printEnv(FILE *fp, const char *var);
 
 // Global variables
 #ifndef WIN32
@@ -411,6 +412,20 @@ static int startEverything(char *prefix)
 	fprintf(fp,"# event mask=%s\n",global_resources->eventMaskString());
 	fprintf(fp,"# user id=%ld\n",(long)getuid());
 	fprintf(fp,"# group id=%ld\n",(long)getgid());
+
+	// Print command-line arguments
+	fprintf(fp,"# \n");
+	fprintf(fp,"# environment set from command line:\n");
+	if(client_ip_addr) {
+		fprintf(fp,"# %s\n",gate_ca_list);
+		fprintf(fp,"# %s\n",gate_ca_auto_list);
+	}
+	if(server_ip_addr) fprintf(fp,"# %s\n",gate_cas_addr);
+	if(server_ignore_ip_addr) fprintf(fp,"# %s\n",gate_cas_ignore_addr);
+	if(client_port) fprintf(fp,"# %s\n",gate_ca_port);
+	if(server_port) fprintf(fp,"# %s\n",gate_cas_port);
+
+	// Print kill information
 	fprintf(fp,"# \n");
 	fprintf(fp,"# use the following to execute commands in command file:\n");
 	fprintf(fp,"#    kill -USR1 %d\n",sid);
@@ -422,16 +437,6 @@ static int startEverything(char *prefix)
 	if(global_resources->isReadOnly()) {
 		fprintf(fp,"# Gateway running in read-only mode.\n");
 	}
-
-	// Print command-line arguments to script file
-	if(client_ip_addr) {
-		fprintf(fp,"# %s\n",gate_ca_list);
-		fprintf(fp,"# %s\n",gate_ca_auto_list);
-	}
-	if(server_ip_addr) fprintf(fp,"# %s\n",gate_cas_addr);
-	if(server_ignore_ip_addr) fprintf(fp,"# %s\n",gate_cas_ignore_addr);
-	if(client_port) fprintf(fp,"# %s\n",gate_ca_port);
-	if(server_port) fprintf(fp,"# %s\n",gate_cas_port);
 
 	fprintf(fp,"\n kill %ld # to kill everything\n\n",(long)parent_pid);
 	fprintf(fp,"\n # kill %u # to kill off this gateway\n\n",sid);
@@ -558,14 +563,12 @@ static int startEverything(char *prefix)
 #else
 	printf("%s PID=%d\n",EPICS_VERSION_STRING,sid);
 #endif
-	if(client_ip_addr) {
-		printf("%s\n",gate_ca_list);
-		printf("%s\n",gate_ca_auto_list);
-	}
-	if(server_ip_addr) printf("%s\n",gate_cas_addr);
-	if(server_ignore_ip_addr) printf("%s\n",gate_cas_ignore_addr);
-	if(client_port) printf("%s\n",gate_ca_port);
-	if(server_port) printf("%s\n",gate_cas_port);
+	printEnv(stdout,"EPICS_CA_ADDR_LIST");
+	printEnv(stdout,"EPICS_CA_AUTO_ADDR_LIST");
+	printEnv(stdout,"EPICS_CA_SERVER_PORT");
+	printEnv(stdout,"EPICS_CAS_INTF_ADDR_LIST");
+	printEnv(stdout,"EPICS_CAS_SERVER_PORT");
+	printEnv(stdout,"EPICS_CAS_IGNORE_ADDR_LIST");
 
 	// Put log
 	FILE *putFp=global_resources->getPutlogFp();
@@ -1418,7 +1421,8 @@ static int setEnv(const char *var, int ival, char **envString)
 	return 0;
 }
 
-void printRecentHistory(void) {
+void printRecentHistory(void)
+{
 #ifndef WIN32
 	int nStarts=0;
 	int i;
@@ -1438,6 +1442,14 @@ void printRecentHistory(void) {
 		fflush(stdout);
 	}
 #endif
+}
+
+static void printEnv(FILE *fp, const char *var)
+{
+	if(!fp || !var) return;
+	
+	char *value=getenv(var);
+	fprintf(fp,"%s=%s\n", var, value?value:"Not specified");
 }
 
 
