@@ -28,6 +28,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.19  2002/08/16 16:23:23  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.17  2002/07/29 16:06:00  jba
  * Added license information.
  *
@@ -143,8 +146,10 @@ void gateAsNode::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
 	if(v->user_func) v->user_func(v->user_arg);
 }
 
-gateAs::gateAs(const char* lfile, const char* afile) :
-	denyFromListUsed(false)
+gateAs::gateAs(const char* lfile, const char* afile)
+#ifdef USE_DENYFROM
+	: denyFromListUsed(false)
+#endif
 {
 	if(initialize(afile))
 		fprintf(stderr,"Failed to install access security file %s\n",afile);
@@ -152,14 +157,17 @@ gateAs::gateAs(const char* lfile, const char* afile) :
 	readPvList(lfile);
 }
 
-gateAs::gateAs(const char* lfile) :
-	denyFromListUsed(false)
+gateAs::gateAs(const char* lfile)
+#ifdef USE_DENYFROM
+	: denyFromListUsed(false)
+#endif
 {
 	readPvList(lfile);
 }
 
 gateAs::~gateAs(void)
 {
+#ifdef USE_DENYFROM
 	tsSLIter<gateAsHost> pi = host_list.firstIter();
 	gateAsList* l;
 
@@ -170,6 +178,7 @@ gateAs::~gateAs(void)
 		deny_from_table.remove(pNode->host,l);
 		deleteAsList(*l);
 	}
+#endif
 
 	deleteAsList(deny_list);
 	deleteAsList(allow_list);
@@ -187,7 +196,9 @@ int gateAs::readPvList(const char* lfile)
 	gateAsEntry* pe;
 	gateAsLine*  pl;
 
+#ifdef USE_DENYFROM
 	denyFromListUsed=false;
+#endif
 
 	if(lfile)
 	{
@@ -214,7 +225,6 @@ int gateAs::readPvList(const char* lfile)
 		pl=new gateAsLine(inbuf,strlen(inbuf),line_list);
 		++line;
 		name=rname=hname=NULL;
-
 		if(!(name=strtok(pl->buf," \t\n"))) continue;
 
 		// Two strings (name and command) are mandatory
@@ -226,6 +236,7 @@ int gateAs::readPvList(const char* lfile)
 			continue;
 		}
 
+#ifdef USE_DENYFROM
 		if(strcasecmp(cmd,"DENY")==0)                                // DENY [FROM]
 		{
 			// Arbitrary number of arguments: [from] host names
@@ -249,6 +260,27 @@ int gateAs::readPvList(const char* lfile)
 			}
 			continue;
 		}
+#else
+		if(strcasecmp(cmd,"DENY")==0)                                // DENY [FROM]
+		{
+			// Arbitrary number of arguments: [from] host names
+			if((hname=strtok(NULL,", \t\n")) && strcasecmp(hname,"FROM")==0)
+			  hname=strtok(NULL,", \t\n");
+			if(hname)           // host name(s) present
+			{
+				fprintf(stderr,"Error in PV list file (line %d): "
+				  "DENY FROM is not supported\n"
+				  "  Use EPICS_CAS_IGNORE_ADDR_LIST instead\n",
+				  line);
+			}
+			else
+			{                   // no host name specified
+				pe = new gateAsEntry(name);
+				if(pe->init(deny_list,line)==aitFalse) delete pe;
+			}
+			continue;
+		}
+#endif
 		
 		if(strcasecmp(cmd,"ORDER")==0)                               // ORDER
 		{
@@ -338,10 +370,17 @@ gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
 	gateAsEntry* pe;
 	gateAsNode* node;
 
+#ifdef USE_DENYFROM
 	if((pe=findEntry(pv,h)))
 		node=new gateAsNode(pe,u,h);
 	else
 		node=NULL;
+#else
+	if((pe=findEntry(pv)))
+		node=new gateAsNode(pe,u,h);
+	else
+		node=NULL;
+#endif
 
 	gateDebug3(12,"pv=%s user=%s host=%s\n",pv,u,h);
 	gateDebug1(12," node=%8.8x\n",(int)node);
@@ -467,6 +506,7 @@ void gateAs::report(FILE* fd)
 		}
 	}
 
+#ifdef USE_DENYFROM
 	tsSLIter<gateAsHost> pi3 = host_list.firstIter();
 	gateAsHost *pNode3;
 	while(pi3.pointer())
@@ -486,6 +526,7 @@ void gateAs::report(FILE* fd)
 		}
 		pi3++;
 	}
+#endif
 
 	if(eval_order==GATE_DENY_FIRST)
 		fprintf(fd,"\nEvaluation order: deny, allow\n");

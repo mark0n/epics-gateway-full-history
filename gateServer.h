@@ -30,6 +30,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.29  2002/08/16 16:23:25  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.28  2002/07/29 16:06:03  jba
  * Added license information.
  *
@@ -111,13 +114,17 @@ private:
 
 // server stats definitions
 #ifdef STAT_PVS
-#define statVcTotal    0
-#define statPvTotal    1
-#define statAlive      2
-#define statActive     3
-#define statInactive   4
-#define statDead       5
-#define NEXT_STAT_PV   6
+#define statVcTotal      0
+#define statPvTotal      1
+// This should be connected, but left for backward compatibility
+#define statAlive        2
+#define statActive       3
+#define statInactive     4
+#define statUnconnected  5
+#define statDead         6
+#define statConnecting   7
+#define statDisconnected 8
+#define NEXT_STAT_PV     9
 #else		     
 #define NEXT_STAT_PV   0
 #endif
@@ -207,7 +214,6 @@ public:
 	void newAs(void);
 	void report1(void);
 	void report2(void);
-	void refreshBeacon(void) const;
 	gateAs* getAs(void) { return as_rules; }
 	casEventMask select_mask;
 	casEventMask alh_mask;
@@ -231,7 +237,10 @@ public:
 	unsigned long total_alive;
 	unsigned long total_active;
 	unsigned long total_inactive;
+	unsigned long total_unconnected;
 	unsigned long total_dead;
+	unsigned long total_connecting;
+	unsigned long total_disconnected;
 #endif
 #ifdef RATE_STATS
 	unsigned long client_event_count;

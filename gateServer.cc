@@ -8,6 +8,7 @@
 * This file is distributed subject to a Software License Agreement found
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
+
 static char RcsId[] = "@(#)$Id$";
 
 /*+*********************************************************************
@@ -29,6 +30,12 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.45  2002/08/23 16:45:05  evans
+ * Still not working.  Thread deadlock problem appears to be solved.
+ * Enums are not working right.  Signals are not working right.
+ * ClientHostName and Beacons are not implemented.  Has not been tested
+ * extensively becasue of these problems.
+ *
  * Revision 1.44  2002/08/16 16:23:25  evans
  * Initial files for Gateway 2.0 being developed to work with Base 3.14.
  *
@@ -272,14 +279,25 @@ void gateServer::mainLoop(void)
 		end=epicsTime::getCurrent();
 		cleanTime+=(end-begin);
 		if((end-lastPrintTime) > GATE_TIME_STAT_INTERVAL) {
-			printf("%s gateServer::mainLoop: [%d,%d,%d,%d] "
+#ifdef STAT_PVS
+			printf("%s gateServer::mainLoop: [%d|%d|%d,%d|%d,%d,%d] "
 			  "loops: %lu process: %.3f pend: %.3f clean: %.3f\n",
 			  timeStamp(),
-			  total_pv,pv_con_list.count(),pv_list.count(),vc_list.count(),
+			  total_vc,total_pv,total_active,total_inactive,
+			  total_connecting,total_dead,total_disconnected,
 			  nLoops,
 			  fdTime/(double)nLoops,
 			  pendTime/(double)nLoops,
 			  cleanTime/(double)nLoops);
+#else
+			printf("%s gateServer::mainLoop: "
+			  "loops: %lu process: %.3f pend: %.3f clean: %.3f\n",
+			  timeStamp(),
+			  nLoops,
+			  fdTime/(double)nLoops,
+			  pendTime/(double)nLoops,
+			  cleanTime/(double)nLoops);
+#endif
 			nLoops=0;
 			lastPrintTime=epicsTime::getCurrent();
 			fdTime=0.0;
@@ -489,13 +507,20 @@ int gateFd::count(0);
 // ----------------------- server methods --------------------
 
 gateServer::gateServer(char *prefix ) :
+#ifdef STAT_PVS
 	caServer(),
 	total_vc(0u),
 	total_pv(0u),
 	total_alive(0u),
 	total_active(0u),
 	total_inactive(0u),
-	total_dead(0u)
+	total_unconnected(0u),
+	total_dead(0u),
+	total_connecting(0u),
+	total_disconnected(0u)
+#else
+	caServer()
+#endif
 {
 	gateDebug0(5,"gateServer()\n");
 
@@ -570,14 +595,6 @@ gateServer::~gateServer(void)
 
 	SEVCHK(ca_flush_io(),"CA flush io");
 	SEVCHK(ca_task_exit(),"CA task exit");
-}
-
-void gateServer::refreshBeacon(void) const
-{
-	gateDebug0(1,"gateServer::refreshBeacon()\n");
-#ifdef TODO
-	caServer::refreshBeacon();
-#endif
 }
 
 void gateServer::checkEvent(void)
@@ -732,13 +749,15 @@ void gateServer::connectCleanup(void)
 		if(pv->timeConnecting()>=global_resources->connectTimeout())
 		{
 			gateDebug1(3,"gateServer::connectCleanup() "
+
 			  "cleaning up PV %s\n",pv->name());
 			// clean from connecting list
 #if DEBUG_PV_CON_LIST
-			printf("  Removing node (0x%x) %ld of %ld [%d,%d,%d,%d]: name=%s\n"
+			printf("  Removing node (0x%x) %ld of %ld [%d|%d|%d,%d|%d,%d,%d]: name=%s\n"
 			  "  timeConnecting=%ld totalElements=%d getStateName=%s\n",
 			  pNode,pos,total,
-			  total_pv,pv_con_list.count(),pv_list.count(),vc_list.count(),
+			  total_vc,total_pv,total_active,total_inactive,
+			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),
 			  pv->timeConnecting(),pv->totalElements(),pv->getStateName());
 #endif
@@ -776,7 +795,7 @@ void gateServer::inactiveDeadCleanup(void)
 	if(refreshSuppressed() &&
 	   timeFirstReconnect() >= global_resources->reconnectInhibit())
 	{
-		refreshBeacon();
+		generateBeaconAnomaly();
 		setFirstReconnectTime();
 		markNoRefreshSuppressed();
 	}
@@ -818,22 +837,16 @@ void gateServer::inactiveDeadCleanup(void)
 			gateDebug1(3,"gateServer::inactiveDeadCleanup() dead PV %s\n",
 				pv->name());
 			int status=pv_list.remove(pv->name(),pNode);
-#ifdef STAT_PVS
-			if(pv->getState()==gatePvActive) {
-				setStat(statActive,--total_active);
-				total_inactive=total_alive-total_active;
-				setStat(statInactive,total_inactive);
-			}
-#endif
 #if DEBUG_PV_LIST
 			if(ifirst) {
 			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
-			printf("%s gateServer::inactiveDeadCleanup(dead): [%d,%d,%d,%d]: "
+			printf("%s gateServer::inactiveDeadCleanup(dead): [%d|%d|%d,%d|%d,%d,%d]: "
 			  "name=%s time=%ld count=%d state=%s\n",
 			  timeStampStr,
-			  total_pv,pv_con_list.count(),pv_list.count(),vc_list.count(),
+			  total_vc,total_pv,total_active,total_inactive,
+			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeDead(),pv->totalElements(),pv->getStateName());
 #endif
 			if(status) printf("Clean dead from PV list failed for pvname=%s.\n",
@@ -852,10 +865,11 @@ void gateServer::inactiveDeadCleanup(void)
 			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
-			printf("%s gateServer::inactiveDeadCleanup(inactive): [%d,%d,%d,%d]: "
+			printf("%s gateServer::inactiveDeadCleanup(inactive): [%d|%d|%d,%d|%d,%d,%d]: "
 			  "name=%s time=%ld count=%d state=%s\n",
 			  timeStampStr,
-			  total_pv,pv_con_list.count(),pv_list.count(),vc_list.count(),
+			  total_vc,total_pv,total_active,total_inactive,
+			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeInactive(),pv->totalElements(),pv->getStateName());
 #endif
 			if(status) printf("Clean inactive from PV list failed for pvname=%s.\n",
@@ -880,8 +894,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
 	++exist_count;
 
-#ifdef TODO
-	// Getting the host name is expensive.  Only do it is the
+#ifdef USE_DENYFROM
+	// Getting the host name is expensive.  Only do it if the
 	// deny_from_list is used
 	if(getAs()->isDenyFromListUsed()) {
 		char hostname[GATE_MAX_HOSTNAME_LENGTH];
@@ -908,7 +922,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	}
 #else
 	// See if requested name is allowed and check for aliases
-	if ( !(pNode = getAs()->findEntry(pvname, NULL)) )
+	if ( !(pNode = getAs()->findEntry(pvname)) )
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
 				   pvname);
@@ -918,7 +932,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
     pNode->getRealName(pvname, real_name, sizeof(real_name));
 
-#ifdef TODO
+#ifdef USE_DENYFROM
     gateDebug3(1,"gateServer::pvExistTest() %s (from %s) real name %s\n",
 	  pvname, hostname, real_name);
 #else
@@ -1174,9 +1188,27 @@ void gateServer::initStats(char *prefix)
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
+		case statUnconnected:
+			stat_table[i].name="unconnected";
+			stat_table[i].init_value=&total_unconnected;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
+			break;
 		case statDead:
 			stat_table[i].name="dead";
 			stat_table[i].init_value=&total_dead;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
+			break;
+		case statConnecting:
+			stat_table[i].name="connecting";
+			stat_table[i].init_value=&total_connecting;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
+			break;
+		case statDisconnected:
+			stat_table[i].name="disconnected";
+			stat_table[i].init_value=&total_disconnected;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;

@@ -11,7 +11,12 @@
 // Author: Jim Kowalkowski
 // Date: 2/96
 
-#define DEBUG_CORE_FILE 1
+#define DEBUG_ENV 0
+
+// Use this to truncate the core file if GATEWAY_CORE_SIZE is
+// specified in the environment.  (Truncating makes it unusable so
+// consider truncation to 0 if anything.)
+#define TRUNC_CORE_FILE 1
 
 #include <stdio.h>
 #include <string.h>
@@ -41,6 +46,8 @@ static int startEverything(char *prefix);
 void gatewayServer(char *prefix);
 void print_instructions(void);
 int manage_gateway(void);
+static int setEnv(const char *var, const char *val, char **envString);
+static int setEnv(const char *var, const int ival, char **envString);
 
 // Global variables
 #ifndef WIN32
@@ -77,8 +84,9 @@ void operator delete(void* x)
 //	-connect_timeout number = clear PV connect requests every number seconds
 //	-inactive_timeout number = Hold inactive PV connections for number seconds
 //	-dead_timeout number = Hold PV connections with no user for number seconds
-//	-cip ip_addr = CA client library IP address list (exclusive)
+//	-cip ip_addr_list = CA client library IP address list (exclusive)
 //	-sip ip_addr = IP address where CAS listens for requests
+//	-signore ip_addr_list = IP address CAS ignores
 //	-cport port_number = CA client library port
 //	-sport port_number = CAS port number
 //	-ro = read only server, no puts allowed
@@ -105,29 +113,30 @@ void operator delete(void* x)
 //	(2) environment variables
 //	(3) defaults
 
-#define PARM_DEBUG        0
-#define PARM_LOG          2
-#define PARM_PVLIST       1
-#define PARM_ACCESS       3
-#define PARM_COMMAND      5
-#define PARM_HOME         4
-#define PARM_CONNECT      6
-#define PARM_INACTIVE     7
-#define PARM_DEAD         8
-#define PARM_USAGE        9
-#define PARM_SERVER_IP   10
-#define PARM_CLIENT_IP   11
-#define PARM_SERVER_PORT 12
-#define PARM_CLIENT_PORT 13
-#define PARM_HELP        14
-#define PARM_SERVER      15
-#define PARM_RO          16
-#define PARM_UID         17
-#define PARM_PREFIX      18
-#define PARM_GID         19
-#define PARM_RECONNECT   20
-#define PARM_DISCONNECT  21
-#define PARM_MASK        22
+#define PARM_DEBUG             0
+#define PARM_PVLIST            1
+#define PARM_LOG               2
+#define PARM_ACCESS            3
+#define PARM_HOME              4
+#define PARM_COMMAND           5
+#define PARM_CONNECT           6
+#define PARM_INACTIVE          7
+#define PARM_DEAD              8
+#define PARM_USAGE             9
+#define PARM_SERVER_IP        10
+#define PARM_CLIENT_IP        11
+#define PARM_SERVER_PORT      12
+#define PARM_CLIENT_PORT      13
+#define PARM_HELP             14
+#define PARM_SERVER           15
+#define PARM_RO               16
+#define PARM_UID              17
+#define PARM_PREFIX           18
+#define PARM_GID              19
+#define PARM_RECONNECT        20
+#define PARM_DISCONNECT       21
+#define PARM_MASK             22
+#define PARM_SERVER_IGNORE_IP 23
 
 #define HOME_DIR_SIZE    300
 #define GATE_LOG         "gateway.log"
@@ -135,6 +144,7 @@ void operator delete(void* x)
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
+static char* server_ignore_ip_addr=NULL;
 static char* client_ip_addr=NULL;
 static int server_port=0;
 static int client_port=0;
@@ -154,6 +164,7 @@ struct parm_stuff
 };
 typedef struct parm_stuff PARM_STUFF;
 
+// Second parameter is length of first not including null
 static PARM_STUFF ptable[] = {
     { "-debug",               6, PARM_DEBUG,       "value" },
     { "-log",                 4, PARM_LOG,         "file_name" },
@@ -163,6 +174,7 @@ static PARM_STUFF ptable[] = {
     { "-home",                5, PARM_HOME,        "directory" },
     { "-sip",                 4, PARM_SERVER_IP,   "IP_address" },
     { "-cip",                 4, PARM_CLIENT_IP,   "IP_address_list" },
+    { "-signore",             8, PARM_SERVER_IGNORE_IP, "IP_address_list" },
     { "-sport",               6, PARM_SERVER_PORT, "CA_server_port" },
     { "-cport",               6, PARM_CLIENT_PORT, "CA_client_port" },
     { "-connect_timeout",    16, PARM_CONNECT,     "seconds" },
@@ -282,10 +294,13 @@ static void sig_stop(int /*sig*/)
 
 static int startEverything(char *prefix)
 {
-	char gate_cas_port[30];
-	char gate_cas_addr[50];
-	char gate_ca_list[100];
-	char gate_ca_port[30];
+	char *gate_cas_port=NULL;
+	char *gate_cas_addr=NULL;
+	char *gate_cas_ignore_addr=NULL;
+	char *gate_ca_list=NULL;
+	char *gate_ca_port=NULL;
+	const char *var=NULL;
+	const char *val=NULL;
 	int sid;
 #ifndef WIN32
 	FILE* fd;
@@ -294,30 +309,46 @@ static int startEverything(char *prefix)
 
 	if(client_ip_addr)
 	{
-		sprintf(gate_ca_list,"EPICS_CA_ADDR_LIST=%s",client_ip_addr);
-		putenv(gate_ca_auto_list);
-		putenv(gate_ca_list);
+		int status=setEnv("EPICS_CA_ADDR_LIST",client_ip_addr,
+		  &gate_ca_list);
+		// In addition, make EPICS_CA_AUTO_LIST=NO to avoid sending
+		// search requests to ourself.  Note that if
+		// EPICS_CA_ADDR_LIST is specified instead of -cip, then
+		// EPICS_CA_AUTO_ADDR_LIST=NO must be set also as this branch
+		// will not be taken.
+		status=putenv(gate_ca_auto_list);
+		if(status) {
+			fprintf(stderr,"putenv failed for:\n  %s\n",gate_ca_auto_list);
+		}
+		gateDebug1(15,"gateway setting <%s>\n",gate_ca_auto_list);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_list);
 	}
 
 	if(server_ip_addr)
 	{
-		sprintf(gate_cas_addr,"EPICS_CAS_INTF_ADDR_LIST=%s",server_ip_addr);
-		putenv(gate_cas_addr);
+		int status=setEnv("EPICS_CAS_INTF_ADDR_LIST",server_ip_addr,
+		  &gate_cas_addr);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_addr);
+	}
+
+	if(server_ignore_ip_addr)
+	{
+		int status=setEnv("EPICS_CAS_IGNORE_ADDR_LIST",server_ignore_ip_addr,
+		  &gate_cas_ignore_addr);
+		gateDebug1(15,"gateway setting <%s>\n",gate_cas_ignore_addr);
 	}
 
 	if(client_port)
 	{
-		sprintf(gate_ca_port,"EPICS_CA_SERVER_PORT=%d",client_port);
-		putenv(gate_ca_port);
+		int status=setEnv("EPICS_CA_SERVER_PORT",client_port,
+		  &gate_ca_port);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_port);
 	}
 
 	if(server_port)
 	{
-		sprintf(gate_cas_port,"EPICS_CAS_SERVER_PORT=%d",server_port);
-		putenv(gate_cas_port);
+		int status=setEnv("EPICS_CAS_SERVER_PORT",server_port,
+		  &gate_cas_port);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_port);
 	}
 
@@ -365,9 +396,11 @@ static int startEverything(char *prefix)
 		fprintf(fd,"# %s\n",gate_ca_auto_list);
 	}
 
-	if(server_ip_addr)	fprintf(fd,"# %s\n",gate_cas_addr);
-	if(client_port)		fprintf(fd,"# %s\n",gate_ca_port);
-	if(server_port)		fprintf(fd,"# %s\n",gate_cas_port);
+	// Print command-line arguments to script file
+	if(server_ip_addr) fprintf(fd,"# %s\n",gate_cas_addr);
+	if(server_ignore_ip_addr) fprintf(fd,"# %s\n",gate_cas_ignore_addr);
+	if(client_port) fprintf(fd,"# %s\n",gate_ca_port);
+	if(server_port) fprintf(fd,"# %s\n",gate_cas_port);
 
 	fprintf(fd,"\n kill %d # to kill everything\n\n",parent_pid);
 	fprintf(fd,"\n # kill %d # to kill off this gateway\n\n",sid);
@@ -412,21 +445,24 @@ static int startEverything(char *prefix)
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");
 	else
 	{
-		long core_len=20000000;
-		char * core_size=getenv("GATEWAY_CORE_SIZE");
-		if (core_size)
-			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=20000000;
-		lim.rlim_cur=core_len;
-#if DEBUG_CORE_FILE == 0
-	      // KE: Truncating the core file makes it unusable -- may as well delete
-	      //  it or not create it or set limit to zero or ...
-		if(setrlimit(RLIMIT_CORE,&lim)<0)
-			fprintf(stderr,"Failed to set core limit to %d\n",
-				(int)lim.rlim_cur);
+#if TRUNC_CORE_FILE
+		// KE: Used to truncate it to 20000000 if GATEWAY_CORE_SIZE
+		// was not specified.  Truncating the core file makes it
+		// unusable.  Now only does it if GATEWAY_CORE_SIZE is
+		// specified.
+		long core_len=0;
+		char *core_size=getenv("GATEWAY_CORE_SIZE");
+		if(core_size && sscanf(core_size,"%ld",&core_len) == 1) {
+			lim.rlim_cur=core_len;
+			if(setrlimit(RLIMIT_CORE,&lim) < 0) {
+				fprintf(stderr,"Failed to set core limit to %d\n",
+				  (int)lim.rlim_cur);
+			}
+		}
 #endif
 	}
 #endif  //#ifndef WIN32
-
+	
 #ifndef WIN32
 	save_hup=signal(SIGHUP,sig_end);
 	save_bus=signal(SIGBUS,sig_end);
@@ -451,7 +487,13 @@ static int startEverything(char *prefix)
 	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__);	  
 	printf("%s PID=%d\n",EPICS_VERSION_STRING,sid);
 
+#if DEBUG_ENV
+	system("printenv | grep EPICS");
+	fflush(stdout); fflush(stderr);
+#endif
+
 	gatewayServer(prefix);
+
 	return 0;
 }
 
@@ -486,6 +528,7 @@ int main(int argc, char** argv)
 	home_dir=getenv("GATEWAY_HOME");
 	home_directory=new char[HOME_DIR_SIZE];
 
+	// Parse command line
 	for(i=1;i<argc && no_error;i++)
 	{
 		for(j=0;not_done && no_error && ptable[j].parm;j++)
@@ -646,6 +689,18 @@ int main(int argc, char** argv)
 						else
 						{
 							server_ip_addr=argv[i];
+							not_done=0;
+						}
+					}
+					break;
+				case PARM_SERVER_IGNORE_IP:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							server_ignore_ip_addr=argv[i];
 							not_done=0;
 						}
 					}
@@ -971,6 +1026,9 @@ void print_instructions(void)
 	pr(stderr,"-sip IP_address: IP address that gateway's CA server listens\n");
 	pr(stderr," for PV requests.  Sets env variable EPICS_CAS_INTF_ADDR.\n\n");
 	
+	pr(stderr,"-signore IP_address_list: IP address that gateway's CA server\n");
+	pr(stderr," ignores.  Sets env variable EPICS_CAS_IGNORE_ADDR_LIST.\n\n");
+	
 	pr(stderr,"-cip IP_address_list: IP address list that the gateway's CA\n");
 	pr(stderr," client uses to find the real PVs.  See CA reference manual.\n");
 	pr(stderr," This sets environment variables EPICS_CA_AUTO_LIST=NO and\n");
@@ -1091,6 +1149,42 @@ int manage_gateway(void)
 
 }
 #endif //#ifdef WIN32
+
+static int setEnv(const char *var, const char *val, char **envString)
+{
+	int len=strlen(var)+strlen(val)+2;
+
+	*envString=(char *)malloc(len);
+	if(!*envString) {
+		fprintf(stderr,"Memory allocation error for %s",var);
+		return 1;
+	}
+	sprintf(*envString,"%s=%s",var,val);
+	int status=putenv(*envString);
+	if(status) {
+		fprintf(stderr,"putenv failed for:\n  %s\n",*envString);
+	}
+	return 0;
+}
+
+static int setEnv(const char *var, int ival, char **envString)
+{
+	// Allow 40 for size of ival
+	int len=strlen(var)+40+2;
+
+	*envString=(char *)malloc(len);
+	if(!*envString) {
+		fprintf(stderr,"Memory allocation error for %s",var);
+		return 1;
+	}
+	sprintf(*envString,"%s=%d",var,ival);
+	int status=putenv(*envString);
+	if(status) {
+		fprintf(stderr,"putenv failed for:\n  %s\n",*envString);
+	}
+	return 0;
+}
+
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */

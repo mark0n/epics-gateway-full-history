@@ -1,14 +1,14 @@
 
 file {
-	name="/home/phoebus5/EVANS/src/medm/hydraStats.adl"
+	name="/home/phoebus3/EVANS/src/medm/hydraStats.adl"
 	version=030003
 }
 display {
 	object {
-		x=42
-		y=34
+		x=15
+		y=32
 		width=375
-		height=675
+		height=730
 	}
 	clr=14
 	bclr=30
@@ -183,7 +183,7 @@ composite {
 composite {
 	object {
 		x=39
-		y=450
+		y=330
 		width=296
 		height=20
 	}
@@ -192,47 +192,7 @@ composite {
 		"text update" {
 			object {
 				x=230
-				y=450
-				width=105
-				height=20
-			}
-			monitor {
-				chan="hydra.fd"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-			}
-		}
-		text {
-			object {
-				x=39
-				y=450
-				width=94
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix="FDs:"
-		}
-	}
-}
-composite {
-	object {
-		x=39
-		y=240
-		width=296
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=230
-				y=240
+				y=330
 				width=105
 				height=20
 			}
@@ -250,7 +210,7 @@ composite {
 		text {
 			object {
 				x=39
-				y=240
+				y=330
 				width=172
 				height=20
 			}
@@ -258,170 +218,6 @@ composite {
 				clr=10
 			}
 			textix="Client Event Rate:"
-		}
-	}
-}
-composite {
-	object {
-		x=39
-		y=300
-		width=296
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=230
-				y=300
-				width=105
-				height=20
-			}
-			monitor {
-				chan="hydra.existTestRate"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-				precDefault=2
-			}
-		}
-		text {
-			object {
-				x=39
-				y=300
-				width=94
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix="Exist Test Rate:"
-		}
-	}
-}
-composite {
-	object {
-		x=39
-		y=330
-		width=296
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=230
-				y=330
-				width=105
-				height=20
-			}
-			monitor {
-				chan="hydra.loopRate"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-				precDefault=2
-			}
-		}
-		text {
-			object {
-				x=39
-				y=330
-				width=94
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix="Loop Rate:"
-		}
-	}
-}
-composite {
-	object {
-		x=39
-		y=270
-		width=296
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=230
-				y=270
-				width=105
-				height=20
-			}
-			monitor {
-				chan="hydra.postEventRate"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-				precDefault=2
-			}
-		}
-		text {
-			object {
-				x=39
-				y=270
-				width=94
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix="Post Event Rate:"
-		}
-	}
-}
-composite {
-	object {
-		x=39
-		y=360
-		width=296
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=230
-				y=360
-				width=105
-				height=20
-			}
-			monitor {
-				chan="hydra.cpuFract"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-				precDefault=2
-			}
-		}
-		text {
-			object {
-				x=39
-				y=360
-				width=172
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix="CPU Fraction:"
 		}
 	}
 }
@@ -442,7 +238,7 @@ composite {
 				height=20
 			}
 			monitor {
-				chan="hydra.serverEventRate"
+				chan="hydra.existTestRate"
 				clr=14
 				bclr=0
 			}
@@ -456,13 +252,13 @@ composite {
 			object {
 				x=39
 				y=390
-				width=172
+				width=94
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix="Server Event Rate:"
+			textix="Exist Test Rate:"
 		}
 	}
 }
@@ -483,7 +279,7 @@ composite {
 				height=20
 			}
 			monitor {
-				chan="hydra.serverPostRate"
+				chan="hydra.loopRate"
 				clr=14
 				bclr=0
 			}
@@ -497,6 +293,129 @@ composite {
 			object {
 				x=39
 				y=420
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Loop Rate:"
+		}
+	}
+}
+composite {
+	object {
+		x=39
+		y=450
+		width=296
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=230
+				y=450
+				width=105
+				height=20
+			}
+			monitor {
+				chan="hydra.cpuFract"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+				precDefault=2
+			}
+		}
+		text {
+			object {
+				x=39
+				y=450
+				width=172
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="CPU Fraction:"
+		}
+	}
+}
+composite {
+	object {
+		x=39
+		y=510
+		width=296
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=230
+				y=510
+				width=105
+				height=20
+			}
+			monitor {
+				chan="hydra.serverEventRate"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+				precDefault=2
+			}
+		}
+		text {
+			object {
+				x=39
+				y=510
+				width=172
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Server Event Rate:"
+		}
+	}
+}
+composite {
+	object {
+		x=39
+		y=480
+		width=296
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=230
+				y=480
+				width=105
+				height=20
+			}
+			monitor {
+				chan="hydra.serverPostRate"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+				precDefault=2
+			}
+		}
+		text {
+			object {
+				x=39
+				y=480
 				width=172
 				height=20
 			}
@@ -550,46 +469,6 @@ composite {
 composite {
 	object {
 		x=39
-		y=210
-		width=296
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=230
-				y=210
-				width=105
-				height=20
-			}
-			monitor {
-				chan="hydra.dead"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-			}
-		}
-		text {
-			object {
-				x=39
-				y=210
-				width=94
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix=" Dead:"
-		}
-	}
-}
-composite {
-	object {
-		x=39
 		y=180
 		width=296
 		height=20
@@ -629,6 +508,426 @@ composite {
 }
 composite {
 	object {
+		x=51
+		y=548
+		width=273
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=171
+				y=548
+				width=23
+				height=20
+			}
+			monitor {
+				chan="hydra.commandFlag"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+			}
+		}
+		text {
+			object {
+				x=51
+				y=548
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Command:"
+		}
+		"message button" {
+			object {
+				x=210
+				y=548
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.commandFlag"
+				clr=14
+				bclr=2
+			}
+			label="Exec"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=269
+				y=548
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.commandFlag"
+				clr=14
+				bclr=2
+			}
+			label="Cancel"
+			press_msg="0"
+		}
+	}
+}
+composite {
+	object {
+		x=51
+		y=578
+		width=273
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=171
+				y=578
+				width=23
+				height=20
+			}
+			monitor {
+				chan="hydra.report1Flag"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+			}
+		}
+		text {
+			object {
+				x=51
+				y=578
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Report1:"
+		}
+		"message button" {
+			object {
+				x=210
+				y=578
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.report1Flag"
+				clr=14
+				bclr=2
+			}
+			label="Exec"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=269
+				y=578
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.report1Flag"
+				clr=14
+				bclr=2
+			}
+			label="Cancel"
+			press_msg="0"
+		}
+	}
+}
+composite {
+	object {
+		x=51
+		y=608
+		width=273
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=171
+				y=608
+				width=23
+				height=20
+			}
+			monitor {
+				chan="hydra.report2Flag"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+			}
+		}
+		text {
+			object {
+				x=51
+				y=608
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Report2:"
+		}
+		"message button" {
+			object {
+				x=210
+				y=608
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.report2Flag"
+				clr=14
+				bclr=2
+			}
+			label="Exec"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=269
+				y=608
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.report2Flag"
+				clr=14
+				bclr=2
+			}
+			label="Cancel"
+			press_msg="0"
+		}
+	}
+}
+composite {
+	object {
+		x=51
+		y=638
+		width=273
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=171
+				y=638
+				width=23
+				height=20
+			}
+			monitor {
+				chan="hydra.report3Flag"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+			}
+		}
+		text {
+			object {
+				x=51
+				y=638
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Report3:"
+		}
+		"message button" {
+			object {
+				x=210
+				y=638
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.report3Flag"
+				clr=14
+				bclr=2
+			}
+			label="Exec"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=269
+				y=638
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.report3Flag"
+				clr=14
+				bclr=2
+			}
+			label="Cancel"
+			press_msg="0"
+		}
+	}
+}
+composite {
+	object {
+		x=51
+		y=668
+		width=273
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=171
+				y=668
+				width=23
+				height=20
+			}
+			monitor {
+				chan="hydra.newAsFlag"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+			}
+		}
+		text {
+			object {
+				x=51
+				y=668
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="New AS:"
+		}
+		"message button" {
+			object {
+				x=210
+				y=668
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.newAsFlag"
+				clr=14
+				bclr=2
+			}
+			label="Exec"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=269
+				y=668
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.newAsFlag"
+				clr=14
+				bclr=2
+			}
+			label="Cancel"
+			press_msg="0"
+		}
+	}
+}
+composite {
+	object {
+		x=51
+		y=698
+		width=273
+		height=20
+	}
+	"composite name"=""
+	children {
+		"text update" {
+			object {
+				x=171
+				y=698
+				width=23
+				height=20
+			}
+			monitor {
+				chan="hydra.quitFlag"
+				clr=14
+				bclr=0
+			}
+			align="horiz. centered"
+			limits {
+				precSrc="default"
+			}
+		}
+		text {
+			object {
+				x=51
+				y=698
+				width=94
+				height=20
+			}
+			"basic attribute" {
+				clr=10
+			}
+			textix="Quit:"
+		}
+		"message button" {
+			object {
+				x=210
+				y=698
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.quitFlag"
+				clr=14
+				bclr=2
+			}
+			label="Exec"
+			press_msg="1"
+		}
+		"message button" {
+			object {
+				x=269
+				y=698
+				width=55
+				height=20
+			}
+			control {
+				chan="hydra.quitFlag"
+				clr=14
+				bclr=2
+			}
+			label="Cancel"
+			press_msg="0"
+		}
+	}
+}
+composite {
+	object {
 		x=39
 		y=120
 		width=296
@@ -657,34 +956,34 @@ composite {
 			object {
 				x=39
 				y=120
-				width=94
+				width=110
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix=" Alive:"
+			textix=" Connected:"
 		}
 	}
 }
 composite {
 	object {
-		x=51
-		y=490
-		width=273
+		x=39
+		y=210
+		width=296
 		height=20
 	}
 	"composite name"=""
 	children {
 		"text update" {
 			object {
-				x=171
-				y=490
-				width=23
+				x=230
+				y=210
+				width=105
 				height=20
 			}
 			monitor {
-				chan="hydra.commandFlag"
+				chan="hydra.unconnected"
 				clr=14
 				bclr=0
 			}
@@ -695,66 +994,36 @@ composite {
 		}
 		text {
 			object {
-				x=51
-				y=490
-				width=94
+				x=39
+				y=210
+				width=130
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix="Command:"
-		}
-		"message button" {
-			object {
-				x=210
-				y=490
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.commandFlag"
-				clr=14
-				bclr=2
-			}
-			label="Exec"
-			press_msg="1"
-		}
-		"message button" {
-			object {
-				x=269
-				y=490
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.commandFlag"
-				clr=14
-				bclr=2
-			}
-			label="Cancel"
-			press_msg="0"
+			textix=" Unconnected:"
 		}
 	}
 }
 composite {
 	object {
-		x=51
-		y=520
-		width=273
+		x=39
+		y=240
+		width=296
 		height=20
 	}
 	"composite name"=""
 	children {
 		"text update" {
 			object {
-				x=171
-				y=520
-				width=23
+				x=230
+				y=240
+				width=105
 				height=20
 			}
 			monitor {
-				chan="hydra.report1Flag"
+				chan="hydra.connecting"
 				clr=14
 				bclr=0
 			}
@@ -765,66 +1034,36 @@ composite {
 		}
 		text {
 			object {
-				x=51
-				y=520
-				width=94
+				x=39
+				y=240
+				width=130
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix="Report1:"
-		}
-		"message button" {
-			object {
-				x=210
-				y=520
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.report1Flag"
-				clr=14
-				bclr=2
-			}
-			label="Exec"
-			press_msg="1"
-		}
-		"message button" {
-			object {
-				x=269
-				y=520
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.report1Flag"
-				clr=14
-				bclr=2
-			}
-			label="Cancel"
-			press_msg="0"
+			textix="  Connecting:"
 		}
 	}
 }
 composite {
 	object {
-		x=51
-		y=550
-		width=273
+		x=39
+		y=300
+		width=296
 		height=20
 	}
 	"composite name"=""
 	children {
 		"text update" {
 			object {
-				x=171
-				y=550
-				width=23
+				x=230
+				y=300
+				width=105
 				height=20
 			}
 			monitor {
-				chan="hydra.report2Flag"
+				chan="hydra.disconnected"
 				clr=14
 				bclr=0
 			}
@@ -835,66 +1074,36 @@ composite {
 		}
 		text {
 			object {
-				x=51
-				y=550
-				width=94
+				x=39
+				y=300
+				width=150
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix="Report2:"
-		}
-		"message button" {
-			object {
-				x=210
-				y=550
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.report2Flag"
-				clr=14
-				bclr=2
-			}
-			label="Exec"
-			press_msg="1"
-		}
-		"message button" {
-			object {
-				x=269
-				y=550
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.report2Flag"
-				clr=14
-				bclr=2
-			}
-			label="Cancel"
-			press_msg="0"
+			textix="  Disconnected:"
 		}
 	}
 }
 composite {
 	object {
-		x=51
-		y=580
-		width=273
+		x=39
+		y=270
+		width=296
 		height=20
 	}
 	"composite name"=""
 	children {
 		"text update" {
 			object {
-				x=171
-				y=580
-				width=23
+				x=230
+				y=270
+				width=105
 				height=20
 			}
 			monitor {
-				chan="hydra.report3Flag"
+				chan="hydra.dead"
 				clr=14
 				bclr=0
 			}
@@ -905,185 +1114,56 @@ composite {
 		}
 		text {
 			object {
-				x=51
-				y=580
-				width=94
+				x=39
+				y=270
+				width=70
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix="Report3:"
-		}
-		"message button" {
-			object {
-				x=210
-				y=580
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.report3Flag"
-				clr=14
-				bclr=2
-			}
-			label="Exec"
-			press_msg="1"
-		}
-		"message button" {
-			object {
-				x=269
-				y=580
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.report3Flag"
-				clr=14
-				bclr=2
-			}
-			label="Cancel"
-			press_msg="0"
+			textix="  Dead:"
 		}
 	}
 }
 composite {
 	object {
-		x=51
-		y=610
-		width=273
+		x=39
+		y=360
+		width=296
 		height=20
 	}
 	"composite name"=""
 	children {
 		"text update" {
 			object {
-				x=171
-				y=610
-				width=23
+				x=230
+				y=360
+				width=105
 				height=20
 			}
 			monitor {
-				chan="hydra.newAsFlag"
+				chan="hydra.postEventRate"
 				clr=14
 				bclr=0
 			}
 			align="horiz. centered"
 			limits {
 				precSrc="default"
+				precDefault=2
 			}
 		}
 		text {
 			object {
-				x=51
-				y=610
+				x=39
+				y=360
 				width=94
 				height=20
 			}
 			"basic attribute" {
 				clr=10
 			}
-			textix="New AS:"
-		}
-		"message button" {
-			object {
-				x=210
-				y=610
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.newAsFlag"
-				clr=14
-				bclr=2
-			}
-			label="Exec"
-			press_msg="1"
-		}
-		"message button" {
-			object {
-				x=269
-				y=610
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.newAsFlag"
-				clr=14
-				bclr=2
-			}
-			label="Cancel"
-			press_msg="0"
-		}
-	}
-}
-composite {
-	object {
-		x=51
-		y=640
-		width=273
-		height=20
-	}
-	"composite name"=""
-	children {
-		"text update" {
-			object {
-				x=171
-				y=640
-				width=23
-				height=20
-			}
-			monitor {
-				chan="hydra.quitFlag"
-				clr=14
-				bclr=0
-			}
-			align="horiz. centered"
-			limits {
-				precSrc="default"
-			}
-		}
-		text {
-			object {
-				x=51
-				y=640
-				width=94
-				height=20
-			}
-			"basic attribute" {
-				clr=10
-			}
-			textix="Quit:"
-		}
-		"message button" {
-			object {
-				x=210
-				y=640
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.quitFlag"
-				clr=14
-				bclr=2
-			}
-			label="Exec"
-			press_msg="1"
-		}
-		"message button" {
-			object {
-				x=269
-				y=640
-				width=55
-				height=20
-			}
-			control {
-				chan="hydra.quitFlag"
-				clr=14
-				bclr=2
-			}
-			label="Cancel"
-			press_msg="0"
+			textix="Post Event Rate:"
 		}
 	}
 }

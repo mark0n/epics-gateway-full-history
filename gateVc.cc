@@ -30,6 +30,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.35  2002/08/16 16:23:26  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.34  2002/07/29 16:06:04  jba
  * Added license information.
  *
@@ -49,6 +52,7 @@ static char RcsId[] = "@(#)$Id$";
 #define DEBUG_VC_DELETE 0
 #define DEBUG_GDD 0
 #define DEBUG_EVENT_DATA 0
+#define DEBUG_ENUM 0
 
 #include <stdio.h>
 #include <string.h>
@@ -100,7 +104,7 @@ void heading(const char *funcname, const char *pvname)
 	fflush(stdout);
 }
 
-void dumpdd(int step, const char *desc, const char * /*name*/, gdd *dd)
+void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 {
 //	if(strcmp(name,"evans:perf:c3.SCAN")) return;
 	fflush(stderr);
@@ -387,13 +391,6 @@ void gateVcData::setEventData(gdd* dd)
 	dumpdd(4,"event_data(after)",name(),event_data);
 #endif
 
-#if DEBUG_EVENT_DATA
-	if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
-		heading("gateVcData::setEventData",name());
-		dumpdd(99,"event_data",name(),event_data);
-	}
-#endif
-
 #if DEBUG_STATE
 	switch(getState())
 	{
@@ -409,6 +406,13 @@ void gateVcData::setEventData(gdd* dd)
 	default:
 		gateDebug0(2,"gateVcData::setEventData() default state\n");
 		break;
+	}
+#endif
+
+#if DEBUG_EVENT_DATA
+	if(pv->fieldType() == DBF_ENUM) {
+		dumpdd(99,"event_data",name(),event_data);
+		heading("*** gateVcData::setEventData: end",name());
 	}
 #endif
 }
@@ -540,7 +544,7 @@ void gateVcData::copyState(gdd &dd)
 {
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
 
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_ENUM
 	heading("gateVcData::copyState",name());
 	dumpdd(1,"dd(incoming)",name(),&dd);
 #endif
@@ -552,7 +556,7 @@ void gateVcData::copyState(gdd &dd)
 	// gatePvData routines.
 	if(pv_data) table.smartCopy(&dd,pv_data);
 
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_ENUM
 	dumpdd(2,"pv_data",name(),pv_data);
 	dumpdd(3,"dd(after pv_data)",name(),&dd);
 #endif
@@ -564,15 +568,15 @@ void gateVcData::copyState(gdd &dd)
 	// container type (gddAppType_dbr_stsack_string)
 	if(event_data) table.smartCopy(&dd,event_data);
 	
-#if DEBUG_EVENT_DATA
-	if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
-		heading("gateVcData::copyState",name());
-		dumpdd(99,"event_data",name(),event_data);
-	}
-#endif
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_ENUM
 	if(event_data) dumpdd(4,"event_data",name(),event_data);
 	dumpdd(5,"dd(after event_data)",name(),&dd);
+#endif
+#if DEBUG_EVENT_DATA
+	if(pv->fieldType() == DBF_ENUM) {
+		dumpdd(99,"event_data",name(),event_data);
+		heading("*** gateVcData::copyState: end",name());
+	}
 #endif
 }
 
@@ -585,7 +589,7 @@ void gateVcData::vcNew(void)
 	if(rio.count()) flushAsyncReadQueue();
 
 #if DEBUG_EVENT_DATA
-		if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
+		if(pv->fieldType() == DBF_ENUM) {
 			heading("gateVcData::vcNew",name());
 			dumpdd(99,"event_data",name(),event_data);
 		}
@@ -647,28 +651,27 @@ void gateVcData::vcPostEvent(void)
 			//if(t>=1)
 			//{
 #if DEBUG_EVENT_DATA
-				if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
-					heading("gateVcData::vcPostEvent",name());
-					dumpdd(99,"event_data",name(),event_data);
-				}
+			if(pv->fieldType() == DBF_ENUM) {
+				heading("gateVcData::vcPostEvent",name());
+				dumpdd(99,"event_data",name(),event_data);
+			}
+#elif DEBUG_GDD
+			heading("gateVcData::vcPostEvent(1)",name());
+			dumpdd(1,"event_data",name(),event_data);
 #endif
-#if DEBUG_GDD
-				heading("gateVcData::vcPostEvent(1)",name());
-				dumpdd(1,"event_data",name(),event_data);
-#endif
-				postEvent(select_mask,*event_data);
+			postEvent(select_mask,*event_data);
 #ifdef RATE_STATS
-				mrg->post_event_count++;
+			mrg->post_event_count++;
 #endif
-				//setTransTime();
+			//setTransTime();
 			//}
 		}
 		else
 		{
 			// no more than 4 events per second
 			// if(++event_count<4)
-#if DEBUG_EVENT_DATA
-				if(pv->fieldType() == DBF_ENUM && !event_data->related()) {
+#if DEBUG_EVENT_DATA && 0
+				if(pv->fieldType() == DBF_ENUM) {
 					heading("gateVcData::vcPostEvent",name());
 					dumpdd(99,"event_data",name(),event_data);
 				}
@@ -719,7 +722,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	static const aitString str = "Not Supported by Gateway";
 	unsigned wait_for_alarm_info=0;
 
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_ENUM
 	heading("gateVcData::read",name());
 	dumpdd(1,"dd(incoming)",name(),&dd);
 #endif
@@ -744,6 +747,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			pv->alhMonitor();
 			wait_for_alarm_info = 1;
 		}
+		// Fall through
 	default:
 		if(!ready() || wait_for_alarm_info) {
 			// Specify async return if PV not ready
@@ -752,7 +756,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			rio.add(*(new gateAsyncR(ctx,dd,&rio)));
 #if DEBUG_GDD
 			fflush(stderr);
-			printf("S_casApp_asyncCompletion\n");
+			printf("gateVcData::read: return S_casApp_asyncCompletion\n");
 			fflush(stdout);
 #endif
 			return S_casApp_asyncCompletion;
@@ -760,13 +764,18 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			// Pending write in progress, don't read now
 #if DEBUG_GDD
 			fflush(stderr);
-			printf("S_casApp_postponeAsyncIO\n");
+			printf("gateVcData::read: return S_casApp_postponeAsyncIO\n");
 			fflush(stdout);
 #endif
 			return S_casApp_postponeAsyncIO;
 		} else {
 			// Copy the current state into the dd
 			copyState(dd);
+#if DEBUG_GDD
+			fflush(stderr);
+			printf("gateVcData::read: return S_casApp_success\n");
+			fflush(stdout);
+#endif
 			return S_casApp_success;
 		}
 	}

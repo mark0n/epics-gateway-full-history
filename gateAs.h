@@ -8,6 +8,7 @@
 * This file is distributed subject to a Software License Agreement found
 * in the file LICENSE that is included with this distribution. 
 \*************************************************************************/
+
 #ifndef _GATEAS_H_
 #define _GATEAS_H_
 
@@ -29,6 +30,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.20  2002/08/16 16:23:23  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.18  2002/07/29 16:06:01  jba
  * Added license information.
  *
@@ -134,10 +138,14 @@ public:
 				const char* g, int l) :        //   ASG / ASL
 		name(pvname), alias(rname), group(g), level(l), as(NULL) { }
 
+#ifdef USE_DENYFROM
 												// DENY / DENY FROM
+#else
+												// DENY
+#endif
 	gateAsEntry(const char* pvname) :			//   PV name pattern (regex)
 		name(pvname), alias(NULL), group(NULL), level(1), as(NULL) { }
-
+	
 	aitBool init(gateAsList& n,                 // Where this entry is added to
 				 int line)						// Line number
 	{
@@ -148,6 +156,7 @@ public:
 		return aitTrue;
 	}
 
+#ifdef USE_DENYFROM
 	aitBool init(const char* host,				// Host name to deny
 				 tsHash<gateAsList>& h,         // Where this entry is added to
 				 gateHostList& hl,				// Where a new key should be added
@@ -167,7 +176,8 @@ public:
 		}
 		return aitTrue;
 	}
-
+#endif
+	
 	void getRealName(const char* pv, char* real, int len);
 
 	const char* name;
@@ -259,10 +269,13 @@ public:
 	gateAsNode* getInfo(const char* pv,const char* usr,const char* hst);
 	gateAsNode* getInfo(gateAsEntry* e,const char* usr,const char* hst);
 
+#ifdef USE_DENYFROM
 	inline gateAsEntry* findEntry(const char* pv, const char* host = 0);
-
 	bool isDenyFromListUsed(void) const { return denyFromListUsed; }
-
+#else
+	inline gateAsEntry* findEntry(const char* pv);
+#endif
+	
 	int readPvList(const char* pvlist_file);
 	void report(FILE*);
 	static long reInitialize(const char* as_file_name);
@@ -271,13 +284,15 @@ public:
 	static const char* default_pattern;
 
 private:
+#ifdef USE_DENYFROM
+	bool denyFromListUsed;
+	tsHash<gateAsList> deny_from_table;
+#endif
 	gateAsList deny_list;
 	gateAsList allow_list;
 	gateHostList host_list;
 	tsSLList<gateAsLine> line_list;
-	tsHash<gateAsList> deny_from_table;
 
-	bool denyFromListUsed;
 
 	static unsigned char eval_order;
 
@@ -313,18 +328,28 @@ public:
 	static int readFunc(char* buf, int max_size);
 };
 
+#ifdef USE_DENYFROM
 inline gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
 {
 	gateAsList* pl=NULL;
 
 	if(host && deny_from_table.find(host,pl)==0 &&	// DENY FROM
 	   findEntryInList(pv, *pl)) return NULL;
-
+	
 	if(eval_order == GATE_ALLOW_FIRST &&			// DENY takes precedence
 	   findEntryInList(pv, deny_list)) return NULL;
 
 	return findEntryInList(pv, allow_list);
 }
+#else
+inline gateAsEntry* gateAs::findEntry(const char* pv)
+{
+	if(eval_order == GATE_ALLOW_FIRST &&
+	   findEntryInList(pv, deny_list)) return NULL;
+
+	return findEntryInList(pv, allow_list);
+}
+#endif
 
 #endif /* _GATEAS_H_ */
 

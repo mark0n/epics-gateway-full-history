@@ -30,6 +30,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.34  2002/08/16 16:23:24  evans
+ * Initial files for Gateway 2.0 being developed to work with Base 3.14.
+ *
  * Revision 1.33  2002/07/29 16:06:02  jba
  * Added license information.
  *
@@ -58,6 +61,7 @@ static char RcsId[] = "@(#)$Id$";
 #define DEBUG_GDD 0
 #define DEBUG_PUT 0
 #define DEBUG_BEAM 0
+#define DEBUG_ENUM 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -177,12 +181,10 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%p,name=%s)\n",m,name);
 	initClear();
-#ifdef STAT_PVS
-	m->setStat(statPvTotal,++m->total_pv);
-	m->total_dead=m->total_pv-m->total_alive;
-	m->setStat(statDead,m->total_dead);
-#endif
 	init(m,e,name);
+#ifdef STAT_PVS
+	mrg->setStat(statPvTotal,++mrg->total_pv);
+#endif
 #if DEBUG_TOTAL_PV
 	printf("gatePvdata: name=%s total_pv=%ld total_alive=%ld\n",
 	  name,mrg->total_pv,mrg->total_alive);
@@ -193,15 +195,30 @@ gatePvData::~gatePvData(void)
 {
 	gateDebug1(5,"~gatePvData() name=%s\n",name());
 #ifdef STAT_PVS
-	mrg->setStat(statPvTotal,--mrg->total_pv);
-	if(getState() == gatePvInactive || getState() == gatePvActive)
+	switch(getState())
 	{
+	case gatePvDisconnect:
+		mrg->setStat(statDisconnected,--mrg->total_disconnected);
+		mrg->setStat(statUnconnected,--mrg->total_unconnected);
+		break;
+	case gatePvDead:
+		mrg->setStat(statDead,--mrg->total_dead);
+		mrg->setStat(statUnconnected,--mrg->total_unconnected);
+		break;
+	case gatePvConnect:
+		mrg->setStat(statConnecting,--mrg->total_connecting);
+		mrg->setStat(statUnconnected,--mrg->total_unconnected);
+		break;
+	case gatePvActive:
+		mrg->setStat(statActive,--mrg->total_active);
 		mrg->setStat(statAlive,--mrg->total_alive);
-		mrg->total_inactive=mrg->total_alive-mrg->total_active;
-		mrg->setStat(statInactive,mrg->total_inactive);
+		break;
+	case gatePvInactive:
+		mrg->setStat(statInactive,--mrg->total_inactive);
+		mrg->setStat(statAlive,--mrg->total_alive);
+		break;
 	}
-	mrg->total_dead=mrg->total_pv-mrg->total_alive;
-	mrg->setStat(statDead,mrg->total_dead);
+	mrg->setStat(statPvTotal,--mrg->total_pv);
 #endif
 #if DEBUG_TOTAL_PV
 	printf("~gatePvdata: name=%s total_pv=%ld total_alive=%ld\n",
@@ -232,7 +249,6 @@ void gatePvData::initClear(void)
 	markAlhNoGetPending();
 	markNoAbort();
 	markAddRemoveNotNeeded();
-	setState(gatePvDead);
 }
 
 void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
@@ -242,7 +258,6 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	mrg=m;
 	ae=n;
 	setTimes();
-	setState(gatePvConnect);
 	status=0;
 	pv_name=strDup(name);
 
@@ -257,6 +272,11 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	if(status==ECA_NORMAL)
 	{
 		status=ca_replace_access_rights_event(chID,::accessCB);
+		setState(gatePvConnect);
+#ifdef STAT_PVS
+		mrg->setStat(statConnecting,++mrg->total_connecting);
+		mrg->setStat(statUnconnected,++mrg->total_unconnected);
+#endif
 		if(status==ECA_NORMAL)
 			status=0;
 		else
@@ -264,8 +284,12 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	}
 	else
 	{
-		gateDebug0(5,"gatePvData::init() search and connect bad!\n");
+		gateDebug0(5,"gatePvData::init() search and connect failed!\n");
 		setState(gatePvDead);
+#ifdef STAT_PVS
+		mrg->setStat(statDead,++mrg->total_dead);
+		mrg->setStat(statUnconnected,++mrg->total_unconnected);
+#endif
 		status=-1;
 	}
 	
@@ -286,10 +310,10 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		char timeStampStr[20];  // 16 should be enough
 		strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		
-		printf("%s gatePvData::init: [%d,%d,%d,%d]: name=%s\n",
-		  timeStampStr,mrg->total_pv,
-		  mrg->pvConList()->count(),mrg->pvList()->count(),
-		  mrg->vcList()->count(),pv_name);
+		printf("%s gatePvData::init: [%d|%d|%d,%d|%d,%d,%d]: name=%s\n",
+		  timeStampStr,
+		  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
+		  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
 #endif
 
 	}
@@ -309,11 +333,6 @@ int gatePvData::activate(gateVcData* vcd)
 {
 	gateDebug2(5,"gatePvData::activate(gateVcData=%p) name=%s\n",
 	  vcd,name());
-#ifdef STAT_PVS
-	mrg->setStat(statActive,++mrg->total_active);
-	mrg->total_inactive=mrg->total_alive-mrg->total_active;
-	mrg->setStat(statInactive,mrg->total_inactive);
-#endif
 	
 	int rc=-1;
 	
@@ -324,6 +343,10 @@ int gatePvData::activate(gateVcData* vcd)
 		markAddRemoveNeeded();
 		vc=vcd;
 		setState(gatePvActive);
+#ifdef STAT_PVS
+		mrg->setStat(statActive,++mrg->total_active);
+		mrg->setStat(statInactive,--mrg->total_inactive);
+#endif
 		setActiveTime();
 		vc->setReadAccess(ca_read_access(chID)?aitTrue:aitFalse);
 		vc->setWriteAccess(ca_write_access(chID)?aitTrue:aitFalse);
@@ -350,11 +373,6 @@ int gatePvData::activate(gateVcData* vcd)
 int gatePvData::deactivate(void)
 {
 	gateDebug1(5,"gatePvData::deactivate() name=%s\n",name());
-#ifdef STAT_PVS
-	mrg->setStat(statActive,--mrg->total_active);
-	mrg->total_inactive=mrg->total_alive-mrg->total_active;
-	mrg->setStat(statInactive,mrg->total_inactive);
-#endif
 #if DEBUG_VC_DELETE
 	printf("gatePvData::deactivate: %s\n",name());
 #endif
@@ -367,6 +385,10 @@ int gatePvData::deactivate(void)
 		unmonitor();
 		alhUnmonitor();
 		setState(gatePvInactive);
+#ifdef STAT_PVS
+		mrg->setStat(statActive,--mrg->total_active);
+		mrg->setStat(statInactive,++mrg->total_inactive);
+#endif
 		vc=NULL;
 		setInactiveTime();
 		break;
@@ -407,23 +429,27 @@ int gatePvData::life(void)
 		if(needAddRemove())	{
 			if(vc) {
 				setState(gatePvActive);
+#ifdef STAT_PVS
+				mrg->setStat(statConnecting,--mrg->total_connecting);
+				mrg->setStat(statUnconnected,--mrg->total_unconnected);
+				mrg->setStat(statActive,++mrg->total_active);
+				mrg->setStat(statAlive,++mrg->total_alive);
+#endif
 				get();
 			}
 		} else {
 			setState(gatePvInactive);
+#ifdef STAT_PVS
+			mrg->setStat(statConnecting,--mrg->total_connecting);
+			mrg->setStat(statUnconnected,--mrg->total_unconnected);
+			mrg->setStat(statInactive,++mrg->total_inactive);
+			mrg->setStat(statAlive,++mrg->total_alive);
+#endif
 			markNoAbort();
 		}
 
 		// Flush any accumulated exist tests
 		if(eio.count()) flushAsyncETQueue(pverExistsHere);
-
-#ifdef STAT_PVS
-		mrg->setStat(statAlive,++mrg->total_alive);
-		mrg->total_dead=mrg->total_pv-mrg->total_alive;
-		mrg->setStat(statDead,mrg->total_dead);
-		mrg->total_inactive=mrg->total_alive-mrg->total_active;
-		mrg->setStat(statInactive,mrg->total_inactive);
-#endif
 
 #if DEBUG_PV_LIST
 		{
@@ -433,27 +459,36 @@ int gatePvData::life(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::life: [%d,%d,%d,%d]: name=%s "
+		    printf("%s gatePvData::life: [%d|%d|%d,%d|%d,%d,%d]: name=%s "
 				   "state=gatePvConnect->%s\n",
-		      timeStampStr,mrg->total_pv,
-		      mrg->pvConList()->count(),mrg->pvList()->count(),
-		      mrg->vcList()->count(),pv_name,getStateName());
+		      timeStampStr,
+			  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
+			  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
 		}
 #endif
 		break;
 
 	case gatePvDisconnect:
+		gateDebug1(3,"gatePvData::life() %s PV\n",getStateName());
 		setReconnectTime();
+		setAliveTime();
+		setState(gatePvInactive);
+#ifdef STAT_PVS
+		mrg->setStat(statDisconnected,--mrg->total_disconnected);
+		mrg->setStat(statUnconnected,--mrg->total_unconnected);
+		mrg->setStat(statInactive,++mrg->total_inactive);
+		mrg->setStat(statAlive,++mrg->total_alive);
+#endif
+		break;
 	case gatePvDead:
 		gateDebug1(3,"gatePvData::life() %s PV\n",getStateName());
 		setAliveTime();
 		setState(gatePvInactive);
 #ifdef STAT_PVS
+		mrg->setStat(statDead,--mrg->total_dead);
+		mrg->setStat(statUnconnected,--mrg->total_unconnected);
+		mrg->setStat(statInactive,++mrg->total_inactive);
 		mrg->setStat(statAlive,++mrg->total_alive);
-		mrg->total_dead=mrg->total_pv-mrg->total_alive;
-		mrg->setStat(statDead,mrg->total_dead);
-		mrg->total_inactive=mrg->total_alive-mrg->total_active;
-		mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 		break;
 
@@ -484,19 +519,21 @@ int gatePvData::death(void)
 	{
 	case gatePvActive:
 		if(vc) delete vc; // get rid of VC
+		setState(gatePvDisconnect);
 #ifdef STAT_PVS
 		mrg->setStat(statActive,--mrg->total_active);
-		mrg->total_inactive=mrg->total_alive-mrg->total_active;
-		mrg->setStat(statInactive,mrg->total_inactive);
+		mrg->setStat(statAlive,--mrg->total_alive);
+		mrg->setStat(statDisconnected,++mrg->total_disconnected);
+		mrg->setStat(statUnconnected,++mrg->total_unconnected);
 #endif
+		break;
 	case gatePvInactive:
 		setState(gatePvDisconnect);
 #ifdef STAT_PVS
+		mrg->setStat(statInactive,--mrg->total_inactive);
 		mrg->setStat(statAlive,--mrg->total_alive);
-		mrg->total_dead=mrg->total_pv-mrg->total_alive;
-		mrg->setStat(statDead,mrg->total_dead);
-		mrg->total_inactive=mrg->total_alive-mrg->total_active;
-		mrg->setStat(statInactive,mrg->total_inactive);
+		mrg->setStat(statDisconnected,++mrg->total_disconnected);
+		mrg->setStat(statUnconnected,++mrg->total_unconnected);
 #endif
 		break;
 	case gatePvConnect:
@@ -510,6 +547,10 @@ int gatePvData::death(void)
 		// connecting PV list
 		mrg->pvAdd(pv_name,*this);
 		setState(gatePvDead);
+#ifdef STAT_PVS
+		mrg->setStat(statConnecting,--mrg->total_connecting);
+		mrg->setStat(statDead,++mrg->total_dead);
+#endif
 
 #if DEBUG_PV_LIST
 		{
@@ -519,10 +560,10 @@ int gatePvData::death(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::death: [%d,%d,%d,%d]: name=%s state=%s\n",
-		      timeStampStr,mrg->total_pv,
-		      mrg->pvConList()->count(),mrg->pvList()->count(),
-		      mrg->vcList()->count(),pv_name,getStateName());
+		    printf("%s gatePvData::death: [%d|%d|%d,%d|%d,%d,%d]: name=%s state=%s\n",
+		      timeStampStr,
+			  mrg->total_vc,mrg->total_pv,mrg->total_active,mrg->total_inactive,
+			  mrg->total_connecting,mrg->total_dead,mrg->total_disconnected,
 		}
 #endif
 		break;
@@ -827,7 +868,7 @@ void gatePvData::setReconnectTime(void)
 	   || (dead_alive_time - mrg->timeFirstReconnect()
 		   >= global_resources->reconnectInhibit()))
 	{
-		mrg->refreshBeacon();
+		mrg->generateBeaconAnomaly();
 		mrg->setFirstReconnectTime();
 		mrg->markNoRefreshSuppressed();
 	} else {
@@ -851,6 +892,10 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
+#endif
+
+#if DEBUG_ENUM
+	printf("gatePvData::connectCB\n");
 #endif
 
 	// send message to user concerning connection
@@ -1088,6 +1133,10 @@ void gatePvData::getCB(EVENT_ARGS args)
 	++pv->mrg->client_event_count;
 #endif
 
+#if DEBUG_ENUM
+	printf("gatePvData::getCB\n");
+#endif
+
 	pv->markNoGetPending();
 	if(args.status==ECA_NORMAL)
 	{
@@ -1157,6 +1206,13 @@ gdd* gatePvData::dataEnumCB(void * dbr)
 	dbr_ctrl_enum* ts = (dbr_ctrl_enum*)dbr;
 	aitFixedString* items = new aitFixedString[ts->no_str];
 	gddAtomic* menu=new gddAtomic(GR->appEnum,aitEnumFixedString,1,ts->no_str);
+
+#if DEBUG_ENUM
+	printf("gatePvData::dataEnumCB: no_str=%d\n",ts->no_str);
+	for(i=0; i<ts->no_str; i++) {
+		printf("  %s\n",ts->strs[i]);
+	}
+#endif
 
 	// DBR_CTRL_ENUM response
 	for (i=0;i<ts->no_str;i++) {
@@ -1304,6 +1360,10 @@ gdd* gatePvData::eventEnumCB(void *dbr)
 	gateDebug0(10,"gatePvData::eventEnumCB\n");
 	dbr_time_enum* ts = (dbr_time_enum*)dbr;
 	gddScalar* value = new gddScalar(GR->appValue,aitEnumEnum16);
+
+#if DEBUG_ENUM
+	printf("gatePvData::eventEnumCB\n");
+#endif
 
 	// DBR_TIME_ENUM response
 	value->putConvert(ts->value);
