@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.10  1996/12/11 13:04:11  jbk
+// All the changes needed to implement access security.
+// Bug fixes for createChannel and access security stuff
+//
 // Revision 1.9  1996/11/27 04:55:47  jbk
 // lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
 //
@@ -302,6 +306,16 @@ static int startEverything(void)
 				fprintf(stderr,"Failed to set FD limit %d\n",
 					(int)lim.rlim_cur);
 		}
+	}
+
+	if(getrlimit(RLIMIT_CORE,&lim)<0)
+		fprintf(stderr,"Cannot retrieve the process FD limits\n");
+	else
+	{
+		lim.rlim_cur=1000000;
+		if(setrlimit(RLIMIT_NOFILE,&lim)<0)
+			fprintf(stderr,"Failed to set FD limit %d\n",
+				(int)lim.rlim_cur);
 	}
 
 	save_hup=signal(SIGHUP,sig_end);
