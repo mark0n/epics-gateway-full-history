@@ -1,8 +1,26 @@
-/* Author: Jim Kowalkowski
- * Date: 7/96 */
+#ifndef _GATESERVER_H_
+#define _GATESERVER_H_
 
-#ifndef gateNewServer_H
-#define gateNewServer_H
+/*+*********************************************************************
+ *
+ * File:       gateServer.h
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     Server class header
+ *             - CAS virtual interface
+ *             - Gateway lists and hashes
+ *             - Server statistics variables
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *********************************************************************-*/
 
 #include <sys/types.h>
 #include <sys/time.h>

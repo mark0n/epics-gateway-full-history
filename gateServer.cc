@@ -1,5 +1,25 @@
-// Author: Jim Kowalkowski
-// Date: 7/96
+static char RcsId[] = "@(#)$Id$";
+
+/*+*********************************************************************
+ *
+ * File:       gateServer.cc
+ * Project:    CA Proxy Gateway
+ *
+ * Descr.:     Gateway server class
+ *             - Provides the CAS virtual interface
+ *             - Manages Gateway lists and hashes, cleanup
+ *             - Server statistics variables
+ *
+ * Author(s):  J. Kowalkowski, J. Anderson, K. Evans (APS)
+ *             R. Lange (BESSY)
+ *
+ * $Revision$
+ * $Date$
+ *
+ * $Author$
+ *
+ * $Log$
+ *********************************************************************-*/
 
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
