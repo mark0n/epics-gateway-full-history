@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.7  1996/11/07 14:11:07  jbk
+// Set up to use the latest CA server library.
+// Push the ulimit for FDs up to maximum before starting CA server
+//
 // Revision 1.6  1996/10/22 16:06:43  jbk
 // changed list operators head to first
 //
@@ -90,6 +94,7 @@ gateVcData::~gateVcData(void)
 	if(data) data->unreference();
 	if(event_data) event_data->unreference();
 	delete [] pv_name;
+	pv->setVC(NULL);
 }
 
 void gateVcData::destroy(void)
@@ -381,8 +386,8 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	}
 	else
 	{
-		table.smartCopy(&dd,value());
-		table.smartCopy(&dd,attributes());
+		if(value()) table.smartCopy(&dd,value());
+		if(attributes()) table.smartCopy(&dd,attributes());
 	}
 
 	return rc;

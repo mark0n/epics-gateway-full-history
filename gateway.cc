@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.7  1996/11/07 14:11:09  jbk
+// Set up to use the latest CA server library.
+// Push the ulimit for FDs up to maximum before starting CA server
+//
 // Revision 1.6  1996/10/22 15:58:43  jbk
 // changes, changes, changes
 //
@@ -25,6 +29,8 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <stdlib.h>
+#include <syslog.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -145,6 +151,29 @@ static PARM_STUFF ptable[] = {
 	{ NULL,			-1,	-1 }
 };
 
+typedef void (*SIG_FUNC)(int);
+
+static SIG_FUNC save_hup = NULL;
+static SIG_FUNC save_int = NULL;
+static SIG_FUNC save_term = NULL;
+
+static void sig_end(int sig)
+{
+	char num[40];
+
+	sprintf(num,"PV Gateway Ending (signal=%d)",sig);
+	syslog(LOG_NOTICE|LOG_DAEMON,num);
+
+	switch(sig)
+	{
+	case SIGHUP: if(save_hup) save_hup(sig); break;
+	case SIGTERM: if(save_term) save_term(sig); break;
+	case SIGINT: if(save_int) save_int(sig); break;
+	default: break;
+	}
+	exit(0);
+}
+
 static int startEverything(void)
 {
 	char gate_cas_port[30];
@@ -232,6 +261,12 @@ static int startEverything(void)
 					(int)lim.rlim_cur);
 		}
 	}
+
+	save_hup=signal(SIGHUP,sig_end);
+	save_term=signal(SIGTERM,sig_end);
+	save_int=signal(SIGINT,sig_end);
+
+	syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Starting");
 
 	gatewayServer();
 	return 0;

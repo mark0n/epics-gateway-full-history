@@ -5,6 +5,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.12  1996/11/07 14:11:05  jbk
+// Set up to use the latest CA server library.
+// Push the ulimit for FDs up to maximum before starting CA server
+//
 // Revision 1.11  1996/10/22 16:06:42  jbk
 // changed list operators head to first
 //
@@ -52,7 +56,15 @@
 #include "gateVc.h"
 #include "gatePv.h"
 
+#include <signal.h>
+
 // ---------------------------- genereral main processing function -----------
+
+typedef void (*SigFunc)(int);
+static void sig_pipe(int)
+{
+	fprintf(stderr,"Got SIGPIPE interrupt!");
+}
 
 void gatewayServer(void)
 {
@@ -67,6 +79,11 @@ void gateServer::mainLoop(void)
 {
 	int not_done=1;
 	osiTime delay(0u,500000000u);
+	SigFunc old;
+
+	// this is horrible, CA server has sigpipe problem for now
+	old=signal(SIGPIPE,sig_pipe);
+	sigignore(SIGPIPE);
 
 	while(not_done)
 	{
