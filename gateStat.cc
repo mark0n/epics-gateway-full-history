@@ -4,6 +4,34 @@
 // $Id$
 //
 // $Log$
+// Revision 1.4  1998/12/22 20:10:20  evans
+// This version has much debugging printout (inside #if's).
+// Changed gateVc::remove-> vcRemove and add -> vcAdd.
+//   Eliminates warnings about hiding private ancestor functions on Unix.
+//   (Warning is invalid.)
+// Now compiles with no warnings for COMPLR=STRICT on Solaris.
+// Made changes to speed it up:
+//   Put #if around ca_add_fd_registration.
+//     Also eliminates calls to ca_pend in fdCB.
+//   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
+//   Changed mainLoop to call fdManager::process with delay=0.
+//   Put explicit ca_poll in the mainLoop.
+//   All these changes eliminate calls to poll() which was the predominant
+//     time user.  Speed up under load is as much as a factor of 5. Under
+//     no load it runs continuously, however, rather than sleeping in
+//     poll().
+// Added #if NODEBUG around calls to Gateway debug routines (for speed).
+// Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
+// Added timeStamp routine to gateServer.cc.
+// Added line with PID and time stamp to log file on startup.
+// Changed freopen for stderr to use "a" so it doesn't overwrite the log.
+// Incorporated Ralph Lange changes by hand.
+//   Changed clock_gettime to osiTime to avoid unresolved reference.
+//   Fixed his gateAs::readPvList to eliminate core dump.
+// Made other minor fixes.
+// Did minor cleanup as noticed problems.
+// This version appears to work but has debugging (mostly turned off).
+//
 // Revision 1.2.2.1  1998/11/13 15:17:00  lange
 // += time stamps for stats
 //
@@ -81,6 +109,7 @@ void gateStat::postData(long val)
         osiTime osit(osiTime::getCurrent());
 	ts.tv_sec=osit.getSec();
 	ts.tv_nsec=osit.getNSec();
+	ts.tv_sec-=631152000ul;	// EPICS ts start 20 years later ...
 #else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
@@ -88,10 +117,7 @@ void gateStat::postData(long val)
 #endif
 
 	value->put((aitInt32)val);
-#if USE_OSI_TIME
-#else
 	value->setTimeStamp(&ts);
-#endif
 	if(post_data) postEvent(serv->select_mask,*value);
 }
 
@@ -103,6 +129,7 @@ void gateStat::postData(double val)
         osiTime osit(osiTime::getCurrent());
 	ts.tv_sec=osit.getSec();
 	ts.tv_nsec=osit.getNSec();
+	ts.tv_sec-=631152000ul;	// EPICS ts start 20 years later ...
 #else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
@@ -110,10 +137,7 @@ void gateStat::postData(double val)
 #endif
 
 	value->put(val);
-#if USE_OSI_TIME
-#else
 	value->setTimeStamp(&ts);
-#endif
 	if(post_data) postEvent(serv->select_mask,*value);
 }
 
