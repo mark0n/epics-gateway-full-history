@@ -200,9 +200,14 @@ public:
 	void connectCleanup(void);
 	void inactiveDeadCleanup(void);
 
+	void setFirstReconnectTime(void);
+	void markRefreshSuppressed(void);
+	void markNoRefreshSuppressed(void);
+
 	time_t timeDeadCheck(void) const;
 	time_t timeInactiveCheck(void) const;
 	time_t timeConnectCleanup(void) const;
+	time_t timeFirstReconnect(void) const;
 
 	tsDLHashList<gateVcData>* vcList(void)		{ return &vc_list; }
 	tsDLHashList<gatePvNode>* pvList(void)		{ return &pv_list; }
@@ -217,9 +222,14 @@ private:
 	void setInactiveCheckTime(void);
 	void setConnectCheckTime(void);
 
+	int refreshSuppressed(void) const;
+
 	time_t last_dead_cleanup;		// checked dead PVs for cleanup here
 	time_t last_inactive_cleanup;	// checked inactive PVs for cleanup here
 	time_t last_connect_cleanup;	// cleared out connect pending list here
+	time_t first_reconnect_time;	// first timestamp of a reconnect storm
+
+	int suppressed_refresh_flag;	// flag to remember suppressed beacons
 
 	gateAs* as_rules;
 
@@ -243,12 +253,23 @@ inline time_t gateServer::timeInactiveCheck(void) const
 	{ return time(NULL)-last_inactive_cleanup; }
 inline time_t gateServer::timeConnectCleanup(void) const
 	{ return time(NULL)-last_connect_cleanup; }
+inline time_t gateServer::timeFirstReconnect(void) const
+	{ return time(NULL)-first_reconnect_time; }
 inline void gateServer::setDeadCheckTime(void)
 	{ time(&last_dead_cleanup); }
 inline void gateServer::setInactiveCheckTime(void)
 	{ time(&last_inactive_cleanup); }
 inline void gateServer::setConnectCheckTime(void)
 	{ time(&last_connect_cleanup); }
+inline void gateServer::setFirstReconnectTime(void)
+	{ time(&first_reconnect_time); }
+
+inline void gateServer::markRefreshSuppressed(void)
+	{ suppressed_refresh_flag = 1; }
+inline void gateServer::markNoRefreshSuppressed(void)
+	{ suppressed_refresh_flag = 0; }
+inline int gateServer::refreshSuppressed(void) const
+    { return (suppressed_refresh_flag)?1:0; }
 
 // --------- add functions
 inline int gateServer::pvAdd(const char* name, gatePvData& pv)

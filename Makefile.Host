@@ -27,15 +27,17 @@ endif
 
 SHARED_LIBRARIES=NO
 
+# STATIC_BUILD=YES
+
 # Patches for HPUX / aCC
-# NORMAL to suppress "future errors", STATIC as using shared libs produces core dumps
+# NORMAL to suppress "future errors", needs immediate binding as using shared libs produces core dumps
 ifeq ($(HOST_ARCH),hp700)
   CXXCMPLR=NORMAL
-  STATIC_BUILD=YES
+  USR_LDFLAGS += -Wl,-Bimmediate
 endif
 
 # Purify
-# CXX = purify -first-only -chain-length=25 -collector='/opt/gcc/lib/gcc-lib/hppa2.0-hp-hpux10.20/2.95.2/collect2' $($(CPLUSPLUS)_$(CXXCMPLR))
+#CXX = purify -first-only -chain-length=25 $($(CPLUSPLUS)_$(CXXCMPLR))
 
 # Quantify -collection-granularity=function runs faster than default=line
 # Quantify -use-machine=sparcstation_5 sets timing for Nike

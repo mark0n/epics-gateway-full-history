@@ -84,8 +84,8 @@ void gateServer::sig_usr2(int /*x*/)
 	signal(SIGUSR2,gateServer::sig_usr2);
 }
 
-volatile int gateServer::command_flag=0;
-volatile int gateServer::report_flag2=0;
+volatile int gateServer::command_flag = 0;
+volatile int gateServer::report_flag2 = 0;
 
 void gatewayServer(char *prefix)
 {
@@ -133,6 +133,9 @@ void gateServer::mainLoop(void)
 	old=signal(SIGPIPE,sig_pipe);
 	sigignore(SIGPIPE);
 	time(&start_time);
+
+	first_reconnect_time = 0;
+	markNoRefreshSuppressed();
 
 	// Initialize stat counters
 #if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
@@ -443,7 +446,7 @@ gateServer::~gateServer(void)
 
 void gateServer::refreshBeacon(void)
 {
-	gateDebug0(5,"gateServer::refreshBeacon()\n");
+	gateDebug0(1,"gateServer::refreshBeacon()\n");
 	caServer::refreshBeacon();
 }
 
@@ -612,10 +615,20 @@ void gateServer::inactiveDeadCleanup(void)
 	gatePvData *pv;
 	int dead_check=0,in_check=0;
 
-	if(timeDeadCheck()>=global_resources->deadTimeout())
+	// Check for suppressed beacons (and send them if they're due)
+
+	if(refreshSuppressed() &&
+	   timeFirstReconnect() >= global_resources->reconnectInhibit())
+	{
+		refreshBeacon();
+		setFirstReconnectTime();
+		markNoRefreshSuppressed();
+	}
+
+	if(timeDeadCheck() >= global_resources->deadTimeout())
 		dead_check=1;
 
-	if(timeInactiveCheck()>=global_resources->inactiveTimeout())
+	if(timeInactiveCheck() >= global_resources->inactiveTimeout())
 		in_check=1;
 
 	if(dead_check==0 && in_check==0) return;
@@ -722,7 +735,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c, const char* pvname)
 	// see if requested name is allowed
 	if(!(node=getAs()->findEntry(pvname,hostname)))
 	{
-		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",pvname);
+		gateDebug2(1,"gateServer::pvExistTest() %s (from %s) not allowed\n",
+				   pvname, hostname);
 		return pverDoesNotExistHere;
 	}
 

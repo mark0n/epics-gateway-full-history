@@ -20,6 +20,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.30  2000/06/15 12:53:08  lange
+ * += "-mask" commandline option to specify CA event mask.
+ *
  * Revision 1.29  2000/05/02 13:49:39  lange
  * Uses GNU regex library (0.12) for pattern matching;
  * Fixed some CAS beacon problems (reconnecting IOCs)
@@ -123,8 +126,6 @@ public:
 };
 
 // ------------------------- pv data methods ------------------------
-
-time_t gatePvData::first_reconnect_time = 0;
 
 gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
@@ -744,11 +745,15 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 void gatePvData::setReconnectTime(void)
 {
 	time(&dead_alive_time);
-	if(!first_reconnect_time
-	   || (dead_alive_time-first_reconnect_time) >= global_resources->reconnectInhibit())
+	if(!mrg->timeFirstReconnect()
+	   || (dead_alive_time - mrg->timeFirstReconnect()
+		   >= global_resources->reconnectInhibit()))
 	{
 		mrg->refreshBeacon();
-		first_reconnect_time=0;
+		mrg->setFirstReconnectTime();
+		mrg->markNoRefreshSuppressed();
+	} else {
+		mrg->markRefreshSuppressed();
 	}
 }
 

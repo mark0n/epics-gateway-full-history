@@ -21,6 +21,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.12  2000/05/02 13:49:39  lange
+ * Uses GNU regex library (0.12) for pattern matching;
+ * Fixed some CAS beacon problems (reconnecting IOCs)
+ *
  * Revision 1.11  2000/04/05 15:59:33  lange
  * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
  *
@@ -209,7 +213,6 @@ private:
 	time_t no_connect_time; // when no one connected to held PV
 	time_t dead_alive_time; // when PV went dead / came alive
 	time_t last_trans_time; // last transaction occurred at this time
-	static time_t first_reconnect_time; // first timestamp of a reconnect storm
 
 	static void connectCB(CONNECT_ARGS args);	// connection callback
 	static void accessCB(ACCESS_ARGS args);		// access security callback

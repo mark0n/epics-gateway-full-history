@@ -9,9 +9,9 @@
 
 #define GATEWAY_VERSION       1
 #define GATEWAY_REVISION      3
-#define GATEWAY_MODIFICATION  1
+#define GATEWAY_MODIFICATION  2
 
-#define GATEWAY_VERSION_STRING	"CA Proxy Gateway Version 1.3.1"
+#define GATEWAY_VERSION_STRING	"CA Proxy Gateway Version 1.3.2"
 
 #define GATEWAY_CREDITS_STRING  \
           "Developed at Argonne National Laboratory and BESSY\n\n" \
