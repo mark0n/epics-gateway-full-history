@@ -1,0 +1,35 @@
+#
+# Author: Jim Kowalkowski
+# Date: 2/96
+#
+# $Id$
+#
+# $Log$
+#
+
+# EPICS = ../../../..
+EPICS = /usr/local/epics/R3.12.2
+
+include Target.include
+include $(EPICS)/config/CONFIG_EXTENSIONS
+
+DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
+
+DEPLIBS = $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a \
+          gateBase.o gateCA.o gateClient.o gateIpc.o gateList.o \
+          gateResources.o gateServer.o gateway.o
+
+USR_LDLIBS = *.o -lgdd -lca -lCom
+USR_LDFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
+USR_INCLUDES = -I$(EPICS_EXTENSIONS_INCLUDE) -I$(HOME)/src/data
+USR_CFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
+
+# CMPLR =
+
+SRCS.cc = ../gateBase.cc ../gateCA.cc ../gateClient.cc ../gateIpc.cc \
+          ../gateList.cc ../gateResources.cc ../gateServer.cc ../gateway.cc
+
+PROD = gateway
+
+include $(EPICS)/config/RULES.Unix
+
