@@ -130,6 +130,7 @@ gateStat::gateStat(gateServer *s, gateAsEntry *e, const char *n, int t) :
 	attr(NULL),
 	post_data(0),
 	type(t),
+	statType(GATE_STAT_TYPE_PV),
 	serv(s),
 	name(strDup(n)),
 	asentry(e)
@@ -138,12 +139,20 @@ gateStat::gateStat(gateServer *s, gateAsEntry *e, const char *n, int t) :
 // Define the value gdd;
 #ifdef STAT_DOUBLE
 	value=new gdd(global_resources->appValue,aitEnumFloat64);
-	if(value)
-	  value->put((aitFloat64)*serv->getStatTable(type)->init_value);
+	if(!value) {
+		fprintf(stderr,"gateStat::gateStat: Failed to create GDD for %s\n",
+		  n?n:"Unknown name");
+		return;
+	}
+	value->put((aitFloat64)*serv->getStatTable(type)->init_value);
 #else
 	value=new gdd(global_resources->appValue,aitEnumInt32);
-	if(value)
-	  value->put((aitInt32)*serv->getStatTable(type)->init_value);
+	if(!value) {
+		fprintf(stderr,"gateStat::gateStat: Failed to create GDD for %s\n",
+		  n?n:"Unknown name");
+		return;
+	}
+	value->put((aitInt32)*serv->getStatTable(type)->init_value);
 #endif
 	value->setTimeStamp(timeSpec());
 #if DEBUG_UMR
@@ -177,7 +186,7 @@ gateStat::gateStat(gateServer *s, gateAsEntry *e, const char *n, int t) :
 
 gateStat::~gateStat(void)
 {
-	serv->clearStat(type);
+	serv->clearStat(type,statType);
 	if(value) value->unreference();
 	if(attr) attr->unreference();
 	if(name) delete [] name;
@@ -403,6 +412,106 @@ void gateStat::postData(double val)
 	value->dump();
 	fflush(stderr);
 #endif
+}
+
+//////// gateStatDesc (derived from gateStat)
+
+gateStatDesc::gateStatDesc(gateServer *s, gateAsEntry *e, const char *n, int t) :
+	gateStat(s,e,n,t)
+{
+
+	statType=GATE_STAT_TYPE_DESC;
+
+// Define the value gdd;
+	value=new gdd(global_resources->appValue,aitEnumString);
+	if(value)
+	  value->put(serv->getStatTable(type)->desc);
+	value->setTimeStamp(timeSpec());
+#if DEBUG_UMR || 1
+	fflush(stderr);
+	printf("gateStatDesc::gateStatDesc: name=%s\n",name);
+	fflush(stdout);
+	value->dump();
+	fflush(stderr);
+#endif
+
+	// Define the attributes gdd
+	attr=new gdd(global_resources->appValue,aitEnumFloat64);
+	attr = gddApplicationTypeTable::AppTable().getDD(gddAppType_attributes);
+	if(attr) {
+		attr[gddAppTypeIndex_attributes_units].put("");
+		attr[gddAppTypeIndex_attributes_maxElements]=1;
+		attr[gddAppTypeIndex_attributes_precision]=0;
+		attr[gddAppTypeIndex_attributes_graphicLow]=0.0;
+		attr[gddAppTypeIndex_attributes_graphicHigh]=0.0;
+		attr[gddAppTypeIndex_attributes_controlLow]=0.0;
+		attr[gddAppTypeIndex_attributes_controlHigh]=0.0;
+		attr[gddAppTypeIndex_attributes_alarmLow]=0.0;
+		attr[gddAppTypeIndex_attributes_alarmHigh]=0.0;
+		attr[gddAppTypeIndex_attributes_alarmLowWarning]=0.0;
+		attr[gddAppTypeIndex_attributes_alarmHighWarning]=0.0;
+		attr->setTimeStamp(timeSpec());
+	}
+}
+
+gateStatDesc::~gateStatDesc(void)
+{
+#ifdef TEMP
+	serv->clearStat(type);
+	if(value) value->unreference();
+	if(attr) attr->unreference();
+	if(name) delete [] name;
+
+	// Clear the chan_list to insure the gateChan's do not call the
+	// gateStatDesc to remove them after the gateStatDesc is gone. removeChan
+	// also sets the pChan->vc to NULL, the only really necessary
+	// thing to do.
+	gateStatChan *pChan;
+	while((pChan=chan_list.first()))	{
+		removeChan(pChan);
+		pChan->deleteAsClient();
+	}
+#endif
+}
+
+caStatus gateStatDesc::read(const casCtx & /*ctx*/, gdd &dd)
+{
+	static const aitString str = "Gateway Statistics PV";
+	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+	caStatus retVal=S_casApp_noSupport;
+
+	// Branch on application type
+	unsigned at=dd.applicationType();
+	switch(at) {
+	case gddAppType_ackt:
+	case gddAppType_acks:
+	case gddAppType_dbr_stsack_string:
+		fprintf(stderr,"%s gateStatDesc::read: "
+		  "Got unsupported app type %d for %s\n",
+		  timeStamp(),
+		  at,name?name:"Unknown Stat PV");
+		fflush(stderr);
+		retVal=S_casApp_noSupport;
+		break;
+	case gddAppType_class:
+		dd.put(str);
+		retVal=S_casApp_success;
+		break;
+	default:
+		// Copy the current state
+		if(attr) table.smartCopy(&dd,attr);
+		if(value) table.smartCopy(&dd,value);
+		retVal=S_casApp_success;
+		break;
+	}
+#if DEBUG_UMR
+	fflush(stderr);
+	printf("gateStatDesc::read: name=%s\n",name);
+	fflush(stdout);
+	dd.dump();
+	fflush(stderr);
+#endif
+	return retVal;
 }
 
 #endif    // statCount

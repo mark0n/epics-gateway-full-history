@@ -33,6 +33,7 @@
 #define DEBUG_DELAY 0
 #define DEBUG_CLOCK 0
 #define DEBUG_ACCESS 0
+#define DEBUG_DESC 0
 
 #ifdef __linux__
 #undef USE_LINUX_PROC_FOR_CPU
@@ -535,20 +536,34 @@ void gateServer::newAs(void)
 #if statCount
 	// Do the statTable
 	for(i=0; i < statCount; i++) {
-		// See if it has been created
+		// See if the pv has been created
 		if(!stat_table[i].pv) {
 #if DEBUG_ACCESS
 			printf("  i=%d No pv for %s\n",i,stat_table[i].name);
 #endif	
-			continue;
-		}
-		// NULL the entry in the gateStat and its channels and delete
-		// the gateAsClients
+		}  else {
+			// NULL the entry in the gateStat and its channels and delete
+			// the gateAsClients
 #if DEBUG_ACCESS
-		printf("  i=%d %s %s\n",i,
-		  stat_table[i].name,stat_table[i].pv->getName());
+			printf("  i=%d %s %s\n",i,
+			  stat_table[i].name,stat_table[i].pv->getName());
 #endif
-		stat_table[i].pv->removeEntry();
+			stat_table[i].pv->removeEntry();
+		}
+		// See if the desc pv has been created
+		if(!stat_table[i].descPv) {
+#if DEBUG_ACCESS
+			printf("  i=%d No descPv for %s\n",i,stat_table[i].name);
+#endif	
+		}  else {
+			// NULL the entry in the gateStat and its channels and delete
+			// the gateAsClients
+#if DEBUG_ACCESS
+			printf("  i=%d %s %s\n",i,
+			  stat_table[i].name,stat_table[i].descPv->getName());
+#endif
+			stat_table[i].descPv->removeEntry();
+		}
 	}
 #endif // #if statCount
 
@@ -612,26 +627,47 @@ void gateServer::newAs(void)
 #if statCount
 	// Do internal PVs.
 	for(i=0; i < statCount; i++) {
-		// See if it has been created
+		// See if the pv has been created
 		if(!stat_table[i].pv) {
 #if DEBUG_ACCESS
 			printf("  i=%d No pv for %s\n",i,stat_table[i].name);
 #endif	
-			continue;
-		}
-		// Replace the entry in the gateStat and its channels
-#if DEBUG_ACCESS
-		printf("  i=%d %s %s\n",i,
-		  stat_table[i].name,stat_table[i].pv->getName());
-#endif
-		pEntry=getAs()->findEntry(stat_table[i].pv->getName());
-		if(!pEntry) {
-			// Denied, uncreate it
-			delete stat_table[i].pv;
-			stat_table[i].pv=NULL;
 		} else {
-			// Allowed, replace gateAsEntry
-			stat_table[i].pv->resetEntry(pEntry);
+			// Replace the entry in the gateStat and its channels
+#if DEBUG_ACCESS
+			printf("  i=%d %s %s\n",i,
+			  stat_table[i].name,stat_table[i].pv->getName());
+#endif
+			pEntry=getAs()->findEntry(stat_table[i].pv->getName());
+			if(!pEntry) {
+				// Denied, uncreate it
+				delete stat_table[i].pv;
+				stat_table[i].pv=NULL;
+			} else {
+				// Allowed, replace gateAsEntry
+				stat_table[i].pv->resetEntry(pEntry);
+			}
+		}
+		// See if the desc pv has been created
+		if(!stat_table[i].descPv) {
+#if DEBUG_ACCESS
+			printf("  i=%d No descPv for %s\n",i,stat_table[i].name);
+#endif	
+		} else {
+			// Replace the entry in the gateStat and its channels
+#if DEBUG_ACCESS
+			printf("  i=%d %s %s\n",i,
+			  stat_table[i].name,stat_table[i].descPv->getName());
+#endif
+			pEntry=getAs()->findEntry(stat_table[i].descPv->getName());
+			if(!pEntry) {
+				// Denied, uncreate it
+				delete stat_table[i].descPv;
+				stat_table[i].descPv=NULL;
+			} else {
+				// Allowed, replace gateAsEntry
+				stat_table[i].descPv->resetEntry(pEntry);
+			}
 		}
 	}
 #endif // #if statCount
@@ -675,6 +711,7 @@ void gateServer::report1(void)
 	// Stat PVs
 	for(int i=0; i < statCount; i++) {
 		if(stat_table[i].pv) stat_table[i].pv->report(fp);
+		if(stat_table[i].descPv) stat_table[i].descPv->report(fp);
 	}
 #endif
 
@@ -698,10 +735,13 @@ void gateServer::report1(void)
 void gateServer::report2(void)
 {
 	FILE* fp;
+	gatePvData *pv;
+	gateStat *pStat;
+	gateAsEntry *pEntry;
 	time_t t,diff;
 	double rate;
 	int tot_dead=0,tot_inactive=0,tot_active=0,tot_connect=0,tot_disconnect=0;
-	int tot_stat=0;
+	int tot_stat=0, tot_stat_desc=0;
 
 	printf("%s Starting Report2 (PV Summary Report)\n",
 	  timeStamp());
@@ -755,67 +795,151 @@ void gateServer::report2(void)
 	fprintf(fp,"Total active PVs: %d\n",tot_active);
 
 #if statCount
+	tot_stat=tot_stat_desc=0;
+	for(int i=0; i < statCount; i++) if(stat_table[i].pv) tot_stat++;
+	for(int i=0; i < statCount; i++) if(stat_table[i].descPv) tot_stat_desc++;
+	fprintf(fp,"Total active stat PVs: %d [of %d]\n",tot_stat,statCount);
+	fprintf(fp,"Total active stat DESC PVs: %d [of %d]\n",tot_stat_desc,
+	  statCount);
+
+	fprintf(fp,"\nStat PVs:\n"
+	  " Name                              Group        Level Pattern\n");
 	// Stat PVs
 	for(int i=0; i < statCount; i++) {
-		if(stat_table[i].pv) tot_stat++;
+		pStat=stat_table[i].pv;
+		if(pStat && pStat->getName()) {
+			fprintf(fp," %-33s",pStat->getName());
+			pEntry=pStat->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+				
+			}
+		}
 	}
-	fprintf(fp,"Total active stat PVs: %d [of %d]\n",tot_stat,statCount);
-
-	fprintf(fp,"\nStat PVs:\n");
+	// Stat PV DESCs
 	for(int i=0; i < statCount; i++) {
-		if(stat_table[i].pv) {
-			fprintf(fp," %s\n",stat_table[i].pv->getName());
+		pStat=stat_table[i].descPv;
+		if(pStat && pStat->getName()) {
+			fprintf(fp," %-33s",pStat->getName());
+			pEntry=pStat->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+			}
 		}
 	}
 #endif
 
-	fprintf(fp,"\nConnecting PVs:\n");
+	fprintf(fp,"\nConnecting PVs:\n"
+	  " Name                              Group        Level Pattern\n");
+	iter=pv_list.firstIter();
+	while(iter.valid())	{
+		pv=iter->getData();
+		if(pv && pv->getState() == gatePvConnect && pv->name()) {
+			fprintf(fp," %-33s",pv->name());
+			pEntry=pv->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+			}
+		}
+		iter++;
+	}
+	
+	fprintf(fp,"\nDead PVs:\n"
+	  " Name                              Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
-		if(iter->getData()->getState()== gatePvConnect &&
-		    iter->getData()->name())
-			fprintf(fp," %s\n",iter->getData()->name());
+		pv=iter->getData();
+		if(pv && pv->getState() == gatePvDead && pv->name()) {
+			fprintf(fp," %-33s",pv->name());
+			pEntry=pv->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+			}
+		}
 		iter++;
 	}
 
-	fprintf(fp,"\nDead PVs:\n");
+	fprintf(fp,"\nDisconnected PVs:\n"
+	  " Name                              Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
-		if(iter->getData()->getState()== gatePvDead &&
-		    iter->getData()->name())
-			fprintf(fp," %s\n",iter->getData()->name());
+		pv=iter->getData();
+		if(pv &&  pv->getState() == gatePvDisconnect &&pv->name()) {
+			fprintf(fp," %-33s",pv->name());
+			pEntry=pv->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+			}
+		}
 		iter++;
 	}
 
-	fprintf(fp,"\nDisconnected PVs:\n");
+	fprintf(fp,"\nInactive PVs:\n"
+	  " Name                              Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
-		if(iter->getData()->getState()== gatePvDisconnect &&
-		    iter->getData()->name())
-			fprintf(fp," %s\n",iter->getData()->name());
+		pv=iter->getData();
+		if(pv && pv->getState() == gatePvInactive && pv->name()) {
+			fprintf(fp," %-33s",pv->name());
+			pEntry=pv->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+			}
+		}
 		iter++;
 	}
 
-	fprintf(fp,"\nInactive PVs:\n");
+	fprintf(fp,"\nActive PVs:\n"
+	  " Name                              Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
-		if(iter->getData()->getState()== gatePvInactive &&
-		    iter->getData()->name())
-			fprintf(fp," %s\n",iter->getData()->name());
-		iter++;
-	}
-
-	fprintf(fp,"\nActive PVs:\n");
-	iter=pv_list.firstIter();
-	while(iter.valid())
-	{
-		if(iter->getData()->getState()== gatePvActive &&
-		    iter->getData()->name())
-			fprintf(fp," %s\n",iter->getData()->name());
+		pv=iter->getData();
+		if(pv && pv->getState() == gatePvActive && pv->name()) {
+			fprintf(fp," %-33s",pv->name());
+			pEntry=pv->getEntry();
+			if(pEntry) {
+				fprintf(fp," %-16s %d %s\n",
+				  pEntry->group?pEntry->group:"None",
+				  pEntry->level,
+				  pEntry->pattern?pEntry->pattern:"None");
+			} else {
+				fprintf(fp,"\n");
+			}
+		}
 		iter++;
 	}
 
@@ -1017,8 +1141,16 @@ gateServer::~gateServer(void)
 
 #if statCount
 	// remove all server stats
-	for(int i=0; i < statCount; i++)
-		delete stat_table[i].pv;
+	for(int i=0; i < statCount; i++) {
+		if(stat_table[i].pv) {
+			delete stat_table[i].pv;
+			stat_table[i].pv=NULL;
+		}
+		if(stat_table[i].descPv) {
+			delete stat_table[i].descPv;
+			stat_table[i].descPv=NULL;
+		}
+	}
 #endif
 
 	int status=ca_flush_io();
@@ -1414,10 +1546,21 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 #if statCount
 	// Check internal PVs
 	if(!strncmp(stat_prefix,real_name,stat_prefix_len)) {
-		for(int i=0; i < statCount; i++)
-		{
-			if(strcmp(real_name,stat_table[i].pvname)==0)
-			{
+		for(int i=0; i < statCount; i++) {
+			if(strcmp(real_name,stat_table[i].pvName)==0) {
+#if DEBUG_DESC
+				printf("  pattern=%s alias=%s group=%s\n",
+				  pEntry->pattern?pEntry->pattern:"NULL",
+				  pEntry->alias?pEntry->alias:"NULL",
+				  pEntry->group?pEntry->group:"NULL");
+				printf("  pverExistsHere\n"); 
+#endif
+				return pverExistsHere;
+			}
+			if(strcmp(real_name,stat_table[i].descPvName)==0) {
+#if DEBUG_DESC
+				printf("  pverExistsHere\n"); 
+#endif
 				return pverExistsHere;
 			}
 		}
@@ -1537,14 +1680,22 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 #if statCount
 	// Trap (and create if needed) server stats PVs
 	if(!strncmp(stat_prefix,real_name,stat_prefix_len)) {
-		for(int i=0; i < statCount; i++)
-		{
-			if(strcmp(real_name,stat_table[i].pvname)==0)
-			{
-				if(stat_table[i].pv==NULL)
+		for(int i=0; i < statCount; i++) {
+			if(strcmp(real_name,stat_table[i].pvName) == 0) {
+				if(stat_table[i].pv == NULL)
 				  stat_table[i].pv=new gateStat(this,pEntry,real_name,i);
-				
+#if DEBUG_DESC
+				printf("gateServer::createPV:  %s\n",stat_table[i].pv->getName());
+#endif
 				return pvCreateReturn(*stat_table[i].pv);
+			}
+			if(strcmp(real_name,stat_table[i].descPvName) == 0) {
+				if(stat_table[i].descPv == NULL)
+				  stat_table[i].descPv=new gateStatDesc(this,pEntry,real_name,i);
+#if DEBUG_DESC
+				printf("gateServer::createPV:  %s\n",stat_table[i].descPv->getName());
+#endif
+				return pvCreateReturn(*stat_table[i].descPv);
 			}
 		}
 	}
@@ -1681,54 +1832,63 @@ void gateServer::initStats(char *prefix)
 #ifdef STAT_PVS
 		case statVcTotal:
 			stat_table[i].name="vctotal";
+			stat_table[i].desc="Total VCs";
 			stat_table[i].init_value=&total_vc;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statPvTotal:
 			stat_table[i].name="pvtotal";
+			stat_table[i].desc="Total PVs";
 			stat_table[i].init_value=&total_pv;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statAlive:
-			stat_table[i].name="alive";
+			stat_table[i].name="connected";
+			stat_table[i].desc="Connected PVs";
 			stat_table[i].init_value=&total_alive;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statActive:
 			stat_table[i].name="active";
+			stat_table[i].desc="Active PVs";
 			stat_table[i].init_value=&total_active;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statInactive:
 			stat_table[i].name="inactive";
+			stat_table[i].desc="Inactive PVs";
 			stat_table[i].init_value=&total_inactive;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statUnconnected:
 			stat_table[i].name="unconnected";
+			stat_table[i].desc="Unconnected PVs";
 			stat_table[i].init_value=&total_unconnected;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statDead:
 			stat_table[i].name="dead";
+			stat_table[i].desc="Dead PVs";
 			stat_table[i].init_value=&total_dead;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statConnecting:
 			stat_table[i].name="connecting";
+			stat_table[i].desc="Connecting PVs";
 			stat_table[i].init_value=&total_connecting;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statDisconnected:
 			stat_table[i].name="disconnected";
+			stat_table[i].desc="Disconnected PVs";
 			stat_table[i].init_value=&total_disconnected;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
@@ -1736,6 +1896,7 @@ void gateServer::initStats(char *prefix)
 # ifdef USE_FDS
 		case statFd:
 			stat_table[i].name="fd";
+			stat_table[i].desc="FDs";
 			stat_table[i].init_value=&total_fd;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
@@ -1745,36 +1906,42 @@ void gateServer::initStats(char *prefix)
 #ifdef RATE_STATS
 		case statClientEventRate:
 			stat_table[i].name="clientEventRate";
+			stat_table[i].desc="Client Event Rate";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
 			break;
 		case statPostEventRate:
-			stat_table[i].name="postEventRate";
+			stat_table[i].name="clientPostRate";
+			stat_table[i].desc="Client Post Rate";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
 			break;
 		case statExistTestRate:
 			stat_table[i].name="existTestRate";
+			stat_table[i].desc="Exist Test Rate";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
 			break;
 		case statLoopRate:
 			stat_table[i].name="loopRate";
+			stat_table[i].desc="Loop Rate";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
 			break;
 		case statCPUFract:
 			stat_table[i].name="cpuFract";
+			stat_table[i].desc="CPU Fraction";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="";
 			stat_table[i].precision=3;
 			break;
 		case statLoad:
 			stat_table[i].name="load";
+			stat_table[i].desc="Load";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="";
 			stat_table[i].precision=3;
@@ -1783,12 +1950,14 @@ void gateServer::initStats(char *prefix)
 #ifdef CAS_DIAGNOSTICS
 		case statServerEventRate:
 			stat_table[i].name="serverEventRate";
+			stat_table[i].desc="Server Event Rate";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
 			break;
 		case statServerEventRequestRate:
 			stat_table[i].name="serverPostRate";
+			stat_table[i].desc="Server Post Rate";
 			stat_table[i].init_value=&zero;
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
@@ -1797,42 +1966,49 @@ void gateServer::initStats(char *prefix)
 #ifdef CONTROL_PVS
 		case statCommandFlag:
 			stat_table[i].name="commandFlag";
+			stat_table[i].desc="Command Flag";
 			stat_table[i].init_value=&command_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statReport1Flag:
 			stat_table[i].name="report1Flag";
+			stat_table[i].desc="Report 1 Flag";
 			stat_table[i].init_value=&report1_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statReport2Flag:
 			stat_table[i].name="report2Flag";
+			stat_table[i].desc="Report 2 Flag";
 			stat_table[i].init_value=&report2_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statReport3Flag:
 			stat_table[i].name="report3Flag";
+			stat_table[i].desc="Report 3 Flag";
 			stat_table[i].init_value=&report3_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statNewAsFlag:
 			stat_table[i].name="newAsFlag";
+			stat_table[i].desc="New AS Flag";
 			stat_table[i].init_value=&newAs_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statQuitFlag:
 			stat_table[i].name="quitFlag";
+			stat_table[i].desc="Quit Flag";
 			stat_table[i].init_value=&quit_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
 			break;
 		case statQuitServerFlag:
 			stat_table[i].name="quitServerFlag";
+			stat_table[i].desc="Quit Server Flag";
 			stat_table[i].init_value=&quitserver_flag;
 			stat_table[i].units="";
 			stat_table[i].precision=0;
@@ -1840,16 +2016,23 @@ void gateServer::initStats(char *prefix)
 #endif
 		}
 
-		stat_table[i].pvname=new char[stat_prefix_len+1+strlen(stat_table[i].name)+1];
-		sprintf(stat_table[i].pvname,"%s.%s",stat_prefix,stat_table[i].name);
+		stat_table[i].pvName=new char[stat_prefix_len+1+strlen(stat_table[i].name)+1];
+		sprintf(stat_table[i].pvName,"%s:%s",stat_prefix,stat_table[i].name);
 		stat_table[i].pv=NULL;
+		stat_table[i].descPvName=new char[stat_prefix_len+1+strlen(stat_table[i].name)+6];
+		sprintf(stat_table[i].descPvName,"%s:%s.DESC",stat_prefix,stat_table[i].name);
+		stat_table[i].descPv=NULL;
 	}
 }
 
-// KE: Not used
-void gateServer::clearStat(int type)
+// KE: Only used in gateStat destructor
+void gateServer::clearStat(int type, gateStatType statType)
 {
-	stat_table[type].pv=NULL;
+	if(statType == GATE_STAT_TYPE_DESC) {
+		stat_table[type].descPv=NULL;
+	} else {
+		stat_table[type].pv=NULL;
+	}
 }
 
 #if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)

@@ -21,9 +21,15 @@
 #include "casdef.h"
 #include "aitTypes.h"
 
+typedef enum {
+	GATE_STAT_TYPE_PV=0,
+	GATE_STAT_TYPE_DESC
+} gateStatType;
+
 class gdd;
 class gateServer;
 class gateStat;
+class gateStatDesc;
 class gateAs;
 class gateAsClient;
 class gateAsEntry;
@@ -51,13 +57,13 @@ public:
 	virtual void interestDelete(void);
 	virtual aitEnum bestExternalType(void) const;
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
-	virtual caStatus write(const casCtx &ctx, const gdd &value);
+	virtual caStatus write(const casCtx &ctx, const gdd &dd);
 	virtual unsigned maxSimultAsyncOps(void) const;
 	virtual const char *getName() const;
 	virtual casChannel *createChannel (const casCtx &ctx,
 		const char* const pUserName, const char* const pHostName);
 	
-	caStatus write(const casCtx &ctx, const gdd &value, gateChan &chan);
+	caStatus write(const casCtx &ctx, const gdd &dd, gateChan &chan);
 
     gateAsEntry* getEntry(void) const { return asentry; }
 	void removeEntry(void);
@@ -72,15 +78,44 @@ public:
 	
 	void report(FILE *fp);
 
-private:
+protected:
 	gdd *value;
 	gdd *attr;
 	int post_data;
 	int type;
+	gateStatType statType;
 	gateServer *serv;
 	char *name;
 	tsDLList<gateStatChan> chan_list;
 	gateAsEntry* asentry;
+};
+
+// The gateStatDesc exists only to provide the equivalent of a DESC
+// field.  It inherits from gateStat so we can use the parts that are
+// already implemented, especially the gateChannel part.  We just
+// override the parts that are different.
+class gateStatDesc : public gateStat
+{
+public:
+	gateStatDesc(gateServer *s, gateAsEntry *e, const char *n, int t);
+	virtual ~gateStatDesc(void);
+	
+	// CA server interface functions
+	virtual aitEnum bestExternalType(void) const { return aitEnumString; }
+	virtual caStatus read(const casCtx &ctx, gdd &prototype);
+
+	// Do not allow writes
+	virtual caStatus write(const casCtx &ctx, const gdd &dd)
+	  { return S_casApp_noSupport; }
+	caStatus write(const casCtx &ctx, const gdd &dd, gateChan &chan)
+	  { return S_casApp_noSupport; }
+
+	// Override these to do nothing.  They should not be called.
+	void postData(long val) {};
+	void postData(unsigned long val) {};
+	void postData(double val) {};
+	
+private:
 };
 
 #endif

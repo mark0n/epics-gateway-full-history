@@ -530,7 +530,7 @@ pvlist file as well as here.</p>
 <ol>
   <li>EVALUATION ORDER &lt;eval-order&gt;</li>
   <li>&lt;pv-name-pattern&gt; DENY [FROM] [&lt;host&gt; ...]</li>
-  <li>&lt;pv-name-pattern&gt; ALIAS &lt;actual-pv-name&gt; [&lt;asg&gt;
+  <li>&lt;pv-name-pattern&gt; ALIAS &lt;real-pv-name&gt; [&lt;asg&gt;
     [&lt;asl&gt;]]</li>
   <li>&lt;pv-name-pattern&gt; ALLOW [&lt;asg&gt; [&lt;asl&gt;]]</li>
 </ol>
@@ -541,10 +541,10 @@ pvlist file as well as here.</p>
   <li>&lt;pv-name-pattern&gt; is a regular expression that matches process
     variable names.</li>
   <li>&lt;host&gt; is an unqualified host name, e.g. hydra.</li>
-  <li>&lt;actual-pv-name&gt; is a substitution pattern that specifies the
-    real process variable name. Occurrences of \0 ... \9 in
-    &lt;actual-pv-name&gt; are replaced by matched sub-expressions in the
-    &lt;pv-name-pattern&gt;.</li>
+  <li>&lt;real-pv-name&gt; is a substitution pattern that specifies the real
+    process variable name. Occurrences of \1 ... \9 in &lt;real-pv-name&gt;
+    are replaced by matched sub-expressions in the
+  &lt;pv-name-pattern&gt;.</li>
   <li>&lt;asg&gt; is an access security group as specified in the access
     file. [The default group is DEFAULT.]</li>
   <li>&lt;asl&gt; is the access security level (0 or 1). These numbers
@@ -599,13 +599,17 @@ example.</p>
 
 <p><strong>ALIAS</strong></p>
 
-<p>This defines a process variable alias. The Gateway will transparently
-translate requested process variable names to different actual process
-variable names. The actual name may contain the special escape sequences \0
-... \9 which will be replaced by the nth subexpression matched. \0 is the
-complete matched expression. See a UNIX book on regular expressions for more
-information. There is an example in the <a href="GATEWAY.pvlist">sample
-pvlist file</a>.</p>
+<p>This defines a process variable alias and allows it as a pattern for names
+which the Gateway should serve. For process variable names that match
+&lt;pv-name-pattern&gt;, the Gateway translates the name into a real process
+variable name and uses the real name as if it had been the one specified. The
+&lt;real-pv-name&gt; may contain the special escape sequences \1 ... \9 which
+will be replaced by the nth subexpression matched. See a UNIX book on regular
+expressions for more information. There is an example in the<a
+href="GATEWAY.pvlist"> sample pvlist file</a>. Access security rules to be
+used for process variables matched by this pattern may be specified. If not
+specified, the defaults are the DEFAULT group and level 1. Apart from
+specifying an alias, this rule is functionally the same as ALLOW.</p>
 
 <p><strong>ALLOW</strong></p>
 

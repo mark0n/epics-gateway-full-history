@@ -45,6 +45,7 @@
 #include "gateResources.h"
 #include "gateVc.h"
 #include "gatePv.h"
+#include "gateStat.h"
 
 class gateServer;
 class gateAs;
@@ -151,12 +152,15 @@ private:
 
 typedef struct gateServerStats
 {
-	const char* name;
-	char* pvname;
-	gateStat* pv;
+	const char *name;
+	char *pvName;
+	char *descPvName;
+	gateStat *pv;
+	gateStatDesc *descPv;
 	// Volatile so it can be used with flags, which are volatile
 	// Pointer so it will use the current value at initialization
 	volatile unsigned long* init_value;
+	const char *desc;
 	const char *units;
 	short precision;
 } gateServerStats;
@@ -217,7 +221,7 @@ public:
 	void setStat(int type, double val);
 	void setStat(int type, unsigned long val);
 	caStatus processStat(int type, double val);
-	void clearStat(int type);
+	void clearStat(int type, gateStatType statType);
 	void initStats(char *prefix);
 	char* stat_prefix;
 	int stat_prefix_len;	
