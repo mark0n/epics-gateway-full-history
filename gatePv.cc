@@ -264,7 +264,7 @@ int gatePvData::activate(gateVcData* vcd)
 	mrg->setStat(statActive,++mrg->total_active);
 #endif
 	
-	int rc=0;
+	int rc=-1;
 	
 	switch(getState())
 	{
@@ -274,22 +274,22 @@ int gatePvData::activate(gateVcData* vcd)
 		vc=vcd;
 		setState(gatePvActive);
 		setActiveTime();
-		rc=get();
+		vc->setReadAccess(ca_read_access(chID)?aitTrue:aitFalse);
+		vc->setWriteAccess(ca_write_access(chID)?aitTrue:aitFalse);
+		if(ca_read_access(chID)) rc=get();
+		else rc=0;
 		break;
 	case gatePvDead:
 		gateDebug0(3,"gatePvData::activate() PV is dead\n");
 		vc=NULL; // NOTE: be sure vc does not respond
-		rc=-1;
 		break;
 	case gatePvActive:
 		gateDebug0(2,"gatePvData::activate() an active PV?\n");
-		rc=-1;
 		break;
 	case gatePvConnect:
 		// already pending, just return
 		gateDebug0(3,"gatePvData::activate() connect pending PV?\n");
 		markAddRemoveNeeded();
-		rc=-1;
 		break;
 	}
 	return rc;
@@ -824,7 +824,6 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 			pv->data_func=(gateCallback)NULL;
 			break;
 		}
-
 		pv->max_elements=pv->totalElements();
 		pv->life();
 	}

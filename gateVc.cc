@@ -145,14 +145,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	pv_data(NULL),
 	event_data(NULL)
 {
-	int rc;
-
 	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
-
-	if(global_resources->isReadOnly())
-		write_access=aitFalse;
-	else
-		write_access=aitTrue;
 
 	select_mask|=(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
 
@@ -168,18 +161,14 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 		setState(gateVcConnect);
 		entry=pv->getEntry();
 
-		rc = pv->activate(this);
-		switch (rc) {
-		case 1:
-			read_access=aitFalse;
-		case 0:
+		if(pv->activate(this)==0)
+		{
 			mrg->vcAdd(pv_name,*this);
 			markInList();
 			// set state to gateVcConnect used to be here
-			break;
-		default :
-			status=1;
 		}
+		else
+			status=1;
 	}
 	else
 		status=1;
