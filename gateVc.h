@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.7  1996/11/07 14:11:08  jbk
+ * Set up to use the latest CA server library.
+ * Push the ulimit for FDs up to maximum before starting CA server
+ *
  * Revision 1.6  1996/10/22 15:58:42  jbk
  * changes, changes, changes
  *
@@ -51,6 +55,7 @@ class gatePvData;
 class gateServer;
 class gateAsyncR;
 class gateAsyncW;
+class gateVcData;
 
 // ----------------------- vc data stuff -------------------------------
 
@@ -68,11 +73,14 @@ public:
 	virtual caStatus write(const casCtx &ctx, gdd &value);
 	virtual void destroy(void);
 	virtual unsigned maxSimultAsyncOps(void) const;
+	virtual casChannel *createChannel (const casCtx &ctx,
+		const char * const pUserName, const char * const pHostName);
 
 	int pending(void);
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }
 	int ready(void)				{ return (pv_state==gateVcReady)?1:0; }
 
+	void report(void);
 	void dumpValue(void);
 	void dumpAttributes(void);
 
@@ -126,6 +134,8 @@ private:
 	gateVcState pv_state;
 	gateServer* mrg;
 	char* pv_name;
+	const char* pv_user;
+	const char* pv_host;
 	aitString pv_string;
 	int in_list_flag;
 	int prev_post_value_changes;

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.7  1996/10/22 15:58:38  jbk
+// changes, changes, changes
+//
 // Revision 1.6  1996/09/12 12:17:53  jbk
 // Fixed up file defaults and logging in the resources class
 //
@@ -26,7 +29,9 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/types.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "gateResources.h"
 #include "gddAppTable.h"
@@ -35,16 +40,19 @@ gateResources* global_resources;
 
 extern int patmatch(char *pattern, char *string);
 
-gateResources::gateResources(void)
+gateResources::gateResources(char* home)
 {
 	pv_access_file=NULL;
 	pv_list_file=NULL;
+	pv_dis_file=NULL;
 	pv_alias_file=NULL;
 	log_file=NULL;
 	alias_table=NULL;
 	alias_buffer=NULL;
 	list_buffer=NULL;
 	pattern_list=NULL;
+	dis_buffer=NULL;
+	pattern_dis=NULL;
 
 	home_dir=strDup(GATE_HOME);
 	suffix=strDup(GATE_SUFFIX);
@@ -53,6 +61,8 @@ gateResources::gateResources(void)
 	debug_level=0;
 	log_on=0;
 	ro=0;
+
+	if(home) setHome(home);
 
 	genLogFile();
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
@@ -69,9 +79,14 @@ gateResources::gateResources(void)
 	appAttributes=tt.getApplicationType("attributes");
 	appMenuitem=tt.getApplicationType("menuitem");
 
-	if(access(GATE_PV_ACCESS_FILE,F_OK)==0) setAccessFile(GATE_PV_ACCESS_FILE);
-	if(access(GATE_PV_LIST_FILE,F_OK)==0)   setAccessFile(GATE_PV_LIST_FILE);
-	if(access(GATE_PV_ALIAS_FILE,F_OK)==0)  setAccessFile(GATE_PV_ALIAS_FILE);
+	if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
+		setAccessFile(GATE_PV_ACCESS_FILE);
+	if(access(GATE_PV_LIST_FILE,F_OK)==0)
+		setListFile(GATE_PV_LIST_FILE);
+	if(access(GATE_PV_ALIAS_FILE,F_OK)==0)
+		setAliasFile(GATE_PV_ALIAS_FILE);
+	if(access(GATE_PV_DISALLOW_FILE,F_OK)==0)
+		setDisallowFile(GATE_PV_DISALLOW_FILE);
 }
 
 gateResources::~gateResources(void)
@@ -81,6 +96,7 @@ gateResources::~gateResources(void)
 	if(pv_access_file)	delete [] pv_access_file;
 	if(pv_list_file)	delete [] pv_list_file;
 	if(pv_alias_file)	delete [] pv_alias_file;
+	if(pv_dis_file)		delete [] pv_dis_file;
 
 	delete [] home_dir;
 	delete [] log_file;
@@ -129,7 +145,7 @@ int gateResources::setListFile(char* file)
 
 	pv_list_file=strDup(file);
 
-	if( (pv_fd=fopen(pv_list_file,"r"))==(FILE*)NULL ||
+	if( (pv_fd=fopen(pv_list_file,"r"))==NULL ||
 		fstat(fileno(pv_fd),&stat_buf)<0 )
 	{
 		fprintf(stderr,"Cannot open %s, all PV requests will be accepted\n",
@@ -158,6 +174,53 @@ int gateResources::setListFile(char* file)
 	}
 
 	// for(i=0;pattern_list[i];i++) fprintf(stderr,"<%s>\n",pattern_list[i]);
+
+	fclose(pv_fd);
+	return 0;
+}
+
+int gateResources::setDisallowFile(char* file)
+{
+	FILE* pv_fd;
+	struct stat stat_buf;
+	int i,j;
+	unsigned long pv_len;
+	char* pc;
+
+	if(dis_buffer)  delete [] dis_buffer;
+	if(pattern_dis) delete [] pattern_dis;
+	if(pv_dis_file) delete [] pv_dis_file;
+
+	pv_dis_file=strDup(file);
+
+	if((pv_fd=fopen(pv_dis_file,"r"))==NULL ||
+		fstat(fileno(pv_fd),&stat_buf)<0 )
+	{
+		fprintf(stderr,"Cannot open %s, no PVs will be forced to be ignored\n",
+			pv_dis_file);
+		fflush(stderr);
+		pattern_dis=new char*[1];
+		pattern_dis[0]=NULL;
+		dis_buffer=NULL;
+	}
+	else
+	{
+		pv_len=(unsigned long)stat_buf.st_size;
+		dis_buffer=new char[pv_len+2];
+
+		for(i=0;fgets(&dis_buffer[i],pv_len-i+2,pv_fd);)
+			i+=strlen(&dis_buffer[i]);
+
+		for(i=0,j=0;i<pv_len;i++) if(dis_buffer[i]=='\n') j++;
+		pattern_dis=new char*[j+1];
+
+		for(i=0,pc=strtok(dis_buffer," \n");pc;pc=strtok(NULL," \n"))
+			pattern_dis[i++]=pc;
+
+		pattern_dis[i]=NULL;
+	}
+
+	// for(i=0;pattern_dis[i];i++) fprintf(stderr,"<%s>\n",pattern_dis[i]);
 
 	fclose(pv_fd);
 	return 0;
@@ -258,18 +321,37 @@ int gateResources::setAccessFile(char* file)
 int gateResources::setUpLogging(void)
 {
 	int rc=0;
-
 #ifdef DEBUG_MODE
 	return rc;
 #else
-	if( (freopen(log_file,"w",stderr))==(FILE*)NULL )
+	char cur_time[300];
+	struct stat sbuf;
+	time_t t;
+	time(&t);
+
+	if(stat(log_file,&sbuf)==0)
+	{
+		if(sbuf.st_size>0)
+		{
+			sprintf(cur_time,"%s.%lu",log_file,(unsigned long)t);
+			if(link(log_file,cur_time)<0)
+			{
+				fprintf(stderr,"Failure to move old log file to new name %s",
+					cur_time);
+			}
+			else
+				unlink(log_file);
+		}
+	}
+	
+	if( (freopen(log_file,"w",stderr))==NULL )
 	{
 		fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
 		fflush(stderr);
 		rc=-1;
 	}
 
-	if( (freopen(log_file,"w",stdout))==(FILE*)NULL )
+	if( (freopen(log_file,"a",stdout))==NULL )
 	{
 		fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
 		fflush(stderr);
@@ -321,6 +403,23 @@ int gateResources::matchName(char* item)
 }
 
 int gateResources::matchOne(char* pattern, char* item)
+{
+	return patmatch(pattern,item);
+}
+
+int gateResources::ignoreMatchName(char* item)
+{
+	int rc,i;
+
+	if(!pattern_dis) return 1; // accept all request if no table
+
+	for(rc=0,i=0;pattern_dis[i] && rc==0;i++)
+		rc=matchOne(pattern_dis[i],item);
+
+	return rc;
+}
+
+int gateResources::ignoreMatchOne(char* pattern, char* item)
 {
 	return patmatch(pattern,item);
 }

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.8  1996/11/21 19:29:17  jbk
+// Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
+//
 // Revision 1.7  1996/11/07 14:11:09  jbk
 // Set up to use the latest CA server library.
 // Push the ulimit for FDs up to maximum before starting CA server
@@ -113,6 +116,8 @@ void operator delete(void* x)
 #define PARM_HELP			14
 #define PARM_NS				15
 #define PARM_RO				16
+#define PARM_UID			17
+#define PARM_DISALLOW		18
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
@@ -136,6 +141,7 @@ static PARM_STUFF ptable[] = {
 	{ "-alias",				6,	PARM_ALIAS,			"file_name" },
 	{ "-log",				4,	PARM_LOG,			"file_name" },
 	{ "-access",			7,	PARM_ACCESS,		"file_name" },
+	{ "-disallow",			9,	PARM_DISALLOW,		"file_name" },
 	{ "-home",				5,	PARM_HOME,			"directory" },
 	{ "-sip",				4,	PARM_SERVER_IP,		"IP_address" },
 	{ "-cip",				4,	PARM_CLIENT_IP,		"IP_address_list" },
@@ -145,6 +151,7 @@ static PARM_STUFF ptable[] = {
 	{ "-inactive_timeout",	17,	PARM_INACTIVE,		"seconds" },
 	{ "-dead_timeout",		13,	PARM_DEAD,			"seconds" },
 	{ "-noserver",			9,	PARM_NS,			"(start interactively)" },
+	{ "-uid",				4,	PARM_UID,			"user_id_number" },
 	{ "-ns",				3,	PARM_NS,			NULL },
 	{ "-ro",				3,	PARM_RO,			NULL },
 	{ "-help",				5,	PARM_HELP,			NULL },
@@ -156,21 +163,49 @@ typedef void (*SIG_FUNC)(int);
 static SIG_FUNC save_hup = NULL;
 static SIG_FUNC save_int = NULL;
 static SIG_FUNC save_term = NULL;
+static SIG_FUNC save_bus = NULL;
+static SIG_FUNC save_ill = NULL;
+static SIG_FUNC save_segv = NULL;
 
 static void sig_end(int sig)
 {
-	char num[40];
-
-	sprintf(num,"PV Gateway Ending (signal=%d)",sig);
-	syslog(LOG_NOTICE|LOG_DAEMON,num);
+	fflush(stdout);
+	fflush(stderr);
 
 	switch(sig)
 	{
-	case SIGHUP: if(save_hup) save_hup(sig); break;
-	case SIGTERM: if(save_term) save_term(sig); break;
-	case SIGINT: if(save_int) save_int(sig); break;
-	default: break;
+	case SIGHUP:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGHUP)");
+		if(save_hup) save_hup(sig);
+		break;
+	case SIGTERM:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGTERM)");
+		if(save_term) save_term(sig);
+		break;
+	case SIGINT:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGINT)");
+		if(save_int) save_int(sig);
+		break;
+	case SIGILL:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGILL)");
+		if(save_ill) save_ill(sig);
+		abort();
+		break;
+	case SIGBUS:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGBUS)");
+		if(save_bus) save_bus(sig);
+		abort();
+		break;
+	case SIGSEGV:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGSEGV)");
+		if(save_segv) save_segv(sig);
+		abort();
+		break;
+	default:
+		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Exiting (Unknown Signal)");
+		break;
 	}
+
 	exit(0);
 }
 
@@ -223,27 +258,37 @@ static int startEverything(void)
 	sid=getpid();
 	
 	fprintf(fd,"\n");
-	fprintf(fd,"# option:\n");
+	fprintf(fd,"# options:\n");
 	fprintf(fd,"# home=<%s>\n",global_resources->homeDirectory());
 	fprintf(fd,"# access file=<%s>\n",global_resources->accessFile());
+	fprintf(fd,"# no access file=<%s>\n",global_resources->disallowFile());
 	fprintf(fd,"# list file=<%s>\n",global_resources->listFile());
 	fprintf(fd,"# alias file=<%s>\n",global_resources->aliasFile());
 	fprintf(fd,"# log file=<%s>\n",global_resources->logFile());
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
-	fprintf(fd,"# dead t-out=%d\n",global_resources->deadTimeout());
-	fprintf(fd,"# connect t-out=%d\n",global_resources->connectTimeout());
-	fprintf(fd,"# inactive t-out=%d\n",global_resources->inactiveTimeout());
+	fprintf(fd,"# dead timeout=%d\n",global_resources->deadTimeout());
+	fprintf(fd,"# connect timeout=%d\n",global_resources->connectTimeout());
+	fprintf(fd,"# inactive timeout=%d\n",global_resources->inactiveTimeout());
+	fprintf(fd,"# user id=%d\n",getuid());
+	fprintf(fd,"# \n");
+	fprintf(fd,"# use the following the get a report in the log file:\n");
+	fprintf(fd,"#    kill -USR1 %d\n",sid);
+	fprintf(fd,"# \n");
+
+	if(global_resources->isReadOnly())
+		fprintf(fd,"# Gateway running in read-only mode\n");
+
 	if(client_ip_addr)
 	{
 		fprintf(fd,"# %s\n",gate_ca_list);
 		fprintf(fd,"# %s\n",gate_ca_auto_list);
 	}
-	if(server_ip_addr) fprintf(fd,"# %s\n",gate_cas_addr);
-	if(client_port) fprintf(fd,"# %s\n",gate_ca_port);
-	if(server_port) fprintf(fd,"# %s\n",gate_cas_port);
-	fprintf(fd,"\n");
-	fprintf(fd,"kill %d\n",sid);
-	fprintf(fd,"\n");
+
+	if(server_ip_addr)	fprintf(fd,"# %s\n",gate_cas_addr);
+	if(client_port)		fprintf(fd,"# %s\n",gate_ca_port);
+	if(server_port)		fprintf(fd,"# %s\n",gate_cas_port);
+
+	fprintf(fd,"\n kill %d\n\n",sid);
 	fflush(fd);
 	
 	if(fd!=stderr) fclose(fd);
@@ -265,6 +310,9 @@ static int startEverything(void)
 	save_hup=signal(SIGHUP,sig_end);
 	save_term=signal(SIGTERM,sig_end);
 	save_int=signal(SIGINT,sig_end);
+	save_ill=signal(SIGILL,sig_end);
+	save_bus=signal(SIGBUS,sig_end);
+	save_segv=signal(SIGSEGV,sig_end);
 
 	syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Starting");
 
@@ -274,16 +322,25 @@ static int startEverything(void)
 
 int main(int argc, char** argv)
 {
-	int level,i,j,not_done,no_error,connect_tout,inactive_tout,dead_tout;
-	char* home_dir;
+	int i,j,uid;
 
-	global_resources = new gateResources;
-	gateResources* gr = global_resources;
+	int not_done=1;
+	int no_error=1;
+	int gave_log_option=0;
+	int level=0;
+	int read_only=0;
+	int connect_tout=-1;
+	int inactive_tout=-1;
+	int dead_tout=-1;
+	char* home_dir=NULL;
+	char* pv_file=NULL;
+	char* access_file=NULL;
+	char* disallow_file=NULL;
+	char* alias_file=NULL;
+	char* log_file=NULL;
 
-	if(home_dir=getenv("GATEWAY_HOME"))
-		gr->setHome(home_dir);
+	home_dir=getenv("GATEWAY_HOME");
 
-	not_done=1; no_error=1;
 	for(i=1;i<argc && no_error;i++)
 	{
 		for(j=0;not_done && no_error && ptable[j].parm;j++)
@@ -302,10 +359,7 @@ int main(int argc, char** argv)
 							if(sscanf(argv[i],"%d",&level)<1)
 								no_error=0;
 							else
-							{
 								not_done=0;
-								gr->setDebugLevel(level);
-							}
 						}
 					}
 					break;
@@ -317,8 +371,21 @@ int main(int argc, char** argv)
 					not_done=0;
 					break;
 				case PARM_RO:
-					gr->setReadOnly();
+					read_only=1;
 					not_done=0;
+					break;
+				case PARM_UID:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							sscanf(argv[i],"%d",&uid);
+							setuid(uid);
+							not_done=0;
+						}
+					}
 					break;
 				case PARM_PV:
 					if(++i>=argc) no_error=0;
@@ -327,7 +394,19 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							gr->setListFile(argv[i]);
+							pv_file=argv[i];
+							not_done=0;
+						}
+					}
+					break;
+				case PARM_DISALLOW:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							disallow_file=argv[i];
 							not_done=0;
 						}
 					}
@@ -339,7 +418,7 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							gr->setAliasFile(argv[i]);
+							alias_file=argv[i];
 							not_done=0;
 						}
 					}
@@ -351,7 +430,8 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							gr->setLogFile(argv[i]);
+							log_file=argv[i];
+							gave_log_option=1;
 							not_done=0;
 						}
 					}
@@ -363,7 +443,7 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							gr->setAccessFile(argv[i]);
+							access_file=argv[i];
 							not_done=0;
 						}
 					}
@@ -375,7 +455,7 @@ int main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							gr->setHome(argv[i]);
+							home_dir=argv[i];
 							not_done=0;
 						}
 					}
@@ -442,10 +522,7 @@ int main(int argc, char** argv)
 							if(sscanf(argv[i],"%d",&dead_tout)<1)
 								no_error=0;
 							else
-							{
-								gr->setDeadTimeout(dead_tout);
 								not_done=0;
-							}
 						}
 					}
 					break;
@@ -459,10 +536,7 @@ int main(int argc, char** argv)
 							if(sscanf(argv[i],"%d",&inactive_tout)<1)
 								no_error=0;
 							else
-							{
 								not_done=0;
-								gr->setInactiveTimeout(inactive_tout);
-							}
 						}
 					}
 					break;
@@ -476,10 +550,7 @@ int main(int argc, char** argv)
 							if(sscanf(argv[i],"%d",&connect_tout)<1)
 								no_error=0;
 							else
-							{
 								not_done=0;
-								gr->setConnectTimeout(connect_tout);
-							}
 						}
 					}
 					break;
@@ -492,6 +563,9 @@ int main(int argc, char** argv)
 		not_done=1;
 		if(ptable[j].parm==NULL) no_error=0;
 	}
+
+	global_resources = new gateResources(home_dir);
+	gateResources* gr = global_resources;
 
 	if(no_error==0)
 	{
@@ -508,20 +582,37 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tdebug=%d\n",gr->debugLevel());
 		fprintf(stderr,"\thome=%s\n",gr->homeDirectory());
 		fprintf(stderr,"\taccess=%s\n",gr->accessFile());
+		fprintf(stderr,"\tdisallow=%s\n",gr->disallowFile());
 		fprintf(stderr,"\talias=%s\n",gr->aliasFile());
 		fprintf(stderr,"\tpv=%s\n",gr->listFile());
 		fprintf(stderr,"\tlog=%s\n",gr->logFile());
 		fprintf(stderr,"\tdead=%d\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%d\n",gr->connectTimeout());
 		fprintf(stderr,"\tinactive=%d\n",gr->inactiveTimeout());
+		fprintf(stderr,"\tuser id=%d\n",getuid());
+		if(gr->isReadOnly())
+			fprintf(stderr," read only mode\n");
 		return -1;
 	}
+
+	// order is somewhat important
+	if(level)				gr->setDebugLevel(level);
+	if(read_only)			gr->setReadOnly();
+	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
+	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
+	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
+	if(access_file)			gr->setAccessFile(access_file);
+	if(log_file)			gr->setLogFile(log_file);
+	if(pv_file)				gr->setListFile(pv_file);
+	if(disallow_file)		gr->setDisallowFile(disallow_file);
+	if(alias_file)			gr->setAliasFile(alias_file);
 
 	if(gr->debugLevel()>10)
 	{
 		fprintf(stderr,"\noption dump:\n");
 		fprintf(stderr," home=<%s>\n",gr->homeDirectory());
 		fprintf(stderr," access file=<%s>\n",gr->accessFile());
+		fprintf(stderr," disallow file=<%s>\n",gr->disallowFile());
 		fprintf(stderr," list file=<%s>\n",gr->listFile());
 		fprintf(stderr," log file=<%s>\n",gr->logFile());
 		fprintf(stderr," alias file=<%s>\n",gr->aliasFile());
@@ -529,6 +620,9 @@ int main(int argc, char** argv)
 		fprintf(stderr," connect timeout =%d\n",gr->connectTimeout());
 		fprintf(stderr," inactive timeout =%d\n",gr->inactiveTimeout());
 		fprintf(stderr," dead timeout =%d\n",gr->deadTimeout());
+		fprintf(stderr," user id=%d\n",getuid());
+		if(gr->isReadOnly())
+			fprintf(stderr," read only mode\n");
 		fflush(stderr);
 	}
 
@@ -536,7 +630,12 @@ int main(int argc, char** argv)
 	startEverything();
 #else
 	if(no_server)
+	{
+		if(gave_log_option)
+			gr->setUpLogging();
+
 		startEverything();
+	}
 	else
 	{
 		gr->setUpLogging();
@@ -571,12 +670,18 @@ void print_instructions(void)
 {
   pr(stderr,"-debug value: Enter value between 0-100.  50 gives lots of\n");
   pr(stderr," info, 1 gives small amount.\n\n");
+
   pr(stderr,"-pv file_name: File with list of valid PV names in it.  The\n");
   pr(stderr," list can contain wild cards.  Here is an example:\n");
   pr(stderr,"\tmotor_pv\n\tthing\n\tS1:*\n\tS2:*:motor\n");
   pr(stderr," A file with this info in it will allow clients to attach to\n");
   pr(stderr," PVs motor_pv, thing, anything starting with \"S1:\", and\n");
   pr(stderr," PVs starting with \"S2:\" and ending with \"motor\".\n\n");
+
+  pr(stderr,"-disallow file_name: File with list of PV names to ignore.\n");
+  pr(stderr," File is the same format as -pv option, but lists PVs that\n");
+  pr(stderr," the gateway should completely ignore.\n\n");
+
   pr(stderr,"-alias file_name: File containing PV/alias pairs.  A list of\n");
   pr(stderr," fake PV names that the client can access and the real names\n");
   pr(stderr," that they get translated to.  Example:\n");
@@ -584,39 +689,54 @@ void print_instructions(void)
   pr(stderr,"\tcurrent S9:C3:F7:current_value\n");
   pr(stderr," Clients can now attach to PV S1:C6:F3:gap_size_A using alias\n");
   pr(stderr," PV gap_size and S9:C3:F7:current_value using PV current\n\n");
+
   pr(stderr,"-log file_name: Name of file where all messages from the\n");
   pr(stderr," gateway go, including stderr and stdout.\n\n");
+
   pr(stderr,"-access file_name: EPICS access security, not implemented.\n\n");
+
   pr(stderr,"-home directory: Home directory where all your gateway\n");
   pr(stderr," configuration files are kept and where the log file goes.\n\n");
+
   pr(stderr,"-sip IP_address: IP address that gateway's CA server listens\n");
   pr(stderr," for PV requests.  Sets env variable EPICS_CAS_INTF_ADDR.\n\n");
+
   pr(stderr,"-cip IP_address_list: IP address list that the gateway's CA\n");
   pr(stderr," client uses to find the real PVs.  See CA reference manual.\n");
   pr(stderr," This sets environment variables EPICS_CA_AUTO_LIST=NO and\n");
   pr(stderr," EPICS_CA_ADDR_LIST.\n\n");
+
   pr(stderr,"-sport CA_server_port: The port which the gateway's CA server\n");
   pr(stderr," uses to listen for PV requests.  Sets environment variable\n");
   pr(stderr," EPICS_CAS_SERVER_PORT.\n\n");
+
   pr(stderr,"-cport CA_client_port:  The port thich the gateway's CA client\n");
   pr(stderr," uses to find the real PVs.  Sets environment variable\n");
   pr(stderr," EPICS_CA_SERVER_PORT.\n\n");
+
   pr(stderr,"-connect_timeout seconds: The amount of time that the\n");
   pr(stderr," gateway will allow a PV search to continue before marking the\n");
   pr(stderr," PV as being not found.\n\n");
+
   pr(stderr,"-inactive_timeout seconds: The amount of time that the gateway\n");
   pr(stderr," will hold the real connection to an unused PV.  If no gateway\n");
   pr(stderr," clients are using the PV, the real connection will still be\n");
   pr(stderr," held for this long.\n\n");
+
   pr(stderr,"-dead_timeout seconds:  The amount of time that the gateway\n");
   pr(stderr," will hold requests for PVs that are not found on the real\n");
   pr(stderr," network that the gateway is using.  Even if a client's\n");
   pr(stderr," requested PV is not found on the real network, the gateway\n");
   pr(stderr," marks the PV dead and holds the request and continues trying\n");
   pr(stderr," to connect for this long.\n\n");
+
   pr(stderr,"-noserver: Start the server interactively at the terminal.  Do\n");
   pr(stderr," not put the process in the background and do not detach it\n");
   pr(stderr," from the terminal\n\n");
+
   pr(stderr,"-ns: Same as -noserver.\n");
+
+  pr(stderr,"-uid number: Run the server with this id, server does a\n");
+  pr(stderr," setuid(2) to this user id number.\n\n");
 }
 

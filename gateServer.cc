@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.13  1996/11/21 19:29:11  jbk
+// Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
+//
 // Revision 1.12  1996/11/07 14:11:05  jbk
 // Set up to use the latest CA server library.
 // Push the ulimit for FDs up to maximum before starting CA server
@@ -61,10 +64,21 @@
 // ---------------------------- genereral main processing function -----------
 
 typedef void (*SigFunc)(int);
+
+static SigFunc save_usr1=NULL;
+
 static void sig_pipe(int)
 {
 	fprintf(stderr,"Got SIGPIPE interrupt!");
 }
+
+void gateServer::sig_usr1(int x)
+{
+	gateServer::report_flag=1;
+	if(save_usr1) save_usr1(x);
+}
+
+volatile int gateServer::report_flag=0;
 
 void gatewayServer(void)
 {
@@ -80,7 +94,9 @@ void gateServer::mainLoop(void)
 	int not_done=1;
 	osiTime delay(0u,500000000u);
 	SigFunc old;
+	unsigned char cnt=0;
 
+	save_usr1=signal(SIGUSR1,sig_usr1);
 	// this is horrible, CA server has sigpipe problem for now
 	old=signal(SIGPIPE,sig_pipe);
 	sigignore(SIGPIPE);
@@ -89,7 +105,24 @@ void gateServer::mainLoop(void)
 	{
 		fileDescriptorManager.process(delay);
 		checkEvent();
+
+		// make sure messages get out
+		if(++cnt==0) { fflush(stderr); fflush(stdout); }
+		if(report_flag) { report(); report_flag=0; }
 	}
+}
+
+void gateServer::report(void)
+{
+	gateVcData *node;
+	time_t t;
+
+	time(&t);
+	printf("Active virtual connection report: %s\n",ctime(&t));
+	for(node=vc_list.first();node;node=node->getNext())
+		node->report();
+	printf("--------------------------------------------------------\n");
+	fflush(stdout);
 }
 
 // ------------------------- file descriptor servicing ----------------------
@@ -347,7 +380,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 		else
 		{
 			// verify the PV name
-			if(global_resources->matchName(r_name))
+			if(!global_resources->ignoreMatchName(r_name) &&
+				global_resources->matchName(r_name))
 			{
 				// don't know - need to check
 				gateDebug1(5,"gateServer::pvExistTest() %s new\n",r_name);

@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.7  1996/11/07 14:11:06  jbk
+ * Set up to use the latest CA server library.
+ * Push the ulimit for FDs up to maximum before starting CA server
+ *
  * Revision 1.6  1996/09/23 20:40:43  jbk
  * many fixes
  *
@@ -86,6 +90,7 @@ public:
 	virtual casPV* createPV(const casCtx& c,const char* pvname);
 
 	void mainLoop(void);
+	void report(void);
 
 	// CAS application management functions
 	void checkEvent(void);
@@ -140,6 +145,9 @@ private:
 	static osiTime delay_quick;
 	static osiTime delay_normal;
 	static osiTime* delay_current;
+
+	static volatile int report_flag;
+	static void sig_usr1(int);
 };
 
 inline time_t gateServer::timeDeadCheck(void) const

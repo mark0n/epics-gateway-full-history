@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.8  1996/11/21 19:29:14  jbk
+// Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
+//
 // Revision 1.7  1996/11/07 14:11:07  jbk
 // Set up to use the latest CA server library.
 // Push the ulimit for FDs up to maximum before starting CA server
@@ -104,6 +107,15 @@ void gateVcData::destroy(void)
 	casPV::destroy();
 }
 
+casChannel* gateVcData::createChannel(const casCtx &ctx,
+		const char * const pUserName, const char * const pHostName)
+{
+	gateDebug0(5,"~gateVcData::createChannel()\n");
+	pv_user=pUserName;
+	pv_host=pHostName;
+	return casPV::createChannel(ctx,pUserName,pHostName);
+}
+
 unsigned gateVcData::maxSimultAsyncOps(void) const
 {
 	return 5000u;
@@ -112,6 +124,11 @@ unsigned gateVcData::maxSimultAsyncOps(void) const
 void gateVcData::dumpValue(void)
 {
 	if(event_data) event_data->dump();
+}
+
+void gateVcData::report(void)
+{
+	printf("%-30.30s %-12.12s %-36.36s\n",pv_name,pv_user,pv_host);
 }
 
 void gateVcData::dumpAttributes(void)

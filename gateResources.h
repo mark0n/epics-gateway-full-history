@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.7  1996/10/22 15:58:39  jbk
+ * changes, changes, changes
+ *
  * Revision 1.6  1996/09/23 20:40:44  jbk
  * many fixes
  *
@@ -29,6 +32,7 @@
 #define GATE_SCRIPT_FILE "GATEWAY.killer"
 #define GATE_PV_LIST_FILE "GATEWAY.pvlist"
 #define GATE_PV_ACCESS_FILE "GATEWAY.access"
+#define GATE_PV_DISALLOW_FILE "GATEWAY.disallow"
 #define GATE_PV_ALIAS_FILE "GATEWAY.alias"
 #define GATE_LOG "GATEWAY"
 #define GATE_HOME "."
@@ -51,10 +55,11 @@ typedef struct gateAliasTable gateAliasTable;
 class gateResources
 {
 public:
-	gateResources(void);
+	gateResources(char* home = NULL);
 	~gateResources(void);
 
 	int setHome(char* dir);
+	int setDisallowFile(char* file);
 	int setListFile(char* file);
 	int setAliasFile(char* file);
 	int setDebugLevel(int level);
@@ -77,6 +82,7 @@ public:
 	char* homeDirectory(void) const		{ return home_dir; }
 
 	char* listFile(void) const	{ return pv_list_file?pv_list_file:"NULL"; }
+	char* disallowFile(void) const { return pv_dis_file?pv_dis_file:"NULL"; }
 	char* aliasFile(void) const { return pv_alias_file?pv_alias_file:"NULL"; }
 	char* logFile(void) const	{ return log_file?log_file:"NULL"; }
 	char* accessFile(void) const{ return pv_access_file?pv_access_file:"NULL"; }
@@ -85,6 +91,9 @@ public:
 
 	int matchName(char* pv_name);
 	int matchOne(char* pattern,char* pv_name);
+
+	int ignoreMatchName(char* pv_name);
+	int ignoreMatchOne(char* pattern,char* pv_name);
 
 	// here for convenience
 	static int appValue;
@@ -98,22 +107,21 @@ public:
 private:
 	int genLogFile(void);
 
-	char* home_dir;
-	char* pv_access_file;
-	char* pv_list_file;
-	char* pv_alias_file;
-	char* log_file;
-	int debug_level;
-	int ro;
+	char* home_dir,*log_file;
+	char *pv_access_file,*pv_list_file,*pv_dis_file,*pv_alias_file;
+	int debug_level,ro;
 	int log_on; // 0=off, 1=on
-	time_t connect_timeout;
-	time_t inactive_timeout;
-	time_t dead_timeout;
+	time_t connect_timeout,inactive_timeout,dead_timeout;
+
+	char *prefix,*suffix;
+
+	char* dis_buffer;
+	char** pattern_dis;
+
 	char* list_buffer;
-	char* alias_buffer;
-	char* prefix;
-	char* suffix;
 	char** pattern_list;
+
+	char* alias_buffer;
 	gateAliasTable* alias_table;
 };
 
