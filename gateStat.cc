@@ -427,7 +427,7 @@ gateStatDesc::gateStatDesc(gateServer *s, gateAsEntry *e, const char *n, int t) 
 	if(value)
 	  value->put(serv->getStatTable(type)->desc);
 	value->setTimeStamp(timeSpec());
-#if DEBUG_UMR || 1
+#if DEBUG_UMR
 	fflush(stderr);
 	printf("gateStatDesc::gateStatDesc: name=%s\n",name);
 	fflush(stdout);
