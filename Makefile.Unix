@@ -5,12 +5,6 @@
 # $Id$
 #
 # $Log$
-# Revision 1.2  1996/06/11 02:05:16  jbk
-# complete the makeilfe
-#
-# Revision 1.1  1996/05/22 03:21:48  jbk
-# new stuff
-#
 #
 
 EPICS = ../../../..
@@ -19,26 +13,30 @@ EPICS = ../../../..
 include Target.include
 include $(EPICS)/config/CONFIG_EXTENSIONS
 
+OPTIM_YES=-g
+
 DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
 
 DEPLIBS = $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
 
-USR_LDLIBS = -lgate -lgdd -lca -lCom
-USR_LDFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
-USR_INCLUDES = -I$(EPICS_EXTENSIONS_INCLUDE) -I$(HOME)/src/data
-USR_CFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
+USR_LDLIBS = -lgate -lgdd -lca -lcas -lCom
+USR_LDFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(EPICS_BASE_LIB)
+USR_INCLUDES = -I$(EPICS_EXTENSIONS_INCLUDE) # -I$(HOME)/epics/base/src/gdd/O.$(HOST_ARCH)
+USR_CCFLAGS = -DDEBUG_MODE # -L$(EPICS_EXTENSIONS_LIB) -L$(EPICS_BASE_LIB)
 
 # CMPLR =
 
-SRCS.cc = ../gateBase.cc ../gateCA.cc ../gateClient.cc ../gateIpc.cc \
-          ../gateList.cc ../gateResources.cc ../gateServer.cc ../gateway.cc
+SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc \
+	      ../gateVc.cc ../gateway.cc ../gateExist.cc
 
-LIBOBJS = gateBase.o gateClient.o gateIpc.o gateList.o \
-          gateResources.o gateServer.o gateway.o
+LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o
 
 LIBNAME = libgate.a
 
-PROD = gateCA
+PROD = gateway
+
+$(PROD): $(PROD).o
+	$(LINK.cc) $(LDFLAGS) $< -o $@ $(LDLIBS)
 
 include $(EPICS)/config/RULES.Unix
 

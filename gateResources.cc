@@ -4,6 +4,7 @@
 // $Id$
 //
 // $Log$
+//
 
 #define GATE_RESOURCE_FILE 1
 
@@ -28,22 +29,21 @@ gateResources::gateResources(void)
 	list_buffer=(char*)NULL;
 	pattern_list=(char**)NULL;
 	log_on=0;
-	db_only=0;
 	log_file=NULL;
-	GenLogFile();
-	SetConnectTimeout(GATE_CONNECT_TIMEOUT);
-	SetInactiveTimeout(GATE_INACTIVE_TIMEOUT);
-	SetDeadTimeout(GATE_DEAD_TIMEOUT);
+	genLogFile();
+	setConnectTimeout(GATE_CONNECT_TIMEOUT);
+	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
+	setDeadTimeout(GATE_DEAD_TIMEOUT);
 
-	tt=new gddApplicationTypeTable();
-	app_value=tt->GetApplicationType("value");
-	app_units=tt->GetApplicationType("units");
-	app_enum=tt->GetApplicationType("enums");
-	app_all=tt->GetApplicationType("all");
-	app_fixed=tt->GetApplicationType("fixed");
-	app_attributes=tt->GetApplicationType("attributes");
-	app_menuitem=tt->GetApplicationType("menuitem");
-	app_type_table=tt;
+	gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
+
+	appValue=tt.getApplicationType("value");
+	appUnits=tt.getApplicationType("units");
+	appEnum=tt.getApplicationType("enums");
+	appAll=tt.getApplicationType("all");
+	appFixed=tt.getApplicationType("fixed");
+	appAttributes=tt.getApplicationType("attributes");
+	appMenuitem=tt.getApplicationType("menuitem");
 }
 
 gateResources::~gateResources(void)
@@ -54,21 +54,20 @@ gateResources::~gateResources(void)
 	delete [] log_file;
 	delete [] suffix;
 	delete [] prefix;
-	delete tt;
+
 	if(list_buffer) delete [] list_buffer;
 	if(pattern_list) delete [] pattern_list;
 }
 
-int gateResources::app_value=0;
-int gateResources::app_enum=0;
-int gateResources::app_all=0;
-int gateResources::app_menuitem=0;
-int gateResources::app_fixed=0;
-int gateResources::app_units=0;
-int gateResources::app_attributes=0;
-gddApplicationTypeTable* gateResources::app_type_table=NULL;
+int gateResources::appValue=0;
+int gateResources::appEnum=0;
+int gateResources::appAll=0;
+int gateResources::appMenuitem=0;
+int gateResources::appFixed=0;
+int gateResources::appUnits=0;
+int gateResources::appAttributes=0;
 
-int gateResources::SetHome(char* dir)
+int gateResources::setHome(char* dir)
 {
 	int rc;
 
@@ -87,7 +86,7 @@ int gateResources::SetHome(char* dir)
 	return rc;
 }
 
-int gateResources::SetListFile(char* file)
+int gateResources::setListFile(char* file)
 {
 	FILE* pv_fd;
 	struct stat stat_buf;
@@ -129,24 +128,24 @@ int gateResources::SetListFile(char* file)
 	return 0;
 }
 
-int gateResources::SetDebugLevel(int level)
+int gateResources::setDebugLevel(int level)
 {
 	debug_level=level;
 	return 0;
 }
 
-int gateResources::SetAccessFile(char* file)
+int gateResources::setAccessFile(char* file)
 {
 	delete [] pv_access_file;
 	pv_access_file=strdup(file);
 	return 0;
 }
 
-int gateResources::SetUpLogging(void)
+int gateResources::setUpLogging(void)
 {
 	int rc=0;
 
-#ifdef GATE_TEST_ONLY
+#ifdef DEBUG_MODE
 	return rc;
 #else
 	if( (freopen(log_file,"w",stderr))==(FILE*)NULL )
@@ -168,46 +167,46 @@ int gateResources::SetUpLogging(void)
 #endif
 }
 
-int gateResources::SetSuffix(char* s)
+int gateResources::setSuffix(char* s)
 {
 	delete [] suffix;
 	suffix=strdup(s);
-	GenLogFile();
+	genLogFile();
 	return 0;
 }
 
-int gateResources::SetLogFile(char* file)
+int gateResources::setLogFile(char* file)
 {
 	delete [] prefix;
 	prefix=strdup(file);
-	GenLogFile();
+	genLogFile();
 	return 0;
 }
 
-int gateResources::GenLogFile(void)
+int gateResources::genLogFile(void)
 {
 	if(log_file) delete [] log_file;
 	log_file=new char[strlen(prefix)+strlen(suffix)+2];
 	strcpy(log_file,prefix);
 	strcat(log_file,".");
 	strcat(log_file,suffix);
-	if(log_on) SetUpLogging();
+	if(log_on) setUpLogging();
 	return 0;
 }
 
-int gateResources::MatchName(char* item)
+int gateResources::matchName(char* item)
 {
 	int rc,i;
 
 	if(!pattern_list) return 0;
 
 	for(rc=0,i=0;pattern_list[i] && rc==0;i++)
-		if(MatchOne(pattern_list[i],item)) rc=1;
+		if(matchOne(pattern_list[i],item)) rc=1;
 
 	return rc;
 }
 
-int gateResources::MatchOne(char* pattern, char* item)
+int gateResources::matchOne(char* pattern, char* item)
 {
 	int i_len=strlen(item);
 	int p_len=strlen(pattern);

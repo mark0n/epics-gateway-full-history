@@ -5,9 +5,6 @@
 # $Id$
 #
 # $Log$
-# Revision 1.1  1996/05/22 03:21:47  jbk
-# new stuff
-#
 #
 
 EPICS=../../..

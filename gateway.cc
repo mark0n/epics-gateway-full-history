@@ -13,10 +13,9 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#include "gddNewDel.h"
-#include "gateBase.h"
-#include "gateIpc.h"
 #include "gateResources.h"
+
+void gatewayServer(void);
 
 // still need to add client and server IP addr info using 
 // the CA environment variables.
@@ -37,12 +36,6 @@ void operator delete(void* x)
 }
 #endif
 
-gddCleanUp gdd_clean_up_thing;
-
-void gatewayClient(void);
-void gatewayServer(void);
-void gatewayTest(void);
-
 // The parameters past in from the user are:
 //	-d? = set debug level, ? is the integer level to set
 //	-debug ? = set debug level, ? is the integer level to set
@@ -50,7 +43,6 @@ void gatewayTest(void);
 //	-l name = log file name
 //	-a name = access security file
 //	-h directory = the program's home directory
-//	-db_only = manage a PV database only, no request forwarding to client
 //	-connect_timeout number = clear PV connect requests every number seconds
 //	-inactive_timeout number = Hold inactive PV connections for number seconds
 //	-dead_timeout number = Hold PV connections with no user for number seconds
@@ -78,7 +70,6 @@ void gatewayTest(void);
 #define PARM_LOG			2
 #define PARM_ACCESS			3
 #define PARM_HOME			4
-#define PARM_DB_ONLY		5
 #define PARM_CONNECT_TOUT	6
 #define PARM_INACTIVE_TOUT	7
 #define PARM_DEAD_TOUT		8
@@ -101,14 +92,10 @@ typedef struct parm_stuff PARM_STUFF;
 
 static PARM_STUFF ptable[] = {
 	{ "-debug",				6,	PARM_DEBUG },
-	{ "-d",					2,	PARM_DEBUG },
 	{ "-pv",				3,	PARM_PV },
 	{ "-log",				4,	PARM_LOG },
 	{ "-access",			7,	PARM_ACCESS },
-	{ "-a",					2,	PARM_ACCESS },
 	{ "-home",				5,	PARM_HOME },
-	{ "-h",					2,	PARM_HOME },
-	{ "-db_only",			8,	PARM_DB_ONLY },
 	{ "-sip",				4,	PARM_SERVER_IP },
 	{ "-cip",				4,	PARM_CLIENT_IP },
 	{ "-connect_timeout",	16,	PARM_CONNECT_TOUT },
@@ -117,93 +104,47 @@ static PARM_STUFF ptable[] = {
 	{ NULL,			-1,	-1 }
 };
 
-static int StartEverything(void)
+static int startEverything(void)
 {
-	gateIPC* ipc = new gateIPC;
-	int sid,cid;
+	int sid;
 	FILE* fd;
 
-	if(!ipc->Valid())
+	if(client_ip_addr)
 	{
-		fprintf(stderr,"IPC problem. Cannot continue.\n");
-		return -1;
+		sprintf(gate_ca_list,"EPICS_CA_ADDR_LIST=%s",client_ip_addr);
+		putenv(gate_ca_auto_list);
+		putenv(gate_ca_list);
+		gateDebug1(15,"gateway setting <%s>\n",gate_ca_list);
 	}
-	global_resources->SetIPC(ipc);
 
-	if(global_resources->DbOnly())
+	if((fd=fopen(GATE_SCRIPT_FILE,"w"))==(FILE*)NULL)
 	{
-		unlink(GATE_PIPE_FILE);
-		if(mknod(GATE_PIPE_FILE,0666,S_IFIFO)<0)
-			perror("creation of pipe failed");
-		else
-		{
-			if(chmod(GATE_PIPE_FILE,S_IWOTH|S_IWGRP|S_IWUSR)<0)
-				perror("chmod of pipe failed");
+		fprintf(stderr,"open of script file %s failed\n",
+			GATE_SCRIPT_FILE);
+		fd=stderr;
+	}
 
-			gateDebug1(1,"*** server pid = %d\n",getpid());
-			ipc->BeServer();
-			gatewayServer(); // should be gateway CA server
-		}
-	}
-	else
-	{
-		switch(cid=fork())
-		{
-		case -1: // error
-			perror("Cannot create gateway processes");
-			return -1;
-		case 0: // child
-			gateDebug1(1,"*** client pid = %d\n",getpid());
-			if(client_ip_addr)
-			{
-				sprintf(gate_ca_list,"EPICS_CA_ADDR_LIST=%s",client_ip_addr);
-				putenv(gate_ca_auto_list);
-				putenv(gate_ca_list);
-				gateDebug1(15,"gateway setting <%s>\n",gate_ca_list);
-			}
-			ipc->BeClient();
-			gatewayClient();
-			break;
-		default: // parent
-			// build little script file to kill off the client
-			// and server processes
-			sid=getpid();
+	sid=getpid();
 	
-			if((fd=fopen(GATE_SCRIPT_FILE,"w"))==(FILE*)NULL)
-			{
-				fprintf(stderr,"open of script file %s failed\n",
-					GATE_SCRIPT_FILE);
-				fd=stderr;
-			}
+	fprintf(fd,"\n");
+	fprintf(fd,"# option:\n");
+	fprintf(fd,"# home=<%s>\n",global_resources->homeDirectory());
+	fprintf(fd,"# access file=<%s>\n",global_resources->accessFile());
+	fprintf(fd,"# list file=<%s>\n",global_resources->listFile());
+	fprintf(fd,"# log file=<%s>\n",global_resources->logFile());
+	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
+	fprintf(fd,"# dead t-out=%d\n",global_resources->deadTimeout());
+	fprintf(fd,"# connect t-out=%d\n",global_resources->connectTimeout());
+	fprintf(fd,"# inactive t-out=%d\n",global_resources->inactiveTimeout());
+	fprintf(fd,"\n");
+	fprintf(fd,"kill %d\n",sid);
+	fprintf(fd,"\n");
+	fflush(fd);
 	
-			fprintf(fd,"\n");
-			fprintf(fd,"# option:\n");
-			fprintf(fd,"# home=<%s>\n",global_resources->HomeDirectory());
-			fprintf(fd,"# access file=<%s>\n",global_resources->AccessFile());
-			fprintf(fd,"# list file=<%s>\n",global_resources->ListFile());
-			fprintf(fd,"# log file=<%s>\n",global_resources->LogFile());
-			fprintf(fd,"# debug level=%d\n",global_resources->DebugLevel());
-			fprintf(fd,"# db only=%s\n",global_resources->DBonly());
-			fprintf(fd,"# dead t-out=%d\n",global_resources->DeadTimeout());
-			fprintf(fd,"# connect t-out=%d\n",
-				global_resources->ConnectTimeout());
-			fprintf(fd,"# inactive t-out=%d\n",
-				global_resources->InactiveTimeout());
-			fprintf(fd,"\n");
-			fprintf(fd,"kill %d %d\n",cid,sid);
-			fprintf(fd,"\n");
-			fflush(fd);
+	if(fd!=stderr) fclose(fd);
+	chmod(GATE_SCRIPT_FILE,00755);
 	
-			if(fd!=stderr) fclose(fd);
-			chmod(GATE_SCRIPT_FILE,00755);
-	
-			gateDebug1(1,"*** server pid = %d\n",getpid());
-			ipc->BeServer();
-			gatewayTest(); // gatewayServer();
-			break;
-		}
-	}
-	delete ipc;
+	gatewayServer();
 	return 0;
 }
 
@@ -215,7 +156,7 @@ main(int argc, char** argv)
 	global_resources = new gateResources;
 
 	if(home_dir=getenv("GATEWAY_HOME"))
-		global_resources->SetHome(home_dir);
+		global_resources->setHome(home_dir);
 
 	not_done=1; no_error=1;
 	for(i=1;i<argc && no_error;i++)
@@ -238,7 +179,7 @@ main(int argc, char** argv)
 							else
 							{
 								not_done=0;
-								global_resources->SetDebugLevel(level);
+								global_resources->setDebugLevel(level);
 							}
 						}
 					}
@@ -250,7 +191,7 @@ main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							global_resources->SetListFile(argv[i]);
+							global_resources->setListFile(argv[i]);
 							not_done=0;
 						}
 					}
@@ -262,7 +203,7 @@ main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							global_resources->SetLogFile(argv[i]);
+							global_resources->setLogFile(argv[i]);
 							not_done=0;
 						}
 					}
@@ -274,7 +215,7 @@ main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							global_resources->SetAccessFile(argv[i]);
+							global_resources->setAccessFile(argv[i]);
 							not_done=0;
 						}
 					}
@@ -286,7 +227,7 @@ main(int argc, char** argv)
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							global_resources->SetHome(argv[i]);
+							global_resources->setHome(argv[i]);
 							not_done=0;
 						}
 					}
@@ -326,7 +267,7 @@ main(int argc, char** argv)
 								no_error=0;
 							else
 							{
-								global_resources->SetDeadTimeout(dead_tout);
+								global_resources->setDeadTimeout(dead_tout);
 								not_done=0;
 							}
 						}
@@ -344,7 +285,7 @@ main(int argc, char** argv)
 							else
 							{
 								not_done=0;
-								global_resources->SetInactiveTimeout(inactive_tout);
+								global_resources->setInactiveTimeout(inactive_tout);
 							}
 						}
 					}
@@ -361,17 +302,9 @@ main(int argc, char** argv)
 							else
 							{
 								not_done=0;
-								global_resources->SetConnectTimeout(connect_tout);
+								global_resources->setConnectTimeout(connect_tout);
 							}
 						}
-					}
-					break;
-				case PARM_DB_ONLY:
-					if(++i>=argc) no_error=0;
-					else
-					{
-						global_resources->SetDBonly();
-						not_done=0;
 					}
 					break;
 				default:
@@ -381,33 +314,36 @@ main(int argc, char** argv)
 			}
 		}
 		not_done=1;
+		if(ptable[j].parm==NULL) no_error=0;
 	}
 
 	if(no_error==0)
 	{
 		fprintf(stderr,"usage:\n");
-		fprintf(stderr," %s [-db_only] [-debug value] [-pv file]\n",argv[0]);
+		fprintf(stderr," %s [-debug value] [-pv file]\n",argv[0]);
 		fprintf(stderr," [-access file] [-log file] [-home directory]\n");
 		fprintf(stderr," [-connect_timeout seconds] [-dead_timeout seconds]\n");
 		fprintf(stderr," [-inactive_timeout seconds]\n");
 		return -1;
 	}
 
-	if(global_resources->DebugLevel()>10)
+	if(global_resources->debugLevel()>10)
 	{
 		fprintf(stderr,"\noption dump:\n");
-		fprintf(stderr," home=<%s>\n",global_resources->HomeDirectory());
-		fprintf(stderr," access file=<%s>\n",global_resources->AccessFile());
-		fprintf(stderr," list file=<%s>\n",global_resources->ListFile());
-		fprintf(stderr," log file=<%s>\n",global_resources->LogFile());
-		fprintf(stderr," debug level=%d\n",global_resources->DebugLevel());
-		fprintf(stderr," connect timeout =%d\n",global_resources->ConnectTimeout());
-		fprintf(stderr," inactive timeout =%d\n",global_resources->InactiveTimeout());
-		fprintf(stderr," dead timeout =%d\n",global_resources->DeadTimeout());
+		fprintf(stderr," home=<%s>\n",global_resources->homeDirectory());
+		fprintf(stderr," access file=<%s>\n",global_resources->accessFile());
+		fprintf(stderr," list file=<%s>\n",global_resources->listFile());
+		fprintf(stderr," log file=<%s>\n",global_resources->logFile());
+		fprintf(stderr," debug level=%d\n",global_resources->debugLevel());
+		fprintf(stderr," connect timeout =%d\n",global_resources->connectTimeout());
+		fprintf(stderr," inactive timeout =%d\n",global_resources->inactiveTimeout());
+		fprintf(stderr," dead timeout =%d\n",global_resources->deadTimeout());
 		fflush(stderr);
 	}
 
-#if 0
+#ifdef DEBUG_MODE
+	startEverything();
+#else
 	// disassociate from parent
 	switch(fork())
 	{
@@ -421,13 +357,11 @@ main(int argc, char** argv)
 		setpgrp(0,0);
 #endif
 		setsid();
-		StartEverything();
+		startEverything();
 		break;
 	default: // parent
 		break;
 	}
-#else
-	StartEverything();
 #endif
 	delete global_resources;
 	return 0;
