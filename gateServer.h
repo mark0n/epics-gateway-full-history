@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.3  1996/07/26 02:34:46  jbk
+ * Interum step.
+ *
  * Revision 1.2  1996/07/23 16:32:40  jbk
  * new gateway that actually runs
  *
@@ -18,7 +21,7 @@
 
 #include "casdef.h"
 #include "tsHash.h"
-#include "fdMgr.h"
+#include "fdManager.h"
 
 #include "gateResources.h"
 #include "gateVc.h"
@@ -33,7 +36,7 @@ typedef struct exception_handler_args       EXCEPT_ARGS;
 
 // ---------------------- list nodes ------------------------
 
-class gatePvNode : public tsDLNode<gatePvNode>
+class gatePvNode : public tsDLHashNode<gatePvNode>
 {
 private:
 	gatePvNode(void);

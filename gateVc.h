@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.1  1996/07/23 16:32:43  jbk
+ * new gateway that actually runs
+ *
  */
 
 #include <sys/types.h>
@@ -34,7 +37,7 @@ class gateAsyncRW;
 
 // ----------------------- vc data stuff -------------------------------
 
-class gateVcData : public casPV, public tsDLNode<gateVcData>
+class gateVcData : public casPV, public tsDLHashNode<gateVcData>
 {
 public:
 	gateVcData(const casCtx&,gateServer*,const char* pv_name);

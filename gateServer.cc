@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.3  1996/07/26 02:34:45  jbk
+// Interum step.
+//
 // Revision 1.2  1996/07/23 16:32:39  jbk
 // new gateway that actually runs
 //
@@ -88,21 +91,21 @@ gateServer::~gateServer(void)
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
 
-	while((pv_node=pv_list.first()))
+	while((pv_node=pv_list.head()))
 	{
 		pv_list.remove(pv_node->getData()->name(),old_pv);
 		pv=old_pv->getData();
 		pv_node->destroy();
 	}
 
-	while((pv_node=pv_con_list.first()))
+	while((pv_node=pv_con_list.head()))
 	{
 		pv_con_list.remove(pv_node->getData()->name(),old_pv);
 		pv=old_pv->getData();
 		pv_node->destroy();
 	}
 
-	while((vc=vc_list.first()))
+	while((vc=vc_list.head()))
 	{
 		vc_list.remove(vc->name(),old_vc);
 		vc->markNoList();
@@ -136,7 +139,7 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
 		if((s->fd_table[fd]))
 		{
-			delete s->fd_table[fd];
+			// delete s->fd_table[fd];
 			s->fd_table[fd]=NULL;
 		}
 	}
@@ -177,7 +180,7 @@ void gateServer::connectCleanup(void)
 
 	if(timeConnectCleanup()<global_resources->connectTimeout()) return;
 
-	for(node=pv_con_list.first();node;)
+	for(node=pv_con_list.head();node;)
 	{
 		cnode=node;
 		node=node->getNext();
@@ -210,7 +213,7 @@ void gateServer::inactiveDeadCleanup(void)
 
 	if(dead_check==0 && in_check==0) return;
 
-	for(node=pv_list.first();node;)
+	for(node=pv_list.head();node;)
 	{
 		cnode=node;
 		node=node->getNext();
@@ -260,7 +263,7 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 
 	// convert alias to real name first
 	if((r_name=global_resources->findAlias(pvname))==NULL)
-		r_name=pvname;
+		r_name=(char*)pvname;
 	else
 	{
 		gateDebug2(1,"gateServer::pvExistTest() alias found %s->%s\n",
@@ -297,6 +300,7 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		{
 			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
 			ed=new gateExistData(*this,pv,c,&cname);
+			rc=S_casApp_asyncCompletion;
 		}
 		else
 		{

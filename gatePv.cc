@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.2  1996/07/26 02:34:43  jbk
+// Interum step.
+//
 // Revision 1.1  1996/07/23 16:32:35  jbk
 // new gateway that actually runs
 //
@@ -43,7 +46,7 @@ public:
 void gateStringDestruct::run(void* v)
 {
 	gateDebug1(5,"void gateStringDestruct::run(void* %8.8x)\n",(int)v);
-	aitString* buf = (aitString*)v;
+	aitFixedString* buf = (aitFixedString*)v;
 	delete [] buf;
 }
 
@@ -241,7 +244,7 @@ int gatePvData::life(void)
 
 		if(needAckNak())
 		{
-			while((et=et_list.first()))
+			while((et=et_list.head()))
 			{
 				et->ack();
 				et_list.remove(*et);
@@ -288,7 +291,7 @@ int gatePvData::death(void)
 		// still on connecting list, add to the PV list as dead
 		if(needAckNak())
 		{
-			while((et=et_list.first()))
+			while((et=et_list.head()))
 			{
 				et->nak();
 				et_list.remove(*et);
@@ -677,13 +680,13 @@ gdd* gatePvData::dataEnumCB(void* dbr)
 	gateDebug0(4,"gatePvData::dataEnumCB\n");
 	int i;
 	dbr_ctrl_enum* ts = (dbr_ctrl_enum*)dbr;
-	aitString* items = new aitString[ts->no_str];
-	gddAtomic* menu=new gddAtomic(GR->appEnum,aitEnumString,1,ts->no_str);
+	aitFixedString* items = new aitFixedString[ts->no_str];
+	gddAtomic* menu=new gddAtomic(GR->appEnum,aitEnumFixedString,1,ts->no_str);
 
 	// DBR_CTRL_ENUM response
 	for(i=0;i<ts->no_str;i++)
 	{
-		items[i].installString(&(ts->strs[i][0]));
+		strcpy(items[i].fixed_string,&(ts->strs[i][0]));
 		gateDebug2(5," enum %d=%s \n",i,&(ts->strs[i][0]));
 	}
 

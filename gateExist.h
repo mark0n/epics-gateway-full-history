@@ -9,7 +9,7 @@ class gdd;
 
 // ------------------------ aync exist test -------------------------------
 
-class gateExistData : public casAsyncIO, public tsDLNode<gateExistData>
+class gateExistData : public casAsyncIO, public tsDLHashNode<gateExistData>
 {
 public:
 	gateExistData(gateServer&,const char* n,const casCtx &ctx, gdd *dd);

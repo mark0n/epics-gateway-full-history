@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.1  1996/07/23 16:32:46  jbk
+ * new gateway that actually runs
+ *
  */
 
 extern "C" {
@@ -21,6 +24,7 @@ class tsHash
 {
 private:
 	void* hash_table;
+	friend class tsDLHashIter<T>;
 
 public:
     tsHash(void)
@@ -88,6 +92,7 @@ class tsDLHashList : public tsDLList<T>
 {
 private:
 	tsHash<T> h;
+	friend class tsDLHashIter<T>;
 
 public:
 	tsDLHashList(void) { }
@@ -121,6 +126,14 @@ public:
 			rc=-1;
 		return rc;
 	}
+};
+
+template <class T>
+class tsDLHashNode : public tsDLNode<T>
+{
+public:
+	T* getNext(void) { return tsDLNode<T>::getNext(); }
+	T* getPrev(void) { return tsDLNode<T>::getPrev(); }
 };
 
 #endif
