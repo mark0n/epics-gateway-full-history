@@ -18,7 +18,9 @@
 
 #include "gateResources.h"
 
-void gatewayServer(void);
+// Function Prototypes
+static int startEverything(char *prefix);
+void gatewayServer(char *prefix);
 void print_instructions(void);
 int manage_gateway(void);
 
@@ -79,28 +81,29 @@ void operator delete(void* x)
 //	(2) environment variables
 //	(3) defaults
 
-#define PARM_DEBUG			0
-#define PARM_LOG			2
-#define PARM_PVLIST			1
-#define PARM_ACCESS			3
-#define PARM_COMMAND			5
-#define PARM_HOME			4
-#define PARM_CONNECT		6
-#define PARM_INACTIVE		7
-#define PARM_DEAD			8
-#define PARM_USAGE			9
-#define PARM_SERVER_IP		10
-#define PARM_CLIENT_IP		11
-#define PARM_SERVER_PORT	12
-#define PARM_CLIENT_PORT	13
-#define PARM_HELP			14
-#define PARM_SERVER			15
-#define PARM_RO				16
-#define PARM_UID			17
+#define PARM_DEBUG        0
+#define PARM_LOG          2
+#define PARM_PVLIST       1
+#define PARM_ACCESS       3
+#define PARM_COMMAND      5
+#define PARM_HOME         4
+#define PARM_CONNECT      6
+#define PARM_INACTIVE     7
+#define PARM_DEAD         8
+#define PARM_USAGE        9
+#define PARM_SERVER_IP   10
+#define PARM_CLIENT_IP   11
+#define PARM_SERVER_PORT 12
+#define PARM_CLIENT_PORT 13
+#define PARM_HELP        14
+#define PARM_SERVER      15
+#define PARM_RO          16
+#define PARM_UID         17
+#define PARM_PREFIX      18
 
-#define HOME_DIR_SIZE 300
-#define GATE_LOG      "gateway.log"
-#define GATE_COMMAND  "gateway.command"
+#define HOME_DIR_SIZE    300
+#define GATE_LOG         "gateway.log"
+#define GATE_COMMAND     "gateway.command"
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
@@ -122,24 +125,25 @@ struct parm_stuff
 typedef struct parm_stuff PARM_STUFF;
 
 static PARM_STUFF ptable[] = {
-	{ "-debug",				6,	PARM_DEBUG,			"value" },
-	{ "-log",				4,	PARM_LOG,			"file_name" },
-	{ "-pvlist",			7,	PARM_PVLIST,		"file_name" },
-	{ "-access",			7,	PARM_ACCESS,		"file_name" },
-	{ "-command",				8,	PARM_COMMAND,			"file_name" },
-	{ "-home",				5,	PARM_HOME,			"directory" },
-	{ "-sip",				4,	PARM_SERVER_IP,		"IP_address" },
-	{ "-cip",				4,	PARM_CLIENT_IP,		"IP_address_list" },
-	{ "-sport",				6,	PARM_SERVER_PORT,	"CA_server_port" },
-	{ "-cport",				6,	PARM_CLIENT_PORT,	"CA_client_port" },
-	{ "-connect_timeout",	16,	PARM_CONNECT,		"seconds" },
-	{ "-inactive_timeout",	17,	PARM_INACTIVE,		"seconds" },
-	{ "-dead_timeout",		13,	PARM_DEAD,			"seconds" },
-	{ "-server",			9,	PARM_SERVER,		"(start as server)" },
-	{ "-uid",				4,	PARM_UID,			"user_id_number" },
-	{ "-ro",				3,	PARM_RO,			NULL },
-	{ "-help",				5,	PARM_HELP,			NULL },
-	{ NULL,			-1,	-1 }
+    { "-debug",             6, PARM_DEBUG,       "value" },
+    { "-log",               4, PARM_LOG,         "file_name" },
+    { "-pvlist",            7, PARM_PVLIST,      "file_name" },
+    { "-access",            7, PARM_ACCESS,      "file_name" },
+    { "-command",           8, PARM_COMMAND,     "file_name" },
+    { "-home",              5, PARM_HOME,        "directory" },
+    { "-sip",               4, PARM_SERVER_IP,   "IP_address" },
+    { "-cip",               4, PARM_CLIENT_IP,   "IP_address_list" },
+    { "-sport",             6, PARM_SERVER_PORT, "CA_server_port" },
+    { "-cport",             6, PARM_CLIENT_PORT, "CA_client_port" },
+    { "-connect_timeout",  16, PARM_CONNECT,     "seconds" },
+    { "-inactive_timeout", 17, PARM_INACTIVE,    "seconds" },
+    { "-dead_timeout",     13, PARM_DEAD,        "seconds" },
+    { "-server",            9, PARM_SERVER,      "(start as server)" },
+    { "-uid",               4, PARM_UID,         "user_id_number" },
+    { "-ro",                3, PARM_RO,          NULL },
+    { "-prefix",            7, PARM_PREFIX,      "statistics prefix" },
+    { "-help",              5, PARM_HELP,        NULL },
+    { NULL,                -1, -1,               NULL }
 };
 
 typedef void (*SIG_FUNC)(int);
@@ -156,7 +160,7 @@ static void sig_end(int sig)
 {
 	fflush(stdout);
 	fflush(stderr);
-
+	
 	switch(sig)
 	{
 	case SIGHUP:
@@ -190,11 +194,11 @@ static void sig_end(int sig)
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Exiting (Unknown Signal)");
 		break;
 	}
-
+	
 	exit(0);
 }
 
-static int startEverything(void)
+static int startEverything(char *prefix)
 {
 	char gate_cas_port[30];
 	char gate_cas_addr[50];
@@ -345,7 +349,7 @@ static int startEverything(void)
 	printf("%s %s [%s %s] PID=%d\n",
 	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__,sid);	  
 
-	gatewayServer();
+	gatewayServer(prefix);
 	return 0;
 }
 
@@ -363,6 +367,7 @@ int main(int argc, char** argv)
 	char* pvlist_file=NULL;
 	char* access_file=NULL;
 	char* command_file=NULL;
+	char* stat_prefix=NULL;
 	char cur_time[300];
 	struct stat sbuf;
 	time_t t;
@@ -570,6 +575,18 @@ int main(int argc, char** argv)
 						}
 					}
 					break;
+				case PARM_PREFIX:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							stat_prefix=argv[i];
+							not_done=0;
+						}
+					}
+					break;
 				default:
 					no_error=0;
 					break;
@@ -706,7 +723,7 @@ int main(int argc, char** argv)
 		fflush(stderr);
 	}
 
-	startEverything();
+	startEverything(stat_prefix);
 	delete global_resources;
 	return 0;
 }
@@ -715,64 +732,64 @@ int main(int argc, char** argv)
 
 void print_instructions(void)
 {
-  pr(stderr,"-debug value: Enter value between 0-100.  50 gives lots of\n");
-  pr(stderr," info, 1 gives small amount.\n\n");
-
-  pr(stderr,"-pvlist file_name: Name of file with all the allowed PVs in it\n");
-  pr(stderr," See the sample file gateway.pvlist in the source distribution\n");
-  pr(stderr," for a description of how to create this file.\n");
-
-  pr(stderr,"-access file_name: Name of file with all the EPICS access\n");
-  pr(stderr," security rules in it.  PVs in the pvlist file use groups\n");
-  pr(stderr," and rules defined in this file.\n");
-
-  pr(stderr,"-log file_name: Name of file where all messages from the\n");
-  pr(stderr," gateway go, including stderr and stdout.\n\n");
-
-  pr(stderr,"-command file_name: Name of file where gateway command(s) go\n");
-  pr(stderr," Commands are executed when a USR1 signal is sent to gateway.\n\n");
-
-  pr(stderr,"-home directory: Home directory where all your gateway\n");
-  pr(stderr," configuration files are kept where log and command files go.\n\n");
-
-  pr(stderr,"-sip IP_address: IP address that gateway's CA server listens\n");
-  pr(stderr," for PV requests.  Sets env variable EPICS_CAS_INTF_ADDR.\n\n");
-
-  pr(stderr,"-cip IP_address_list: IP address list that the gateway's CA\n");
-  pr(stderr," client uses to find the real PVs.  See CA reference manual.\n");
-  pr(stderr," This sets environment variables EPICS_CA_AUTO_LIST=NO and\n");
-  pr(stderr," EPICS_CA_ADDR_LIST.\n\n");
-
-  pr(stderr,"-sport CA_server_port: The port which the gateway's CA server\n");
-  pr(stderr," uses to listen for PV requests.  Sets environment variable\n");
-  pr(stderr," EPICS_CAS_SERVER_PORT.\n\n");
-
-  pr(stderr,"-cport CA_client_port:  The port thich the gateway's CA client\n");
-  pr(stderr," uses to find the real PVs.  Sets environment variable\n");
-  pr(stderr," EPICS_CA_SERVER_PORT.\n\n");
-
-  pr(stderr,"-connect_timeout seconds: The amount of time that the\n");
-  pr(stderr," gateway will allow a PV search to continue before marking the\n");
-  pr(stderr," PV as being not found.\n\n");
-
-  pr(stderr,"-inactive_timeout seconds: The amount of time that the gateway\n");
-  pr(stderr," will hold the real connection to an unused PV.  If no gateway\n");
-  pr(stderr," clients are using the PV, the real connection will still be\n");
-  pr(stderr," held for this long.\n\n");
-
-  pr(stderr,"-dead_timeout seconds:  The amount of time that the gateway\n");
-  pr(stderr," will hold requests for PVs that are not found on the real\n");
-  pr(stderr," network that the gateway is using.  Even if a client's\n");
-  pr(stderr," requested PV is not found on the real network, the gateway\n");
-  pr(stderr," marks the PV dead and holds the request and continues trying\n");
-  pr(stderr," to connect for this long.\n\n");
-
-  pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
-  pr(stderr," and start a daemon that watches the gateway and automatically\n");
-  pr(stderr," restarted it if it dies\n");
-
-  pr(stderr,"-uid number: Run the server with this id, server does a\n");
-  pr(stderr," setuid(2) to this user id number.\n\n");
+	pr(stderr,"-debug value: Enter value between 0-100.  50 gives lots of\n");
+	pr(stderr," info, 1 gives small amount.\n\n");
+	
+	pr(stderr,"-pvlist file_name: Name of file with all the allowed PVs in it\n");
+	pr(stderr," See the sample file gateway.pvlist in the source distribution\n");
+	pr(stderr," for a description of how to create this file.\n");
+	
+	pr(stderr,"-access file_name: Name of file with all the EPICS access\n");
+	pr(stderr," security rules in it.  PVs in the pvlist file use groups\n");
+	pr(stderr," and rules defined in this file.\n");
+	
+	pr(stderr,"-log file_name: Name of file where all messages from the\n");
+	pr(stderr," gateway go, including stderr and stdout.\n\n");
+	
+	pr(stderr,"-command file_name: Name of file where gateway command(s) go\n");
+	pr(stderr," Commands are executed when a USR1 signal is sent to gateway.\n\n");
+	
+	pr(stderr,"-home directory: Home directory where all your gateway\n");
+	pr(stderr," configuration files are kept where log and command files go.\n\n");
+	
+	pr(stderr,"-sip IP_address: IP address that gateway's CA server listens\n");
+	pr(stderr," for PV requests.  Sets env variable EPICS_CAS_INTF_ADDR.\n\n");
+	
+	pr(stderr,"-cip IP_address_list: IP address list that the gateway's CA\n");
+	pr(stderr," client uses to find the real PVs.  See CA reference manual.\n");
+	pr(stderr," This sets environment variables EPICS_CA_AUTO_LIST=NO and\n");
+	pr(stderr," EPICS_CA_ADDR_LIST.\n\n");
+	
+	pr(stderr,"-sport CA_server_port: The port which the gateway's CA server\n");
+	pr(stderr," uses to listen for PV requests.  Sets environment variable\n");
+	pr(stderr," EPICS_CAS_SERVER_PORT.\n\n");
+	
+	pr(stderr,"-cport CA_client_port:  The port thich the gateway's CA client\n");
+	pr(stderr," uses to find the real PVs.  Sets environment variable\n");
+	pr(stderr," EPICS_CA_SERVER_PORT.\n\n");
+	
+	pr(stderr,"-connect_timeout seconds: The amount of time that the\n");
+	pr(stderr," gateway will allow a PV search to continue before marking the\n");
+	pr(stderr," PV as being not found.\n\n");
+	
+	pr(stderr,"-inactive_timeout seconds: The amount of time that the gateway\n");
+	pr(stderr," will hold the real connection to an unused PV.  If no gateway\n");
+	pr(stderr," clients are using the PV, the real connection will still be\n");
+	pr(stderr," held for this long.\n\n");
+	
+	pr(stderr,"-dead_timeout seconds:  The amount of time that the gateway\n");
+	pr(stderr," will hold requests for PVs that are not found on the real\n");
+	pr(stderr," network that the gateway is using.  Even if a client's\n");
+	pr(stderr," requested PV is not found on the real network, the gateway\n");
+	pr(stderr," marks the PV dead and holds the request and continues trying\n");
+	pr(stderr," to connect for this long.\n\n");
+	
+	pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
+	pr(stderr," and start a daemon that watches the gateway and automatically\n");
+	pr(stderr," restarted it if it dies\n");
+	
+	pr(stderr,"-uid number: Run the server with this id, server does a\n");
+	pr(stderr," setuid(2) to this user id number.\n\n");
 }
 
 // -------------------------------------------------------------------
@@ -794,8 +811,8 @@ static void sig_chld(int /*sig*/)
 static void sig_stop(int /*sig*/)
 {
 	if(gate_pid)
-		kill(gate_pid,SIGTERM);
-
+	  kill(gate_pid,SIGTERM);
+	
 	death_flag=1;
 }
 
@@ -803,12 +820,12 @@ int manage_gateway(void)
 {
 	time_t t,pt=0;
 	int rc;
-
+	
 	save_chld=signal(SIGCHLD,sig_chld);
 	save_hup=signal(SIGHUP,sig_stop);
 	save_term=signal(SIGTERM,sig_stop);
 	save_int=signal(SIGINT,sig_stop);
-
+	
 	// disassociate from parent
 	switch(fork())
 	{
@@ -826,15 +843,15 @@ int manage_gateway(void)
 	default: // parent
 		return 1;
 	}
-
+	
 	parent_pid=getpid();
-
+	
 	do
 	{
 		time(&t);
 		if((t-pt)<5) sleep(6); // don't respawn faster than every 6 seconds
 		pt=t;
-
+		
 		switch(gate_pid=fork())
 		{
 		case -1: // error
@@ -849,7 +866,7 @@ int manage_gateway(void)
 		}
 	}
 	while(gate_pid && death_flag==0);
-
+	
 	if(death_flag || gate_pid==-1)
 		rc=1;
 	else
@@ -858,3 +875,10 @@ int manage_gateway(void)
 	return rc;
 }
 
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

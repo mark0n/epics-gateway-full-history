@@ -86,11 +86,12 @@ void gateServer::sig_usr2(int /*x*/)
 volatile int gateServer::command_flag=0;
 volatile int gateServer::report_flag2=0;
 
-void gatewayServer(void)
+void gatewayServer(char *prefix)
 {
-	gateDebug0(5,"gateServer::gatewayServer()\n");
+	gateDebug1(5,"gateServer::gatewayServer() prefix=%s\n",
+	  prefix?prefix:"NULL");
 
-	gateServer* server = new gateServer(5000u);
+	gateServer* server = new gateServer(5000u,prefix);
 	server->mainLoop();
 	delete server;
 }
@@ -107,6 +108,9 @@ void gateServer::mainLoop(void)
 	//	osiTime delay(0u,0u);    // (sec, nsec) (0 ms, select will not block)
 	SigFunc old;
 	unsigned char cnt=0;
+
+	printf("Statistics PV prefix is %s\n",stat_prefix);
+
 #if DEBUG_TIMES
 	osiTime zero, begin, end, fdTime, pendTime, cleanTime, lastPrintTime;
 	unsigned long nLoops=0;
@@ -339,10 +343,17 @@ void gateFd::callBack(void)
 
 // ----------------------- server methods --------------------
 
-gateServer::gateServer(unsigned pvcount):caServer(pvcount)
+gateServer::gateServer(unsigned pvcount, char *prefix ) :
+	total_alive(0u),
+	total_active(0u),
+	total_pv(0u),
+	total_vc(0u),
+	total_fd(0u),
+	caServer(pvcount)
 {
 	gateDebug0(5,"gateServer()\n");
-	// this is a CA client, initialize the library
+
+	// Initialize channel access
 	SEVCHK(ca_task_initialize(),"CA task initialize");
 #if USE_FDS
 	SEVCHK(ca_add_fd_registration(fdCB,this),"CA add fd registration");
@@ -360,21 +371,15 @@ gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 
 	exist_count=0;
 #if statCount
-	struct utsname ubuf;
-
 	// Initialize stats
-	if(uname(&ubuf)<0)
-		host_name=strDup("gateway");
-	else
-		host_name=strDup(ubuf.nodename);
-
-	host_len=strlen(host_name);
-	initStats();
-	total_alive=0;
-	total_active=0;
-	total_pv=0;
-	total_vc=0;
-	total_fd=0;
+	initStats(prefix);
+#if 0
+	total_alive=0u;
+	total_active=0u;
+	total_pv=0u;
+	total_vc=0u;
+	total_fd=0u;
+#endif
 #ifdef RATE_STATS
 	client_event_count=0;
 	post_event_count=0;
@@ -407,7 +412,7 @@ gateServer::~gateServer(void)
 	delete [] name_fd;
 #endif
 #if statCount
-	delete [] host_name;
+	delete [] stat_prefix;
 #endif
 
 	while((pv_node=pv_list.first()))
@@ -882,20 +887,29 @@ void gateServer::setStat(int type, unsigned long val)
 	if(stat_table[type].pv) stat_table[type].pv->postData(val);
 }
 
-void gateServer::initStats(void)
+void gateServer::initStats(char *prefix)
 {
 	int i;
 	struct utsname ubuf;
 	static unsigned long zero=0u;
 
-	// set up PV names for server stats and fill them into the stat_table
-	if(uname(&ubuf)<0)
-		host_name=strDup("gateway");
-	else
-		host_name=strDup(ubuf.nodename);
+	// Define the prefix for the server stats
+	if(prefix) {
+		// Use the specified one
+		stat_prefix=prefix;
+	} else {
+		// Make one up
+		if(uname(&ubuf) >= 0) {
+			// Use the name of the host
+			stat_prefix=strDup(ubuf.nodename);
+		} else {
+			// If all else fails use "gateway"
+			stat_prefix=strDup("gateway");
+		}
+	}
+	stat_prefix_len=strlen(stat_prefix);
 
-	host_len=strlen(host_name);
-
+	// Set up PV names for server stats and fill them into the stat_table
 	for(i=0;i<statCount;i++)
 	{
 		switch(i) {
@@ -903,63 +917,80 @@ void gateServer::initStats(void)
 		case statActive:
 			stat_table[i].name="active";
 			stat_table[i].init_value=&total_active;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
 			break;
 		case statAlive:
 			stat_table[i].name="alive";
 			stat_table[i].init_value=&total_alive;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
 			break;
 		case statVcTotal:
 			stat_table[i].name="vctotal";
 			stat_table[i].init_value=&total_vc;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
 			break;
 		case statFd:
 			stat_table[i].name="fd";
 			stat_table[i].init_value=&total_fd;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
 			break;
 		case statPvTotal:
 			stat_table[i].name="pvtotal";
 			stat_table[i].init_value=&total_pv;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
 			break;
 #endif
 #ifdef RATE_STATS
 		case statClientEventRate:
 			stat_table[i].name="clientEventRate";
 			stat_table[i].init_value=&zero;
+			stat_table[i].units="Hz";
+			stat_table[i].precision=2;
 			break;
 		case statPostEventRate:
 			stat_table[i].name="postEventRate";
 			stat_table[i].init_value=&zero;
+			stat_table[i].units="Hz";
+			stat_table[i].precision=2;
 			break;
 		case statExistTestRate:
 			stat_table[i].name="existTestRate";
 			stat_table[i].init_value=&zero;
+			stat_table[i].units="Hz";
+			stat_table[i].precision=2;
 			break;
 		case statLoopRate:
 			stat_table[i].name="loopRate";
 			stat_table[i].init_value=&zero;
+			stat_table[i].units="Hz";
+			stat_table[i].precision=2;
 			break;
 #endif
 #ifdef CAS_DIAGNOSTICS
 		case statServerEventRate:
 			stat_table[i].name="serverEventRate";
 			stat_table[i].init_value=&zero;
+			stat_table[i].units="Hz";
+			stat_table[i].precision=2;
 			break;
 		case statServerEventRequestRate:
 			stat_table[i].name="serverPostRate";
 			stat_table[i].init_value=&zero;
+			stat_table[i].units="Hz";
+			stat_table[i].precision=2;
 			break;
 #endif
 		}
 
-                stat_table[i].pvname=new char[host_len+1+strlen(stat_table[i].name)+1];
-		sprintf(stat_table[i].pvname,"%s.%s",host_name,stat_table[i].name);
-                stat_table[i].pv=NULL;
+		stat_table[i].pvname=new char[stat_prefix_len+1+strlen(stat_table[i].name)+1];
+		sprintf(stat_table[i].pvname,"%s.%s",stat_prefix,stat_table[i].name);
+		stat_table[i].pv=NULL;
 	}
-}
-
-long gateServer::initStatValue(int type)
-{
-	return *stat_table[type].init_value;
 }
 
 void gateServer::clearStat(int type)
@@ -1069,7 +1100,8 @@ void gateRateStatsTimer::expire()
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
-/* c-basic-offset: 8 */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

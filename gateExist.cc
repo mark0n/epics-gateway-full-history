@@ -1,3 +1,5 @@
+// KE: Not used
+#if 0
 
 #include "gdd.h"
 #include "gateServer.h"
@@ -45,3 +47,4 @@ void gateExistData::cancel(void)
 	postIOCompletion(pverDoesNotExistHere);
 }
 
+#endif  // KE: Not used

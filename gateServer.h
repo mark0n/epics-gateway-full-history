@@ -103,6 +103,8 @@ struct gateServerStats
 	char* pvname;
 	gateStat* pv;
 	unsigned long* init_value;
+	char *units;
+	short precision;
 };
 typedef struct gateServerStats;
 
@@ -130,7 +132,7 @@ private:
 class gateServer : public caServer
 {
 public:
-	gateServer(unsigned pv_count_est);
+	gateServer(unsigned pv_count_est, char *prefix=NULL);
 	virtual ~gateServer(void);
 
 	// CAS virtual overloads
@@ -148,14 +150,13 @@ public:
 	time_t start_time;
 	unsigned long exist_count;
 #if statCount
-	gateStat* getStat(int type);
+	gateServerStats *getStatTable(int type) { return &stat_table[type]; }
 	void setStat(int type,double val);
 	void setStat(int type,unsigned long val);
 	void clearStat(int type);
-	long initStatValue(int type);
-	void initStats(void);
-	char* host_name;
-	int host_len;	
+	void initStats(char *prefix);
+	char* stat_prefix;
+	int stat_prefix_len;	
 	gateServerStats stat_table[statCount];
 #endif	
 #ifdef STAT_PVS
@@ -242,12 +243,6 @@ private:
 	static void sig_usr1(int);
 	static void sig_usr2(int);
 };
-
-#if statCount
-// --------- stat functions
-
-inline gateStat* gateServer::getStat(int type) { return stat_table[type].pv; }
-#endif
 
 // --------- time functions
 inline time_t gateServer::timeDeadCheck(void) const

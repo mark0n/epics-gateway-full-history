@@ -35,6 +35,7 @@ public:
 
 private:
 	gdd* value;
+	gdd *attr;
 	int post_data;
 	int type;
 	gateServer* serv;

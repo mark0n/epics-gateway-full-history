@@ -1,6 +1,9 @@
 // Author: Jim Kowalkowski
 // Date: 2/96
 
+// KE: strDup() comes from base/src/gdd/aitHelpers.h
+// Not clear why strdup() is not used
+
 #define GATE_RESOURCE_FILE 1
 
 #include <stdio.h>

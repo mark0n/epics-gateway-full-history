@@ -4,6 +4,10 @@
 #ifndef GATE_NEW_PV_H
 #define GATE_NEW_PV_H
 
+// Used in put() to specify callback or not
+#define GATE_NOCALLBACK 0
+#define GATE_DOCALLBACK 1
+
 #include <sys/types.h>
 #include <sys/time.h>
 
@@ -37,9 +41,30 @@ typedef enum {
 
 class gdd;
 class gateVcData;
+class gatePvData;
 class gateExistData;
 class gateServer;
 
+// This class is used by gatePvData to keep track of which associated
+// gateVcData initiated a put.  It stores the vcID of the gateVcData
+// and the gatePvData's this pointer in a list for use by the
+// gatePvData's static putCB.
+class gatePvCallbackId : public tsDLNode<gatePvCallbackId>
+{
+public:
+	gatePvCallbackId(unsigned long idIn, gatePvData *pvIn) :
+	  id(idIn),pv(pvIn) {};
+	unsigned long getID(void) const { return id;}
+	gatePvData *getPV(void) const { return pv;}
+private:
+	unsigned long id;
+	gatePvData *pv;
+};
+
+// This class is used to manage one process variable (channel) on the
+// client side of the Gateway.  It typically stays around a long time,
+// whereas the associated gateVcData comes and goes as clients connect
+// to the server side of the Gateway.
 class gatePvData
 {
 public:
@@ -50,58 +75,58 @@ public:
 	~gatePvData(void);
 
 	typedef gdd* (gatePvData::*gateCallback)(void*);
-
-        int active(void) const { return (pv_state==gatePvActive)?1:0; }
-        int inactive(void) const { return (pv_state==gatePvInactive)?1:0; }
-        int dead(void) const { return (pv_state==gatePvDead)?1:0; }
-        int pendingConnect(void) const { return (pv_state==gatePvConnect)?1:0; }
-
-        int pendingGet(void) const { return (get_state)?1:0; }
-        int monitored(void) const { return (mon_state)?1:0; }
-        int needAckNak(void) const { return (test_flag)?1:0; }
-        int needAddRemove(void) const { return (complete_flag)?1:0; }
-        int abort(void) const { return (abort_flag)?1:0; }
-
-        const char* name(void) const { return pv_name; }
-        gateVcData* VC(void) const { return vc; }
-        gateAsEntry* getEntry(void) const { return ae; }
-        gatePvState getState(void) const { return pv_state; }
-        int getStatus(void) const { return status; }
-        chid getChannel(void) const { return chID; }
-        evid getEvent(void) const { return evID; }
-        int getCaState(void) const { return ca_state(chID); }
-        aitInt32 totalElements(void) const { return ca_element_count(chID); }
-        aitUint32 maxElements(void) const { return max_elements; }
-        chtype fieldType(void) const { return ca_field_type(chID); }
-        aitEnum nativeType(void) const;
-        chtype dataType(void) const { return data_type; }
-        chtype eventType(void) const { return event_type; }
-        void checkEvent(void) { ca_poll(); }
-        double eventRate(void);
-
-        int activate(gateVcData* from); // set to active (CAS connect)
-        int deactivate(void);           // set to inactive (CAS disconnect)
-        int death(void);                // set to not connected (CAC disconnect)
-        int life(void);                 // set to connected (CAC connect)
-        int monitor(void);              // add monitor
-        int unmonitor(void);            // delete monitor
-        int get(void);                  // get callback
-#if 0
-// KE: Isn't presently used
-#endif
-        int put(gdd*);                  // put callback
-        int putDumb(gdd*);              // put, no callback
-
+	
+	int active(void) const { return (pv_state==gatePvActive)?1:0; }
+	int inactive(void) const { return (pv_state==gatePvInactive)?1:0; }
+	int dead(void) const { return (pv_state==gatePvDead)?1:0; }
+	int pendingConnect(void) const { return (pv_state==gatePvConnect)?1:0; }
+	
+	int pendingGet(void) const { return (get_state)?1:0; }
+	int monitored(void) const { return (mon_state)?1:0; }
+	int needAckNak(void) const { return (test_flag)?1:0; }
+	int needAddRemove(void) const { return (complete_flag)?1:0; }
+	int abort(void) const { return (abort_flag)?1:0; }
+	
+	const char* name(void) const { return pv_name; }
+	gateVcData* VC(void) const { return vc; }
+	gateAsEntry* getEntry(void) const { return ae; }
+	gatePvState getState(void) const { return pv_state; }
+	int getStatus(void) const { return status; }
+	chid getChannel(void) const { return chID; }
+	evid getEvent(void) const { return evID; }
+	int getCaState(void) const { return ca_state(chID); }
+	aitInt32 totalElements(void) const { return ca_element_count(chID); }
+	aitUint32 maxElements(void) const { return max_elements; }
+	chtype fieldType(void) const { return ca_field_type(chID); }
+	aitEnum nativeType(void) const;
+	chtype dataType(void) const { return data_type; }
+	chtype eventType(void) const { return event_type; }
+	void checkEvent(void) { ca_poll(); }
+	double eventRate(void);
+	
+	int activate(gateVcData* from); // set to active (CAS connect)
+	int deactivate(void);           // set to inactive (CAS disconnect)
+	int death(void);                // set to not connected (CAC disconnect)
+	int life(void);                 // set to connected (CAC connect)
+	int monitor(void);              // add monitor
+	int unmonitor(void);            // delete monitor
+	int get(void);                  // get callback
+	int put(gdd*, int docallback);  // put with or without callback
+	
 	time_t timeInactive(void) const;
 	time_t timeActive(void) const;
 	time_t timeDead(void) const;
 	time_t timeAlive(void) const;
 	time_t timeLastTrans(void) const;
 	time_t timeConnecting(void) const;
-
+	
 	void setVC(gateVcData* t) { vc=t; }
 	void setTransTime(void);
+#if 0
+			// KE: not used
 	void addET(gateExistData*);
+#endif
+	
 
 protected:
 	void init(gateServer*,gateAsEntry*,const char* name);
@@ -114,46 +139,51 @@ protected:
 	void setTimes(void);
 
 private:
-        void markMonitored(void) { mon_state=1; }
-        void markGetPending(void) { get_state=1; }
-        void markAckNakNeeded(void) { test_flag=1; }
-        void markAddRemoveNeeded(void) { complete_flag=1; }
-        void markAbort(void) { abort_flag=1; }
-        void markNotMonitored(void) { mon_state=0; }
-        void markNoGetPending(void) { get_state=0; }
-        void markAckNakNotNeeded(void) { test_flag=0; }
-        void markAddRemoveNotNeeded(void) { complete_flag=0; }
-        void markNoAbort(void) { abort_flag=0; }
-
-        void setState(gatePvState s) { pv_state=s; }
-
-        gdd* runEventCB(void* data) { return (this->*event_func)(data); }
-        gdd* runDataCB(void* data) { return (this->*data_func)(data); }
-
-        tsDLList<gateExistData> et_list; // pending exist testing list
-
-        gateServer* mrg;
-        gateVcData* vc;         // virtual connection
-        gateAsEntry* ae;
-        aitUint32 max_elements;
-        int status;
-        unsigned long event_count;
-        char* pv_name;          // name of the pv I am connected to
-        chid chID;              // channel access ID
-        evid evID;              // CA event thing
-        chtype event_type;      // type associated with monitor event
-        chtype data_type;       // type associated with attribute retrieval
-        gatePvState pv_state;   // over-all state of the PV
-
-	gateCallback event_func;
-	gateCallback data_func;
-
-	int mon_state; // 0=not monitored, 1=is monitored
-	int get_state; // 0=no get pending, 1=get pending
-	int test_flag; // true if NAK/ACK response required after completion
-	int abort_flag;	// true if activate-connect sequence should be aborted
+	void markMonitored(void) { mon_state=1; }
+	void markGetPending(void) { get_state=1; }
+	void markAckNakNeeded(void) { test_flag=1; }
+	void markAddRemoveNeeded(void) { complete_flag=1; }
+	void markAbort(void) { abort_flag=1; }
+	void markNotMonitored(void) { mon_state=0; }
+	void markNoGetPending(void) { get_state=0; }
+	void markAckNakNotNeeded(void) { test_flag=0; }
+	void markAddRemoveNotNeeded(void) { complete_flag=0; }
+	void markNoAbort(void) { abort_flag=0; }
+	
+	void setState(gatePvState s) { pv_state=s; }
+	
+	gdd* runEventCB(void* data) { return (this->*event_func)(data); }
+	gdd* runDataCB(void* data) { return (this->*data_func)(data); }
+	
+#if 0
+	// KE: not used
+	tsDLList<gateExistData> et_list;  // pending exist testing list
+#endif	
+	
+	tsDLList<gatePvCallbackId> callback_list;  // callback list for puts
+	
+	gateServer* mrg;    // The gateServer that manages this gatePvData
+	gateVcData* vc;     // Pointer to the associated gateVcData, NULL if none
+	gateAsEntry* ae;
+	aitUint32 max_elements;
+	int status;
+	char* pv_name;             // Name of the process variable
+	chid chID;                 // Channel access ID
+	evid evID;                 // Channel access event id
+	chtype event_type;         // DBR type associated with eventCB (event_data)
+	chtype data_type;          // DBR type associated with getCB (pv_data)
+	gatePvState pv_state;      // The state of the connection
+	unsigned long event_count; // Counter for events received
+	
+	gateCallback event_func;   // Function called in eventCB for event_data
+	gateCallback data_func;    // Function called in getCB for pv_data
+	
+	int mon_state;     // 0=not monitored, 1=is monitored
+	int get_state;     // 0=no get pending, 1=get pending
+	int test_flag;     // true if NAK/ACK response required after completion
+	int abort_flag;	   // true if activate-connect sequence should be aborted
 	int complete_flag; // true if ADD/REMOVE required after completion
-
+	
 	time_t no_connect_time; // when no one connected to held PV
 	time_t dead_alive_time; // when PV went dead / came alive
 	time_t last_trans_time; // last transaction occurred at this time
@@ -164,7 +194,7 @@ private:
 	static void putCB(EVENT_ARGS args);         // put callback
 	static void getCB(EVENT_ARGS args);         // get callback
 
-	// Callback functions for event when monitored
+	// Callback functions used in eventCB
 	gdd* eventStringCB(void*);
 	gdd* eventEnumCB(void*);
 	gdd* eventShortCB(void*);
@@ -173,7 +203,7 @@ private:
 	gdd* eventCharCB(void*);
 	gdd* eventLongCB(void*);
 
-	// Callback functions for get of pv_data
+	// Callback functions used in getCB
 	gdd* dataStringCB(void*);
 	gdd* dataEnumCB(void*);
 	gdd* dataShortCB(void*);
@@ -183,7 +213,10 @@ private:
 	gdd* dataLongCB(void*);
 };
 
+#if 0
+			// KE: not used
 inline void gatePvData::addET(gateExistData* ed) { et_list.add(*ed); }
+#endif
 
 inline time_t gatePvData::timeInactive(void) const
 	{ return inactive()?(time(NULL)-no_connect_time):0; }

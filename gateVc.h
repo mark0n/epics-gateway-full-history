@@ -23,13 +23,14 @@ typedef enum {
 
 class gdd;
 class gatePvData;
-class gateServer;
-/* class gateAsyncR; */
-/*class gateAsyncW; */
 class gateVcData;
+class gateServer;
 class gateAs;
 class gateAsNode;
 class gateAsEntry;
+class gateAsyncR;
+class gateAsyncW;
+class gatePendingWrite;
 
 // ----------------------- vc channel stuff -------------------------------
 
@@ -51,34 +52,6 @@ public:
 private:
 	gateAsNode* node; // I must delete this when done using it
 	gateVcData& vc;
-};
-
-// ---------------------- async read/write pending operation ------------------
-
-class gateAsyncR : public casAsyncReadIO, public tsDLNode<gateAsyncR>
-{
-public:
-	gateAsyncR(const casCtx &ctx,gdd& wdd) : casAsyncReadIO(ctx),dd(wdd)
-		{ dd.reference(); }
-
-	virtual ~gateAsyncR(void);
-
-	gdd& DD(void) { return dd; }
-private:
-	gdd& dd;
-};
-
-class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
-{
-public:
-	gateAsyncW(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
-		{ dd.reference(); }
-
-	virtual ~gateAsyncW(void);
-
-	gdd& DD(void) { return dd; }
-private:
-	gdd& dd;
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -107,12 +80,6 @@ public:
 	int ready(void)				{ return (pv_state==gateVcReady)?1:0; }
 
 	void report(void);
-#if 0
-	// KE: Not used
-	void dumpEventData(void);
-	void dumpPvData(void);
-#endif	
-
     const char* name(void) const { return pv_name; }  // KE: Duplicates getName
     aitString& nameString(void) { return pv_string; }
     void* PV(void) const { return pv; }
@@ -121,7 +88,6 @@ public:
     gdd* pvData(void) const { return pv_data; }
     gdd* eventData(void) const { return event_data; }
     gdd* attribute(int) const { return NULL; } // not done
-    aitEnum nativeType(void) const;
     aitIndex maximumElements(void) const;
     gateAsEntry* getEntry(void) const { return entry; }
     void addChan(gateChan*);
@@ -136,22 +102,27 @@ public:
 	// Pv notification interface
 	virtual void vcNew(void);
 	virtual void vcDelete(void);
-	virtual void vcEvent(void);
+	virtual void vcPostEvent(void);
 	virtual void vcData(void);
-	virtual void vcPutComplete(gateBool);
-
 #if 0
-// KE: Isn't presently used
-	int put(gdd*);
+	// KE: Not used.
+	virtual void vcPutComplete(gateBool);
 #endif	
-	int putDumb(gdd*);
 
 	void vcRemove(void);
 	void ack(void);
 	void nak(void);
 	void vcAdd(gdd*);
-	void setEventData(gdd*);
-	void setPvData(gdd*);
+	void setEventData(gdd *dd); // Sets event_data from GatePvData::eventCB
+	void setPvData(gdd *dd);    // Sets pv_data from GatePvData::getCB
+	void copyState(gdd &dd);    // Copies pv_data and event_data to dd
+
+	// Asynchronous IO
+	caStatus putCB(int status);
+	unsigned long getVcID(void) const { return vcID; }
+	gatePendingWrite *pendingWrite() const { return pending_write; }
+	void flushAsyncReadQueue(void);
+	void flushAsyncWriteQueue(int docallback);
 
 	void markNoList(void) { in_list_flag=0; }
 	void markInList(void) { in_list_flag=1; }
@@ -178,23 +149,30 @@ public:
 	
 protected:
 	void setState(gateVcState s) { pv_state=s; }
-	gatePvData* pv;
+	gatePvData* pv;     // Pointer to the associated gatePvData
+
 private:
+	static unsigned long nextID;
+	unsigned long vcID;
+#if 0
+	// KE: Not used
 	int event_count;
+#endif	
 	aitBool read_access,write_access;
 	time_t time_last_trans;
 	int status;
 	gateAsEntry* entry;
 	gateVcState pv_state;
-	gateServer* mrg;
-	char* pv_name;
+	gateServer* mrg;     // The gateServer that manages this gateVcData
+	char* pv_name;     // The name of the process variable
 	aitString pv_string;
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;
 	tsDLList<gateChan> chan;
-	tsDLList<gateAsyncR> rio;	// NULL unless read posting required and connect
-	tsDLList<gateAsyncW> wio;	// NULL unless write posting required and connect
+	tsDLList<gateAsyncR> rio;	// Queue for read's received when not ready
+	tsDLList<gateAsyncW> wio;	// Queue for write's received when not ready
+	gatePendingWrite *pending_write;  // NULL unless a write (put) is in progress
 	// The state of the process variable is kept in these two gdd's
 	gdd* pv_data;     // Filled in by gatePcData::getCB on activation
 	gdd* event_data;  // Filled in by vatePvData::eventCB on channel change
@@ -217,6 +195,67 @@ inline time_t gateVcData::timeLastTrans(void) const
 
 inline void gateVcData::addChan(gateChan* c) { chan.add(*c); }
 inline void gateVcData::removeChan(gateChan* c) { chan.remove(*c); }
+
+// ---------------------- async read/write pending operation ------------------
+
+class gateAsyncR : public casAsyncReadIO, public tsDLNode<gateAsyncR>
+{
+public:
+	gateAsyncR(const casCtx &ctx, gdd& ddIn, tsDLList<gateAsyncR> *rioIn) :
+	  casAsyncReadIO(ctx),dd(ddIn),rio(rioIn)
+	  { dd.reference(); }
+
+	virtual ~gateAsyncR(void);
+
+	gdd& DD(void) const { return dd; }
+	void removeFromQueue(void) {
+		if(rio) {
+			// We trust the server library to remove the asyncIO
+			// before removing the gateVcData and hence the rio queue
+			rio->remove(*this);
+			rio=NULL;
+		}
+	}
+private:
+	tsDLList<gateAsyncR> *rio;
+	gdd& dd;
+};
+
+class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
+{
+public:
+	gateAsyncW(const casCtx &ctx, gdd& ddIn, tsDLList<gateAsyncW> *wioIn) :
+	  casAsyncWriteIO(ctx),dd(ddIn),wio(wioIn)
+	  { dd.reference(); }
+
+	virtual ~gateAsyncW(void);
+
+	gdd& DD(void) const { return dd; }
+	void removeFromQueue(void) {
+		if(wio) {
+			// We trust the server library to remove the asyncIO
+			// before removing the gateVcData and hence the wio queue
+			wio->remove(*this);
+			wio=NULL;
+		}
+	}
+private:
+	tsDLList<gateAsyncW> *wio;
+	gdd& dd;
+};
+
+class gatePendingWrite : public casAsyncWriteIO
+{
+public:
+	gatePendingWrite(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
+		{ dd.reference(); }
+
+	virtual ~gatePendingWrite(void);
+
+	gdd& DD(void) const { return dd; }
+private:
+	gdd& dd;
+};
 
 #endif
 

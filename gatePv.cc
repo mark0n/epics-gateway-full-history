@@ -5,6 +5,7 @@
 #define DEBUG_PV_LIST 0
 #define DEBUG_VC_DELETE 0
 #define DEBUG_GDD 0
+#define DEBUG_PUT 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -33,24 +34,65 @@
 #define GR global_resources
 #define GETDD(ap) gddApplicationTypeTable::AppTable().getDD(GR->ap)
 
-// ------------------------- menu array of string destructor ----------------
+// ------------------------- gdd destructors --------------------------------
 
-class gateStringDestruct : public gddDestructor
+// Apart from the FixedString destructor, which is definitely needed,
+// these are probably not necessary.  The default gddDestructor does
+// delete [] (aitUint8 *)v.  (aitUint=char) Since delete calls free,
+// which casts the pointer to a char * anyway, our specific casts are
+// probably wasted.
+
+// Fixed String
+class gateFixedStringDestruct : public gddDestructor
 {
 public:
-	gateStringDestruct(void) { }
-	void run(void*);
+	gateFixedStringDestruct(void) { }
+	void run(void *v) { delete [] (aitFixedString *)v; }
 };
 
-void gateStringDestruct::run(void* v)
+// Int
+class gateIntDestruct : public gddDestructor
 {
-	gateDebug1(5,"void gateStringDestruct::run(void* %8.8x)\n",(int)v);
-	aitFixedString* buf = (aitFixedString*)v;
-	delete [] buf;
-}
+public:
+	gateIntDestruct(void) { }
+	void run(void *v) { delete [] (aitInt32 *)v; }
+};
+
+// Char  (Default would also work here)
+class gateCharDestruct : public gddDestructor
+{
+public:
+	gateCharDestruct(void) { }
+	void run(void *v) { delete [] (aitInt8 *)v; }
+};
+
+// Float
+class gateFloatDestruct : public gddDestructor
+{
+public:
+	gateFloatDestruct(void) { }
+	void run(void *v) { delete [] (aitFloat32 *)v; }
+};
+
+// Double
+class gateDoubleDestruct : public gddDestructor
+{
+public:
+	gateDoubleDestruct(void) { }
+	void run(void *v) { delete [] (aitFloat64 *)v; }
+};
+
+// Short
+class gateShortDestruct : public gddDestructor
+{
+public:
+	gateShortDestruct(void) { }
+	void run(void *v) { delete [] (aitInt16 *)v; }
+};
 
 // ------------------------- pv data methods ------------------------
 
+// KE: This is the only constructor used
 gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
@@ -61,6 +103,8 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 	init(m,e,name);
 }
 
+#if 0
+// KE: Not used
 gatePvData::gatePvData(gateServer* m,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
@@ -70,7 +114,10 @@ gatePvData::gatePvData(gateServer* m,const char* name)
 #endif
 	init(m,m->getAs()->findEntry(name),name);
 }
+#endif
 
+#if 0
+// KE: Not used
 gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
 {
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateVcData=%8.8x,name=%s)\n",
@@ -83,7 +130,10 @@ gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
 	markAddRemoveNeeded();
 	init(m,m->getAs()->findEntry(name),name);
 }
+#endif
 
+#if 0
+// KE: Not used
 gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 {
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateExistData=%8.8x,name=%s)\n",
@@ -96,6 +146,7 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 	addET(d);
 	init(m,m->getAs()->findEntry(name),name);
 }
+#endif
 
 gatePvData::~gatePvData(void)
 {
@@ -111,6 +162,14 @@ gatePvData::~gatePvData(void)
 	status=ca_clear_channel(chID);
 	SEVCHK(status,"clear channel");
 	delete [] pv_name;
+
+	// Clear the callback_list;
+	gatePvCallbackId *id;
+	while((callback_list.first()))
+	{
+		callback_list.remove(*id);
+		delete id;
+	}
 }
 
 void gatePvData::initClear(void)
@@ -277,11 +336,15 @@ int gatePvData::deactivate(void)
 	return rc;
 }
 
+// Called in the connectCB if ca_state is cs_conn
 int gatePvData::life(void)
 {
 	gateDebug1(5,"gatePvData::life() name=%s\n",name());
 
+#if 0
+	// KE: not used
 	gateExistData* et;
+#endif
 	int rc=0;
 	event_count=0;
 
@@ -301,34 +364,33 @@ int gatePvData::life(void)
 		
 		mrg->pvAdd(pv_name,*this);
 
-		if(needAddRemove())
-		{
-			if(vc)
-			{
+		if(needAddRemove())	{
+			if(vc) {
 				setState(gatePvActive);
 				get();
 			}
-		}
-		else
-		{
+		} else {
 			setState(gatePvInactive);
 			markNoAbort();
 		}
 
-		if(needAckNak())
-		{
+		if(needAckNak()) {
+#if 0
+			// KE: not used
 			// I know this is not used, but it does not seem
 			// right. Who deletes or destroys the et node?
-			while((et=et_list.first()))
-			{
+			while((et=et_list.first())) {
 				et->ack();
 				et_list.remove(*et);
 			}
+#endif
 			markAckNakNotNeeded();
 		}
+
 #ifdef STAT_PVS
 		mrg->setStat(statAlive,++mrg->total_alive);
 #endif
+
 #if DEBUG_PV_LIST
 		{
 		    long now;
@@ -379,11 +441,15 @@ int gatePvData::life(void)
 	return rc;
 }
 
+// Called in the connectCB if ca_state is not cs_conn
 int gatePvData::death(void)
 {
 	gateDebug1(5,"gatePvData::death() name=%s\n",name());
 
+#if 0
+	// KE: not used
 	gateExistData* et;
+#endif
 	int rc=0;
 	event_count=0;
 
@@ -407,6 +473,8 @@ int gatePvData::death(void)
 		// still on connecting list, add to the PV list as dead
 		if(needAckNak())
 		{
+#if 0
+			// KE: not used
 			// I know this is not used, but it does not seem
 			// right. Who deletes or destroys the et node?
 			while((et=et_list.first()))
@@ -414,6 +482,7 @@ int gatePvData::death(void)
 				et->nak();
 				et_list.remove(*et);
 			}
+#endif
 		}
 		if(needAddRemove() && vc) delete vc; // should never be the case
 		mrg->pvAdd(pv_name,*this);
@@ -554,81 +623,28 @@ int gatePvData::get(void)
 	return (rc==ECA_NORMAL)?0:-1;
 }
 
-#if 0
-// KE: Isn't presently used
-int gatePvData::put(gdd* dd)
+// Called by gateVcData::write().  Does a ca_array_put_callback or
+// ca_array_put depending on docallback.  The former is used unless
+// the vc is not expected to remain around (e.g. in its destructor).
+// The callback will eventually update the gateVcData's event_data if
+// all goes well and not do so otherwise.  Returns S_casApp_success
+// for a successful put and as good an error code as we can generate
+// otherwise.  There is unfortunately no S_casApp return code defined
+// for failure.
+int gatePvData::put(gdd* dd, int docallback)
 {
 	gateDebug2(5,"gatePvData::put(gdd=%8.8x) name=%s\n",(int)dd,name());
-	int rc=ECA_NORMAL;
-	chtype cht;
-	unsigned long count;
-
-	gateDebug1(6,"gatePvData::put() - Field type=%d\n",(int)fieldType());
-	// dd->dump();
-
-	switch(getState())
-	{
-	case gatePvActive:
-		gateDebug0(2,"gatePvData::put() active PV\n");
-		setTransTime();
-
-		if(dd->isScalar())
-		{
-			cht=field(type);
-			count=1;
-			pData=dd->dataAddress();
-		}
-		else
-		{
-			// hopefully this is only temporary and we will get a string ait
-			if(fieldType()==DBF_STRING && dd->primitiveType()==aitEnumInt8)
-			{
-				cht=DBF_STRING;
-				count=1;
-				pData=dd->dataPointer();
-			}
-			else
-			{
-				cht=gddAitToDbr[dd->primitiveType()];
-				count=dd->getDataSizeElements();
-				pData=dd->dataPointer();
-			}
-		}
-		gateDebug0(6,"gatePvData::put() ca put before\n");
-		rc=ca_array_put_callback(cht,count,chID,pData,putCB,this);
-		gateDebug0(6,"gatePvData::put() ca put after\n");
-		SEVCHK(rc,"put callback bad");
-		markAckNakNeeded();
-#if OMIT_CHECK_EVENT
-#else
-		checkEvent();
-#endif
-		break;
-	case gatePvInactive:
-		gateDebug0(2,"gatePvData::put() inactive PV\n");
-		break;
-	case gatePvConnect:
-		gateDebug0(2,"gatePvData::put() connecting PV\n");
-		break;
-	case gatePvDead:
-		gateDebug0(2,"gatePvData::put() dead PV\n");
-		break;
-	}
-	return (rc==ECA_NORMAL)?0:-1;
-}
-#endif
-
-int gatePvData::putDumb(gdd* dd)
-{
-	gateDebug2(5,"gatePvData::putDumb(gdd=%8.8x) name=%s\n",(int)dd,name());
+	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	chtype cht=gddAitToDbr[dd->primitiveType()];
-	int rc=ECA_NORMAL;
+	gatePvCallbackId *cbid;
 	aitString* str;
 	void *pValue;
 	unsigned long count;
+	static int full=0;
 
 #if DEBUG_GDD
-		printf("gatePvData::putDumb: at=%d pt=%d ft=%d[%s] name=%s\n",
+		printf("gatePvData::put(%s): at=%d pt=%d ft=%d[%s] name=%s\n",
+		  docallback?"callback":"nocallback",
 		  dd->applicationType(),
 		  dd->primitiveType(),
 		  fieldType(),dbr_type_to_text(fieldType()),
@@ -638,7 +654,21 @@ int gatePvData::putDumb(gdd* dd)
 	switch(getState())
 	{
 	case gatePvActive:
-		gateDebug0(2,"gatePvData::putDumb() active PV\n");
+		caStatus stat;
+		gateDebug0(2,"gatePvData::put() active PV\n");
+		// Don't let the callback list grow forever
+		if(callback_list.count() > 5000u) {
+			// Only print this when it becomes full
+			if(!full) {
+				fprintf(stderr,"gatePvData::put:"
+				  "  Callback list is full for %s\n",name);
+				full=1;
+				return -1;
+			}
+		} else {
+			full=0;
+		}
+
 		setTransTime();
 		switch(dd->primitiveType())
 		{
@@ -653,7 +683,7 @@ int gatePvData::putDumb(gdd* dd)
 			pValue=(void *)str->string();
 			gateDebug1(5," putting String <%s>\n",str->string());
 			break;
-		case aitEnumFixedString:
+		case aitEnumFixedString:     // Always a pointer
 			count=dd->getDataSizeElements();
 			pValue=dd->dataPointer();
 			gateDebug1(5," putting FString <%s>\n",(char *)pUser);
@@ -668,26 +698,41 @@ int gatePvData::putDumb(gdd* dd)
 			}
 			break;
 		}
-		rc=ca_array_put(cht,count,chID,pValue);	
-		SEVCHK(rc,"put dumb bad");
+
+		if(docallback) {
+			// We need to keep track of which vc requested the put, so we
+			// make a gatePvCallbackId, save it in the callback_list, and
+			// use it as the puser for the callback, which is putCB.
+			cbid=new gatePvCallbackId(vc->getVcID(),this);
+#if DEBUG_PUT
+			printf("gatePvData::put: cbid=%x this=%x id=%d pv=%x\n",
+			  cbid,this,cbid->getID(),cbid->getPV());
+#endif		
+			if(!cbid) return S_casApp_noMemory;
+			callback_list.add(*cbid);
+			stat=ca_array_put_callback(cht,count,chID,pValue,putCB,(void *)cbid);
+			SEVCHK(stat,"put callback bad");
+		} else {
+			stat=ca_array_put(cht,count,chID,pValue);
+			SEVCHK(stat,"put bad");
+		}
 #if OMIT_CHECK_EVENT
 #else
 		checkEvent();
 #endif
-		break;
+		return (stat==ECA_NORMAL)?S_casApp_success:-1;
 	case gatePvInactive:
-		gateDebug0(2,"gatePvData::putDumb() inactive PV\n");
-		break;
+		gateDebug0(2,"gatePvData::put() inactive PV\n");
+		return -1;
 	case gatePvConnect:
-		gateDebug0(2,"gatePvData::putDumb() connecting PV\n");
-		break;
+		gateDebug0(2,"gatePvData::put() connecting PV\n");
+		return -1;
 	case gatePvDead:
-		gateDebug0(2,"gatePvData::putDumb() dead PV\n");
-		break;
-	default: break;
+		gateDebug0(2,"gatePvData::put() dead PV\n");
+		return -1;
+	default:
+		return -1;
 	}
-
-	return (rc==ECA_NORMAL)?0:-1;
 }
 
 double gatePvData::eventRate(void)
@@ -727,12 +772,6 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 			pv->event_func=eventStringCB;
 			pv->data_func=dataStringCB;
 			break;
-		case DBF_ENUM:
-			pv->data_type=DBR_CTRL_ENUM;
-			pv->event_type=DBR_TIME_ENUM;
-			pv->event_func=eventEnumCB;
-			pv->data_func=dataEnumCB;
-			break;
 		case DBF_SHORT: // DBF_INT is same as DBF_SHORT
 			pv->data_type=DBR_CTRL_SHORT;
 			pv->event_type=DBR_TIME_SHORT;
@@ -744,6 +783,12 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 			pv->event_type=DBR_TIME_FLOAT;
 			pv->event_func=eventFloatCB;
 			pv->data_func=dataFloatCB;
+			break;
+		case DBF_ENUM:
+			pv->data_type=DBR_CTRL_ENUM;
+			pv->event_type=DBR_TIME_ENUM;
+			pv->event_func=eventEnumCB;
+			pv->data_func=dataEnumCB;
 			break;
 		case DBF_CHAR:
 			pv->data_type=DBR_CTRL_CHAR;
@@ -787,19 +832,75 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 	}
 }
 
+// This is the callback that is called when ca_array_put_callback is
+// used in put().  It must be a static function and gets the pointer
+// to the particular gatePvData that called it as well the vcID of the
+// originating vc in that gatePvData from the args.usr, which is a
+// pointer to a gatePvConnectId.  It uses the vcID to check that the
+// vc which originated the put is still the current one, in which case
+// if all is well, it will call the vc's putCB to update its
+// event_data.  Otherwise, we would be trying to update a gateVcDta
+// that is gone and get errors.  The gatePvCallbackId's are stored in
+// a list in the gatePvData since they must remain around until this
+// callback runs.  If we did not need the vcID to check the vc, we
+// could have avoided all this and just passed the pointer to the
+// gatePvData as the args.usr.  Note that we can also get the
+// gatePvData from ca_puser(args.chid), and it is perhaps not
+// necessary to include the GatePvData this pointer in the
+// gatePvConnectId.  We will leave it this way for now.
 void gatePvData::putCB(EVENT_ARGS args)
 {
-	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 	gateDebug1(5,"gatePvData::putCB(gatePvData=%8.8x)\n",pv);
+
+	// Get the callback id
+	gatePvCallbackId* cbid=(gatePvCallbackId *)args.usr;
+	if(!cbid) {
+     // Unexpected error
+		fprintf(stderr,"gatePvData::putCB: gatePvCallbackId pointer is NULL\n");
+		return;
+	}
+
+	// Get the information from the callback id
+	unsigned long vcid=cbid->getID();
+	gatePvData *pv=cbid->getPV();
+	if(!pv) {
+     // Unexpected error
+		fprintf(stderr,"gatePvData::putCB: gatePvData pointer is NULL\n");
+		return;
+	}
+
+#if DEBUG_PUT
+		printf("gatePvData::putCB: cbid=%x user=%x id=%d pv=%x\n",
+		  cbid,ca_puser(args.chid),cbid->getID(),cbid->getPV());
+#endif		
+
+	// We are through with the callback id.  Remove it from the
+	// callback_list and delete it.
+	pv->callback_list.remove(*cbid);
+	delete cbid;
+
+	// Check if the put was successful
+	if(args.status != ECA_NORMAL) return;
+	
+	// Check if the originating vc is still around.
+	if(!pv->vc || pv->vc->getVcID() != vcid) return;
 
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
 #endif
 
+    // The originating vc is still around.  Let it handle it.
+	pv->vc->putCB(args.status);
+		
+	// KE: Not sure what this does, if anything
+	// Clean it up later
 	// notice that put with callback never fails here (always ack'ed)
 	pv->vc->ack(); // inform the VC
 }
 
+// This is the callback registered with ca_add_array_event in the
+// monitor routine.  If conditions are right, it calls the routines
+// that copy the data into the GateVcData's event_data.
 void gatePvData::eventCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
@@ -817,7 +918,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 		if(pv->active())
 		{
 			gateDebug0(5,"gatePvData::eventCB() active pv\n");
-			if(dd=pv->runEventCB((void*)(args.dbr)))
+			if(dd=pv->runEventCB((void *)(args.dbr)))
 			{
 				if(pv->needAddRemove())
 				{
@@ -851,7 +952,7 @@ void gatePvData::getCB(EVENT_ARGS args)
 		if(pv->active())
 		{
 			gateDebug0(5,"gatePvData::getCB() pv active\n");
-			if(dd=pv->runDataCB((void*)(args.dbr))) pv->vc->setPvData(dd);
+			if(dd=pv->runDataCB((void *)(args.dbr))) pv->vc->setPvData(dd);
 			pv->monitor();
 		}
 	}
@@ -899,14 +1000,14 @@ void gatePvData::accessCB(ACCESS_ARGS args)
 //  DBR_CTRL_LONG
 //  DBR_CTRL_SHORT (DBR_CTRL_INT)
 
-gdd* gatePvData::dataStringCB(void* /*dbr*/)
+gdd* gatePvData::dataStringCB(void * /*dbr*/)
 {
 	gateDebug0(4,"gatePvData::dataStringCB\n");
 	// no useful pv_data returned by this function
 	return NULL;
 }
 
-gdd* gatePvData::dataEnumCB(void* dbr)
+gdd* gatePvData::dataEnumCB(void * dbr)
 {
 	gateDebug0(4,"gatePvData::dataEnumCB\n");
 	int i;
@@ -920,13 +1021,12 @@ gdd* gatePvData::dataEnumCB(void* dbr)
 		  sizeof(aitFixedString));
 		items[i].fixed_string[sizeof(aitFixedString)-1u] = '\0';
 	}
-	
 
-	menu->putRef(items,new gateStringDestruct);
+	menu->putRef(items,new gateFixedStringDestruct());
 	return menu;
 }
 
-gdd* gatePvData::dataDoubleCB(void* dbr)
+gdd* gatePvData::dataDoubleCB(void * dbr)
 {
 	gateDebug0(10,"gatePvData::dataDoubleCB\n");
 	dbr_ctrl_double* ts = (dbr_ctrl_double*)dbr;
@@ -947,7 +1047,7 @@ gdd* gatePvData::dataDoubleCB(void* dbr)
 	return attr;
 }
 
-gdd* gatePvData::dataShortCB(void* dbr)
+gdd* gatePvData::dataShortCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::dataShortCB\n");
 	dbr_ctrl_short* ts = (dbr_ctrl_short*)dbr;
@@ -968,7 +1068,7 @@ gdd* gatePvData::dataShortCB(void* dbr)
 	return attr;
 }
 
-gdd* gatePvData::dataFloatCB(void* dbr)
+gdd* gatePvData::dataFloatCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::dataFloatCB\n");
 	dbr_ctrl_float* ts = (dbr_ctrl_float*)dbr;
@@ -989,7 +1089,7 @@ gdd* gatePvData::dataFloatCB(void* dbr)
 	return attr;
 }
 
-gdd* gatePvData::dataCharCB(void* dbr)
+gdd* gatePvData::dataCharCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::dataCharCB\n");
 	dbr_ctrl_char* ts = (dbr_ctrl_char*)dbr;
@@ -1010,7 +1110,7 @@ gdd* gatePvData::dataCharCB(void* dbr)
 	return attr;
 }
 
-gdd* gatePvData::dataLongCB(void* dbr)
+gdd* gatePvData::dataLongCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::dataLongCB\n");
 	dbr_ctrl_long* ts = (dbr_ctrl_long*)dbr;
@@ -1040,7 +1140,7 @@ gdd* gatePvData::dataLongCB(void* dbr)
 //  DBR_TIME_LONG
 //  DBR_TIME_SHORT (DBR_TIME_INT)
 
-gdd* gatePvData::eventStringCB(void* dbr)
+gdd* gatePvData::eventStringCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventStringCB\n");
 	dbr_time_string* ts = (dbr_time_string*)dbr;
@@ -1055,7 +1155,7 @@ gdd* gatePvData::eventStringCB(void* dbr)
 	return value;
 }
 
-gdd* gatePvData::eventEnumCB(void* dbr)
+gdd* gatePvData::eventEnumCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventEnumCB\n");
 	dbr_time_enum* ts = (dbr_time_enum*)dbr;
@@ -1069,7 +1169,7 @@ gdd* gatePvData::eventEnumCB(void* dbr)
 	return value;
 }
 
-gdd* gatePvData::eventLongCB(void* dbr)
+gdd* gatePvData::eventLongCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventLongCB\n");
 	dbr_time_long* ts = (dbr_time_long*)dbr;
@@ -1085,7 +1185,7 @@ gdd* gatePvData::eventLongCB(void* dbr)
 		d=(aitInt32*)&ts->value;
 		memcpy(nd,d,count*sizeof(aitInt32));
 		value=new gddAtomic(GR->appValue,aitEnumInt32,1,&count);
-		value->putRef(nd,new gddDestructor);
+		value->putRef(nd,new gateIntDestruct());
 	}
 	else
 	{
@@ -1097,7 +1197,7 @@ gdd* gatePvData::eventLongCB(void* dbr)
 	return value;
 }
 
-gdd* gatePvData::eventCharCB(void* dbr)
+gdd* gatePvData::eventCharCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventCharCB\n");
 	dbr_time_char* ts = (dbr_time_char*)dbr;
@@ -1113,7 +1213,7 @@ gdd* gatePvData::eventCharCB(void* dbr)
 		d=(aitInt8*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitInt8));
 		value = new gddAtomic(GR->appValue,aitEnumInt8,1,&count);
-		value->putRef(nd,new gddDestructor);
+		value->putRef(nd,new gateCharDestruct());
 	}
 	else
 	{
@@ -1125,7 +1225,7 @@ gdd* gatePvData::eventCharCB(void* dbr)
 	return value;
 }
 
-gdd* gatePvData::eventFloatCB(void* dbr)
+gdd* gatePvData::eventFloatCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventFloatCB\n");
 	dbr_time_float* ts = (dbr_time_float*)dbr;
@@ -1141,7 +1241,7 @@ gdd* gatePvData::eventFloatCB(void* dbr)
 		d=(aitFloat32*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitFloat32));
 		value= new gddAtomic(GR->appValue,aitEnumFloat32,1,&count);
-		value->putRef(nd,new gddDestructor);
+		value->putRef(nd,new gateFloatDestruct());
 	}
 	else
 	{
@@ -1153,7 +1253,7 @@ gdd* gatePvData::eventFloatCB(void* dbr)
 	return value;
 }
 
-gdd* gatePvData::eventDoubleCB(void* dbr)
+gdd* gatePvData::eventDoubleCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventDoubleCB\n");
 	dbr_time_double* ts = (dbr_time_double*)dbr;
@@ -1169,7 +1269,7 @@ gdd* gatePvData::eventDoubleCB(void* dbr)
 		d=(aitFloat64*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitFloat64));
 		value= new gddAtomic(GR->appValue,aitEnumFloat64,1,&count);
-		value->putRef(nd,new gddDestructor);
+		value->putRef(nd,new gateDoubleDestruct());
 	}
 	else
 	{
@@ -1181,7 +1281,7 @@ gdd* gatePvData::eventDoubleCB(void* dbr)
 	return value;
 }
 
-gdd* gatePvData::eventShortCB(void* dbr)
+gdd* gatePvData::eventShortCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventShortCB\n");
 	dbr_time_short* ts = (dbr_time_short*)dbr;
@@ -1197,7 +1297,7 @@ gdd* gatePvData::eventShortCB(void* dbr)
 		d=(aitInt16*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitInt16));
 		value=new gddAtomic(GR->appValue,aitEnumInt16,1,&count);
-		value->putRef(nd,new gddDestructor);
+		value->putRef(nd,new gateShortDestruct);
 	}
 	else
 	{
