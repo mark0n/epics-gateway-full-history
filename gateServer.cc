@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.24  1997/06/30 16:07:00  jba
+// Added Dead PVs report
+//
 // Revision 1.23  1997/06/11 01:18:43  jba
 // Fixed delete for name_* vars.
 //
@@ -110,7 +113,7 @@ static void sig_pipe(int)
 
 void gateServer::sig_usr1(int x)
 {
-	gateServer::report_flag1=1;
+	gateServer::command_flag=1;
 	// if(save_usr1) save_usr1(x);
 	signal(SIGUSR1,gateServer::sig_usr1);
 }
@@ -121,7 +124,7 @@ void gateServer::sig_usr2(int x)
 	signal(SIGUSR2,gateServer::sig_usr2);
 }
 
-volatile int gateServer::report_flag1=0;
+volatile int gateServer::command_flag=0;
 volatile int gateServer::report_flag2=0;
 
 void gatewayServer(void)
@@ -159,8 +162,66 @@ void gateServer::mainLoop(void)
 
 		// make sure messages get out
 		if(++cnt==0) { fflush(stderr); fflush(stdout); }
-		if(report_flag1) { report(); report_flag1=0; }
 		if(report_flag2) { report2(); report_flag2=0; }
+		if(command_flag) { gateCommands(global_resources->commandFile()); command_flag=0; }
+	}
+}
+
+void gateServer::gateCommands(const char* cfile)
+{
+
+	FILE* fd;
+	char inbuf[200];
+	char *cmd,*ptr;
+	time_t t;
+
+	if(cfile)
+	{
+		if((fd=fopen(cfile,"r"))==NULL)
+		{
+			fprintf(stderr,"Failed to open command file %s\n",cfile);
+			return;
+		}
+	}
+	else
+	{
+		return;
+	}
+
+	while(fgets(inbuf,sizeof(inbuf),fd))
+	{
+		if((ptr=strchr(inbuf,'#'))) *ptr='\0';
+
+                cmd=strtok(inbuf," \t\n");
+		while(cmd)
+               {
+			if(strcmp(cmd,"R1")==0)
+				report();
+			else if(strcmp(cmd,"R2")==0)
+					report2();
+			else if(strcmp(cmd,"R3")==0)
+					as_rules->report(stdout);
+			else if(strcmp(cmd,"AS")==0)
+			{
+				time(&t);
+				printf("Reading access security file: %s\n",ctime(&t));
+				newAs();
+			}
+			else printf("Invalid command %s\n",cmd);
+                        cmd=strtok(NULL," \t\n");
+		}
+	}
+	fclose(fd);
+	fflush(stdout);
+
+	return;
+}
+
+void gateServer::newAs(void)
+{
+	if (as_rules && global_resources->accessFile())
+	{
+		as_rules->reInitialize(global_resources->accessFile());
 	}
 }
 

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.17  1997/09/25 18:20:47  jba
+// Added cast and include for tsDLList.h.
+//
 // Revision 1.16  1997/06/12 21:32:07  jba
 // pv_name update.
 //
@@ -438,7 +441,7 @@ int gatePvData::monitor(void)
 
 		if(ca_read_access(chan))
 		{
-			gateDebug1(5,"gatePvData::monitor() type=%d\n",eventType());
+			gateDebug1(5,"gatePvData::monitor() type=%ld\n",eventType());
 			rc=ca_add_array_event(eventType(),0,chan,eventCB,this,
 				0.0,0.0,0.0,&event);
 			SEVCHK(rc,"gatePvData::Monitor() add event");
@@ -704,7 +707,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 	gateDebug2(5,"gatePvData::eventCB(gatePvData=%8.8x) type=%d\n",
-		pv,args.type);
+		pv,(unsigned int)args.type);
 	gdd* dd;
 
 	if(args.status==ECA_NORMAL)

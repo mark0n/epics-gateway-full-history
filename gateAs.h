@@ -138,6 +138,8 @@ public:
 
 	void report(FILE*);
 
+	static long reInitialize(const char* as_file_name);
+
 	static char* const default_group;
 	static char* const default_pattern;
 private:

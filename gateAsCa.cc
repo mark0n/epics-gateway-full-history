@@ -7,6 +7,7 @@
 extern "C" {
 #include "alarm.h"
 #include "cadef.h"
+#include "epicsPrint.h"
 }
 
 extern ASBASE *pasbase;
@@ -16,7 +17,6 @@ extern ASBASE *pasbase;
 typedef struct capvt {
 	struct dbr_sts_double rtndata;
 	chid ch_id;
-	evid ev_id;
 	int gotFirstEvent;
 };
 typedef struct capvt CAPVT;
@@ -25,79 +25,60 @@ static volatile int ready = 0;
 static volatile int count = 0;
 static time_t start_time;
 
-static void accessCB(struct access_rights_handler_args arha)
+static void connectCB(struct connection_handler_args arg)
 {
-	chid		ch_id = arha.chid;
-	ASGINP		*pasginp;
-	ASG			*pasg;
-	CAPVT		*pcapvt;
+    chid	chid = arg.chid;
+    ASGINP	*pasginp = (ASGINP *)ca_puser(chid);;
+    ASG		*pasg = pasginp->pasg;;
 
-	pasginp=(ASGINP*)ca_puser(ch_id);
-	pasg=(ASG*)pasginp->pasg;
-	pcapvt=(CAPVT*)pasginp->capvt;
-
-	if(!ca_read_access(ch_id))
-	{
-		pasg->inpBad |= (1<<pasginp->inpIndex);
-		if(ready) asComputeAsg(pasg);
+    if(ca_state(chid)!=cs_conn) {
+	if(!(pasg->inpBad & (1<<pasginp->inpIndex))) {
+	    /*was good so lets make it bad*/
+	    pasg->inpBad |= (1<<pasginp->inpIndex);
+	    if(ready) asComputeAsg(pasg);
 	}
-	// eventCallback will set inpBad false
+    }
+    // eventCallback will set inpBad false
 }
 
-static void connectCB(struct connection_handler_args cha)
+static void eventCB(struct event_handler_args arg)
 {
-	chid		ch_id = cha.chid;
-	ASGINP		*pasginp;
-	ASG			*pasg;
-	CAPVT		*pcapvt;
+    ASGINP              *pasginp = (ASGINP *)arg.usr;
+    ASG                 *pasg = pasginp->pasg;
+    CAPVT               *pcapvt = (CAPVT *)pasginp->capvt;
+    chid                chid = pcapvt->ch_id;
+    int                 caStatus = arg.status;
+    struct dbr_sts_double *pdata = (struct dbr_sts_double*)arg.dbr;
 
-	pasginp=(ASGINP*)ca_puser(ch_id);
-	pasg=(ASG*)pasginp->pasg;
-	pcapvt=(CAPVT*)pasginp->capvt;
-
-	if(ca_state(ch_id)!=cs_conn)
-	{
-		pasg->inpBad |= (1<<pasginp->inpIndex);
-		if(ready) asComputeAsg(pasg);
-	}
-	// eventCallback will set inpBad false
-}
-
-static void eventCB(struct event_handler_args eha)
-{
-	ASGINP		*pasginp;
-	CAPVT		*pcapvt;
-	ASG			*pasg;
-	struct dbr_sts_double *pdata = (struct dbr_sts_double*)eha.dbr;
-
-	pasginp=(ASGINP*)eha.usr;
-	pcapvt=(CAPVT*)pasginp->capvt;
-	if (!ready && !pcapvt->gotFirstEvent)
-	{
-		--count;
-		pcapvt->gotFirstEvent=TRUE;
-	}
-
-	if(ca_read_access(pcapvt->ch_id))
-	{
-		pasg=(ASG*)pasginp->pasg;
-		pcapvt->rtndata=*pdata; /*structure copy*/
-
-		if(pdata->severity==INVALID_ALARM)
-		{
-			pasg->inpBad |= (1<<pasginp->inpIndex);
-		}
-		else
-		{
-			pasg->inpBad &= ~((1<<pasginp->inpIndex));
-			pasg->pavalue[pasginp->inpIndex] = pdata->value;
-		}
-		pasg->inpChanged |= (1<<pasginp->inpIndex);
-		if(ready) asComputeAsg(pasg);
-	}
-	gateDebug2(11,"AS: %s %lf\n",pasginp->inp,pdata->value);
-	gateDebug2(11,"    stat=%d sevr=%d\n",
+    if (!ready && !pcapvt->gotFirstEvent)
+    {
+	--count;
+	pcapvt->gotFirstEvent=TRUE;
+    }
+    if(ca_state(chid)!=cs_conn || !ca_read_access(chid)) {
+        if(!(pasg->inpBad & (1<<pasginp->inpIndex))) {
+            /*was good so lets make it bad*/
+            pasg->inpBad |= (1<<pasginp->inpIndex);
+            if(ready) asComputeAsg(pasg);
+        }
+    } else {
+        if(caStatus!=ECA_NORMAL) {
+            epicsPrintf("asCa: eventCallback error %s\n",ca_message(caStatus));
+        } else {
+            pcapvt->rtndata = *pdata; /*structure copy*/
+            if(pdata->severity==INVALID_ALARM) {
+                pasg->inpBad |= (1<<pasginp->inpIndex);
+            } else {
+                pasg->inpBad &= ~((1<<pasginp->inpIndex));
+                pasg->pavalue[pasginp->inpIndex] = pdata->value;
+            }
+            pasg->inpChanged |= (1<<pasginp->inpIndex);
+            if(ready) asComputeAsg(pasg);
+	    gateDebug2(11,"AS: %s %lf\n",pasginp->inp,pdata->value);
+	    gateDebug2(11,"    stat=%d sevr=%d\n",
 		(int)pdata->status,(int)pdata->severity);
+        }
+    }
 }
 
 void gateAsCa(void)
@@ -128,13 +109,9 @@ void gateAsCa(void)
 			SEVCHK(ca_search_and_connect(pasginp->inp,&pcapvt->ch_id,
 				connectCB,pasginp),"ca_search_and_connect (gateAsCa)");
 
-			/*calls gateAsARCB immediately called for local Pvs*/
-			SEVCHK(ca_replace_access_rights_event(pcapvt->ch_id,accessCB),
-				"ca_replace_access_rights_event (gateAsCa)");
-
 			/*Note calls eventCB immediately called for local Pvs*/
 			SEVCHK(ca_add_event(DBR_STS_DOUBLE,pcapvt->ch_id,
-				eventCB,pasginp,&pcapvt->ev_id), "ca_add_event (gateAsCa)");
+				eventCB,pasginp,0), "ca_add_event (gateAsCa)");
 
 			pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
 		}
@@ -151,5 +128,35 @@ void gateAsCa(void)
 	asComputeAllAsg();
 	if(count>0) printf("Access security did not connect to %d PVs\n",count);
 	ready=1;
+}
+
+void gateAsCaClear(void)
+{
+	ASG		*pasg;
+	ASGINP	*pasginp;
+	CAPVT	*pcapvt;
+
+	pasg=(ASG*)ellFirst(&pasbase->asgList);
+	while(pasg)
+	{
+		pasginp=(ASGINP*)ellFirst(&pasg->inpList);
+		while(pasginp)
+		{
+			pasg->inpBad |= (1<<pasginp->inpIndex);
+			pcapvt=(CAPVT*)pasginp->capvt;
+
+			gateDebug1(11,"Access security clearing channel %s\n",pasginp->inp);
+			if (pcapvt->ch_id)
+				SEVCHK(ca_clear_channel(pcapvt->ch_id),
+					 "ca_clear_channel (gateAsCaClear)");
+			pcapvt->ch_id = NULL;
+			free(pasginp->capvt);
+			pasginp->capvt = NULL;
+			pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
+		}
+		pasg=(ASG*)ellNext((ELLNODE*)pasg);
+	}
+	SEVCHK(ca_pend_io(1.0),"ca_pend_io (gateAsCaClear)");
+
 }
 

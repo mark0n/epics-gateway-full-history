@@ -1,0 +1,7 @@
+
+Wed Feb 18 09:10:14 CST 1998
+
+	Upon USR1 signal gateway now executes commands specified in a
+	gateway.command file. 
+	Incorporated latest changes to access security in gateAsCa.cc
+

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.12  1997/02/21 17:31:17  jbk
+// many many bug fixes and improvements
+//
 // Revision 1.11  1996/12/17 14:32:27  jbk
 // Updates for access security
 //
@@ -61,6 +64,12 @@ gateResources::gateResources(void)
 	else
 		pvlist_file=NULL;
 
+	if(access(GATE_COMMAND_FILE,F_OK)==0)
+		command_file=strDup(GATE_COMMAND_FILE);
+	else
+		command_file=NULL;
+
+
 	debug_level=0;
 	ro=0;
 
@@ -83,6 +92,7 @@ gateResources::~gateResources(void)
 {
 	if(access_file)	delete [] access_file;
 	if(pvlist_file)	delete [] pvlist_file;
+	if(command_file) delete [] command_file;
 }
 
 int gateResources::appValue=0;
@@ -104,6 +114,13 @@ int gateResources::setAccessFile(char* file)
 {
 	if(access_file) delete [] access_file;
 	access_file=strDup(file);
+	return 0;
+}
+
+int gateResources::setCommandFile(char* file)
+{
+	if(access_file) delete [] command_file;
+	command_file=strDup(file);
 	return 0;
 }
 

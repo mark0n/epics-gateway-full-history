@@ -8,6 +8,9 @@
 #include "gateAs.h"
 #include "gateResources.h"
 
+void gateAsCa(void);
+void gateAsCaClear(void);
+
 extern int patmatch(char *pattern, char *string);
 
 char* const gateAs::default_group = "DEFAULT";
@@ -303,6 +306,16 @@ long gateAs::initialize(const char* afile)
 
 	if(rc==0) rules_installed=aitTrue;
 	return rc;
+}
+
+long gateAs::reInitialize(const char* afile)
+{
+
+	rules_installed=aitFalse;
+	gateAsCaClear();
+	initialize(afile);
+	gateAsCa();
+	return 0;
 }
 
 int gateAs::readFunc(char* buf, int max)

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.14  1997/05/20 15:48:27  jbk
+ * changes for the latest CAS library in EPICS 3.13.beta9
+ *
  * Revision 1.13  1997/03/17 16:01:02  jbk
  * bug fixes and additions
  *
@@ -128,6 +131,8 @@ public:
 	virtual pvCreateReturn createPV(const casCtx& c,const char* pvname);
 
 	void mainLoop(void);
+	void gateCommands(const char* cfile);
+	void newAs(void);
 	void report(void);
 	void report2(void);
 	gateAs* getAs(void) { return as_rules; }
@@ -208,7 +213,8 @@ private:
 	static long total_fd;
 	static gateServerStats stat_table[];
 
-	static volatile int report_flag1,report_flag2;
+	static volatile int command_flag;
+	static volatile int report_flag2;
 	static void sig_usr1(int);
 	static void sig_usr2(int);
 };

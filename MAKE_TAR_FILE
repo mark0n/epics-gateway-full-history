@@ -1,4 +1,4 @@
 
 
-tar zcvf /tmp/gateway.tar.gz *.cc *.h Makefile* MAKE* GATEWAY.* START*
+/opt/gnu/bin/tar zcvf /tmp/gateway.tgz *.cc *.h Makefile* MAKE* GATEWAY.* 
 

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.16  1997/06/09 14:18:52  jba
+// Environment variable GATEWAY_CORE_SIZE now sets size limit of core file.
+//
 // Revision 1.15  1997/05/15 14:35:50  jba
 // Added gateway restart script report.
 //
@@ -92,6 +95,7 @@ void operator delete(void* x)
 //	-pvlist file_name = process variable list file
 //	-log file_name = log file name
 //	-access file_name = access security file
+//	-command file_name = USR1 command list file
 //	-home directory = the program's home directory
 //	-connect_timeout number = clear PV connect requests every number seconds
 //	-inactive_timeout number = Hold inactive PV connections for number seconds
@@ -109,6 +113,7 @@ void operator delete(void* x)
 //	Home directory = .
 //	Access security file = gateway.access
 //	process variable list file = gateway.pvlist
+//	USR1 command list file = gateway.command
 //	log file = gateway.log
 //	debug level = 0 (none)
 //  connect_timeout = 1 second
@@ -127,6 +132,7 @@ void operator delete(void* x)
 #define PARM_LOG			2
 #define PARM_PVLIST			1
 #define PARM_ACCESS			3
+#define PARM_COMMAND			5
 #define PARM_HOME			4
 #define PARM_CONNECT		6
 #define PARM_INACTIVE		7
@@ -143,6 +149,7 @@ void operator delete(void* x)
 
 #define HOME_DIR_SIZE 300
 #define GATE_LOG      "gateway.log"
+#define GATE_COMMAND  "gateway.command"
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
@@ -168,6 +175,7 @@ static PARM_STUFF ptable[] = {
 	{ "-log",				4,	PARM_LOG,			"file_name" },
 	{ "-pvlist",			7,	PARM_PVLIST,		"file_name" },
 	{ "-access",			7,	PARM_ACCESS,		"file_name" },
+	{ "-command",				8,	PARM_COMMAND,			"file_name" },
 	{ "-home",				5,	PARM_HOME,			"directory" },
 	{ "-sip",				4,	PARM_SERVER_IP,		"IP_address" },
 	{ "-cip",				4,	PARM_CLIENT_IP,		"IP_address_list" },
@@ -289,16 +297,18 @@ static int startEverything(void)
 	fprintf(fd,"# log file=<%s>\n",log_file);
 	fprintf(fd,"# access file=<%s>\n",global_resources->accessFile());
 	fprintf(fd,"# pvlist file=<%s>\n",global_resources->listFile());
+	fprintf(fd,"# command file=<%s>\n",global_resources->commandFile());
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
 	fprintf(fd,"# dead timeout=%d\n",global_resources->deadTimeout());
 	fprintf(fd,"# connect timeout=%d\n",global_resources->connectTimeout());
 	fprintf(fd,"# inactive timeout=%d\n",global_resources->inactiveTimeout());
 	fprintf(fd,"# user id=%d\n",getuid());
 	fprintf(fd,"# \n");
-	fprintf(fd,"# use the following the get a complete PV report in log:\n");
+	fprintf(fd,"# use the following to execute commands in command file:\n");
 	fprintf(fd,"#    kill -USR1 %d\n",sid);
 	fprintf(fd,"# use the following the get a PV summary report in log:\n");
 	fprintf(fd,"#    kill -USR2 %d\n",sid);
+
 	fprintf(fd,"# \n");
 
 	if(global_resources->isReadOnly())
@@ -351,10 +361,10 @@ static int startEverything(void)
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");
 	else
 	{
-		long core_len=1000000;
+		long core_len=20000000;
 		char * core_size=getenv("GATEWAY_CORE_SIZE");
 		if (core_size)
-			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=1000000;
+			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=20000000;
 		lim.rlim_cur=core_len;
 		if(setrlimit(RLIMIT_CORE,&lim)<0)
 			fprintf(stderr,"Failed to set core limit to %d\n",
@@ -379,7 +389,6 @@ int main(int argc, char** argv)
 	int i,j,uid;
 	int not_done=1;
 	int no_error=1;
-	int gave_log_option=0;
 	int level=0;
 	int read_only=0;
 	int connect_tout=-1;
@@ -388,6 +397,7 @@ int main(int argc, char** argv)
 	char* home_dir=NULL;
 	char* pvlist_file=NULL;
 	char* access_file=NULL;
+	char* command_file=NULL;
 	char cur_time[300];
 	struct stat sbuf;
 	time_t t;
@@ -461,7 +471,18 @@ int main(int argc, char** argv)
 						else
 						{
 							log_file=argv[i];
-							gave_log_option=1;
+							not_done=0;
+						}
+					}
+					break;
+				case PARM_COMMAND:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							command_file=argv[i];
 							not_done=0;
 						}
 					}
@@ -678,6 +699,7 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tlog=%s\n",log_file);
 		fprintf(stderr,"\taccess=%s\n",gr->accessFile());
 		fprintf(stderr,"\tpvlist=%s\n",gr->listFile());
+		fprintf(stderr,"\tcommand=%s\n",gr->commandFile());
 		fprintf(stderr,"\tdead=%d\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%d\n",gr->connectTimeout());
 		fprintf(stderr,"\tinactive=%d\n",gr->inactiveTimeout());
@@ -695,6 +717,7 @@ int main(int argc, char** argv)
 	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
 	if(access_file)			gr->setAccessFile(access_file);
 	if(pvlist_file)			gr->setListFile(pvlist_file);
+	if(command_file)		gr->setCommandFile(command_file);
 
 	gr->setUpAccessSecurity();
 
@@ -705,6 +728,7 @@ int main(int argc, char** argv)
 		fprintf(stderr," log file=<%s>\n",log_file);
 		fprintf(stderr," access file=<%s>\n",gr->accessFile());
 		fprintf(stderr," list file=<%s>\n",gr->listFile());
+		fprintf(stderr," command file=<%s>\n",gr->commandFile());
 		fprintf(stderr," debug level=%d\n",gr->debugLevel());
 		fprintf(stderr," connect timeout =%d\n",gr->connectTimeout());
 		fprintf(stderr," inactive timeout =%d\n",gr->inactiveTimeout());
@@ -738,8 +762,11 @@ void print_instructions(void)
   pr(stderr,"-log file_name: Name of file where all messages from the\n");
   pr(stderr," gateway go, including stderr and stdout.\n\n");
 
+  pr(stderr,"-command file_name: Name of file where gateway command(s) go\n");
+  pr(stderr," Commands are executed when a USR1 signal is sent to gateway.\n\n");
+
   pr(stderr,"-home directory: Home directory where all your gateway\n");
-  pr(stderr," configuration files are kept and where the log file goes.\n\n");
+  pr(stderr," configuration files are kept where log and command files go.\n\n");
 
   pr(stderr,"-sip IP_address: IP address that gateway's CA server listens\n");
   pr(stderr," for PV requests.  Sets env variable EPICS_CAS_INTF_ADDR.\n\n");

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.13  1997/05/15 14:35:49  jba
+ * Added gateway restart script report.
+ *
  * Revision 1.12  1997/03/17 16:01:00  jbk
  * bug fixes and additions
  *
@@ -45,6 +48,7 @@
 #define GATE_RESTART_FILE   "gateway.restart"
 #define GATE_PV_LIST_FILE   "gateway.pvlist"
 #define GATE_PV_ACCESS_FILE "gateway.access"
+#define GATE_COMMAND_FILE   "gateway.command"
 
 #define GATE_CONNECT_TIMEOUT  0
 #define GATE_INACTIVE_TIMEOUT (60*60*2)
@@ -66,6 +70,7 @@ public:
 	int setHome(char* dir);
 	int setListFile(char* file);
 	int setAccessFile(char* file);
+	int setCommandFile(char* file);
 	int setUpAccessSecurity(void);
 	int setDebugLevel(int level);
 
@@ -81,8 +86,9 @@ public:
 	time_t inactiveTimeout(void) const	{ return inactive_timeout; }
 	time_t deadTimeout(void) const		{ return dead_timeout; }
 
-	char* listFile(void) const	{ return pvlist_file?pvlist_file:"NULL"; }
-	char* accessFile(void) const{ return access_file?access_file:"NULL"; }
+	const char* listFile(void) const { return pvlist_file?pvlist_file:"NULL"; }
+	const char* accessFile(void) const { return access_file?access_file:"NULL"; }
+	const char* commandFile(void) const { return command_file?command_file:"NULL"; }
 
 	gateAs* getAs(void);
 
@@ -96,7 +102,7 @@ public:
 	static int appAttributes;
 
 private:
-	char *access_file,*pvlist_file;
+	char *access_file,*pvlist_file,*command_file;
 	int debug_level,ro;
 	time_t connect_timeout,inactive_timeout,dead_timeout;
 	gateAs* as;

@@ -5,6 +5,9 @@
 # $Id$
 #
 # $Log$
+# Revision 1.11  1997/06/16 17:28:02  jba
+# Build gateway with beta10
+#
 # Revision 1.10  1997/06/09 17:43:27  jba
 # Added user includes.
 #
@@ -34,15 +37,19 @@ EPICS = ../../../..
 include Target.include
 include $(EPICS)/config/CONFIG_EXTENSIONS
 
-EPICS_BASE = /usr/local/epics/baseR3.13.0.beta10
+#EPICS_BASE = /usr/local/epics/baseR3.13.0.beta10
+#EPICS_BASE = /usr/local/epics/baseR3.13.0.beta11
+#EPICS_BASE = /home/phoebus/JBA/epics/beta10AsFix
 
-USR_INCLUDES += -I$(EPICS_BASE_INCLUDE)/os/$(T_A)
+#USR_INCLUDES += -I$(EPICS_BASE_INCLUDE)/os/$(T_A)
+
+#USR_CCFLAGS += -DEXPL_TEMPL
 
 CXXCMPLR=STRICT
 # CPLUSPLUS=G++
-# OPTIM_YES=-g
-# CCC=purify CC
-# CC=purify cc
+
+#OPTIM_YES=-g
+#CCC = purify -chain-length=20 CC
 
 DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
 DEPLIBS = $(EPICS_BASE_LIB)/libAs.a $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
