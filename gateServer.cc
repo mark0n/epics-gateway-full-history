@@ -5,6 +5,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.4  1996/08/14 21:10:33  jbk
+// next wave of updates, menus stopped working, units working, value not
+// working correctly sometimes, can't delete the channels
+//
 // Revision 1.3  1996/07/26 02:34:45  jbk
 // Interum step.
 //
@@ -139,7 +143,7 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
 		if((s->fd_table[fd]))
 		{
-			// delete s->fd_table[fd];
+			delete s->fd_table[fd];
 			s->fd_table[fd]=NULL;
 		}
 	}
@@ -258,8 +262,8 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 	gatePvData* pv;
 	gateExistData* ed;
 	caStatus rc;
-	aitString x;
 	char* r_name;
+	// aitString x;
 
 	// convert alias to real name first
 	if((r_name=global_resources->findAlias(pvname))==NULL)
@@ -277,19 +281,21 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		{
 		case gatePvInactive:
 		case gatePvActive:
-			gateDebug1(5,"gateServer::pvExistTest() %s Inactive/Active\n",
-				pv->name());
-
-			x=pv->name();
+		  {
+			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",pv->name());
+			const aitString x = pv->name();
 			cname.put(x);
+			// x.dump();
+			// cname.dump();
 			rc=S_casApp_success;
 			break;
+		  }
 		case gatePvDead:
-			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n", r_name);
+			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",pv->name());
 			rc=S_casApp_pvNotFound;
 			break;
 		default: // don't know yet - wait till connect complete
-			gateDebug1(5,"gateServer::pvExistTest() %s unknown?\n", r_name);
+			gateDebug1(5,"gateServer::pvExistTest() %s unknown?\n",pv->name());
 			rc=S_casApp_pvNotFound;
 			break;
 		}
@@ -299,7 +305,7 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		if(conFind(r_name,pv)==0)
 		{
 			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
-			ed=new gateExistData(*this,pv,c,&cname);
+			ed=new gateExistData(*this,r_name,c,&cname);
 			rc=S_casApp_asyncCompletion;
 		}
 		else

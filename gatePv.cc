@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.3  1996/08/14 21:10:32  jbk
+// next wave of updates, menus stopped working, units working, value not
+// working correctly sometimes, can't delete the channels
+//
 // Revision 1.2  1996/07/26 02:34:43  jbk
 // Interum step.
 //
@@ -690,8 +694,7 @@ gdd* gatePvData::dataEnumCB(void* dbr)
 		gateDebug2(5," enum %d=%s \n",i,&(ts->strs[i][0]));
 	}
 
-	menu->registerDestructor(new gateStringDestruct);
-	menu->putRef(items);
+	menu->putRef(items,new gateStringDestruct);
 	return menu;
 }
 

@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.2  1996/08/14 21:10:34  jbk
+ * next wave of updates, menus stopped working, units working, value not
+ * working correctly sometimes, can't delete the channels
+ *
  * Revision 1.1  1996/07/23 16:32:43  jbk
  * new gateway that actually runs
  *
@@ -58,7 +62,7 @@ public:
 	void dumpValue(void);
 	void dumpAttributes(void);
 
-	char* name(void)			{ return pv_name; }
+	const char* name(void)			{ return pv_name; }
 	aitString& nameString(void)	{ return pv_string; }
 	void* PV(void)				{ return pv; }
 	void setPV(gatePvData* t)	{ pv=t; }
