@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.5  1996/09/07 13:01:52  jbk
+ * fixed bugs.  reference the gdds from CAS now.
+ *
  * Revision 1.4  1996/08/14 21:10:34  jbk
  * next wave of updates, menus stopped working, units working, value not
  * working correctly sometimes, can't delete the channels
@@ -78,7 +81,6 @@ public:
 	// CAS virtual overloads
 	virtual caStatus pvExistTest(const casCtx& c,const char* pvname,gdd& cname);
 	virtual casPV* createPV(const casCtx& c,const char* pvname);
-	virtual unsigned maxSimultAsyncOps(void) const;
 
 	void mainLoop(void);
 

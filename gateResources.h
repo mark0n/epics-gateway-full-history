@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.5  1996/09/12 12:17:54  jbk
+ * Fixed up file defaults and logging in the resources class
+ *
  * Revision 1.4  1996/09/10 15:04:11  jbk
  * many fixes.  added instructions to usage. fixed exist test problems.
  *
@@ -66,10 +69,11 @@ public:
 	time_t inactiveTimeout(void) const	{ return inactive_timeout; }
 	time_t deadTimeout(void) const		{ return dead_timeout; }
 	char* homeDirectory(void) const		{ return home_dir; }
-	char* listFile(void) const			{ return pv_list_file; }
-	char* aliasFile(void) const			{ return pv_alias_file; }
-	char* logFile(void) const			{ return log_file; }
-	char* accessFile(void) const		{ return pv_access_file; }
+
+	char* listFile(void) const	{ return pv_list_file?pv_list_file:"NULL"; }
+	char* aliasFile(void) const { return pv_alias_file?pv_alias_file:"NULL"; }
+	char* logFile(void) const	{ return log_file?log_file:"NULL"; }
+	char* accessFile(void) const{ return pv_access_file?pv_access_file:"NULL"; }
 
 	char* findAlias(const char* const name) const;
 

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.3  1996/09/07 13:01:54  jbk
+// fixed bugs.  reference the gdds from CAS now.
+//
 // Revision 1.2  1996/07/26 02:34:46  jbk
 // Interum step.
 //
@@ -52,11 +55,16 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 
 	if(mrg->pvFind(name,pv)==0)
 	{
+		// Activate could possibly perform get for attributes and value
+		// before returning here.  Be sure to mark this state connecting
+		// so that everything works out OK in this situation.
+		setState(gateVcConnect);
+
 		if(pv->activate(this)==0)
 		{
 			mrg->vcAdd(pv_name,*this);
 			markInList();
-			setState(gateVcConnect);
+			// set state to gateVcConnect used to be here
 		}
 		else
 			status=1;
@@ -82,6 +90,11 @@ void gateVcData::destroy(void)
 	gateDebug0(1,"gateVcData::destroy()\n");
 	remove();
 	casPV::destroy();
+}
+
+unsigned gateVcData::maxSimultAsyncOps(void) const
+{
+	return 5000u;
 }
 
 void gateVcData::dumpValue(void)
@@ -295,7 +308,11 @@ void gateVcData::vcEvent(void)
 {
 	gateDebug1(10,"gateVcData::vcEvent() name=%s\n",name());
 	casEventMask select(mrg->valueEventMask|mrg->logEventMask);
-	if(needPosting()) postEvent(select,*event_data);
+	if(needPosting())
+	{
+		gateDebug0(10,"gateVcData::vcEvent() posting event\n");
+		postEvent(select,*event_data);
+	}
 }
 
 void gateVcData::vcData()

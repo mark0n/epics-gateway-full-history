@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.4  1996/09/07 13:01:53  jbk
+ * fixed bugs.  reference the gdds from CAS now.
+ *
  * Revision 1.3  1996/09/06 11:56:23  jbk
  * little fixes
  *
@@ -57,6 +60,7 @@ public:
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
 	virtual caStatus write(const casCtx &ctx, gdd &value);
 	virtual void destroy(void);
+	virtual unsigned maxSimultAsyncOps(void) const;
 
 	int pending(void);
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }

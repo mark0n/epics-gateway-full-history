@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.8  1996/09/12 12:17:54  jbk
+// Fixed up file defaults and logging in the resources class
+//
 // Revision 1.7  1996/09/10 15:04:13  jbk
 // many fixes.  added instructions to usage. fixed exist test problems.
 //
@@ -127,8 +130,6 @@ gateServer::~gateServer(void)
 	SEVCHK(ca_flush_io(),"CA flush io");
 	SEVCHK(ca_task_exit(),"CA task exit");
 }
-
-unsigned gateServer::maxSimultAsyncOps(void) const { return 5000u; }
 
 void gateServer::checkEvent(void)
 {
