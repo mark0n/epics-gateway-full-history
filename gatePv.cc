@@ -20,6 +20,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.31  2000/10/18 16:06:28  lange
+ * Bugfix in beacon relay mechanism
+ *
  * Revision 1.30  2000/06/15 12:53:08  lange
  * += "-mask" commandline option to specify CA event mask.
  *
@@ -739,6 +742,7 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 		
 		pPver = new pvExistReturn(er);
 		asynce->postIOCompletion(*pPver);
+        delete pPver;
 	}
 }
 
