@@ -140,19 +140,16 @@ static void sig_pipe(int)
 	signal(SIGPIPE,sig_pipe);
 }
 
-void gateServer::sig_usr1(int /*x*/)
+static void sig_usr1(int x)
 {
-	gateServer::command_flag=1;
-	// setStat isn't accessible here, so can't update internal pv
-	// if(save_usr1) save_usr1(x);
-	signal(SIGUSR1,gateServer::sig_usr1);
+	// Call a class function to get access to class variables
+	gateServer::sig_usr1(x);
 }
 
-void gateServer::sig_usr2(int /*x*/)
+static void sig_usr2(int x)
 {
-	gateServer::report2_flag=1;
-	// setStat isn't accessible here, so can't update internal pv
-	signal(SIGUSR2,gateServer::sig_usr2);
+	// Call a class function to get access to class variables
+	gateServer::sig_usr2(x);
 }
 
 } //extern "C"
@@ -219,8 +216,8 @@ void gateServer::mainLoop(void)
 	// as->report(stdout);
 
 #ifndef WIN32
-	save_usr1=signal(SIGUSR1,sig_usr1);
-	save_usr2=signal(SIGUSR2,sig_usr2);
+	save_usr1=signal(SIGUSR1,::sig_usr1);
+	save_usr2=signal(SIGUSR2,::sig_usr2);
 #if 0
 	// KE: This should be handled in both CA and CAS now using
 	// osiSigPipeIgnore. There is no sigignore on Linux, so use
@@ -1062,11 +1059,19 @@ gateServer::gateServer(char *prefix ) :
 	gateDebug0(5,"gateServer()\n");
 
 	// Initialize channel access
+#ifdef USE_313
 	int status=ca_task_initialize();
 	if(status != ECA_NORMAL) {
 	    fprintf(stderr,"%s gateServer::gateServer: ca_task_initialize failed:\n"
 		  " %s\n",timeStamp(),ca_message(status));
 	}
+#else
+	int status=ca_context_create(ca_disable_preemptive_callback);
+	if(status != ECA_NORMAL) {
+	    fprintf(stderr,"%s gateServer::gateServer: ca_context_create failed:\n"
+		  " %s\n",timeStamp(),ca_message(status));
+	}
+#endif
 #ifdef USE_FDS
 	status=ca_add_fd_registration(::fdCB,this);
 	if(status != ECA_NORMAL) {
@@ -1158,11 +1163,15 @@ gateServer::~gateServer(void)
 	    fprintf(stderr,"%s gateServer::~gateServer: ca_flush_io failed:\n"
 		  " %s\n",timeStamp(),ca_message(status));
 	}
+#ifdef USE_313
 	status=ca_task_exit();
 	if(status != ECA_NORMAL) {
 	    fprintf(stderr,"%s gateServer::~gateServer: ca_task_exit failed:\n"
 		  " %s\n",timeStamp(),ca_message(status));
 	}
+#else
+	ca_context_destroy();
+#endif
 }
 
 void gateServer::checkEvent(void)
@@ -2312,6 +2321,20 @@ static double linuxCpuTimeDiff(void)
 		}
 	}
 	return retVal;
+}
+#endif
+
+#ifndef WIN32
+void gateServer::sig_usr1(int /*x*/)
+{
+	gateServer::command_flag=1;
+	signal(SIGUSR1,::sig_usr1);
+}
+
+void gateServer::sig_usr2(int /*x*/)
+{
+	gateServer::report2_flag=1;
+	signal(SIGUSR2,::sig_usr2);
 }
 #endif
 

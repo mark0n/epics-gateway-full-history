@@ -315,10 +315,12 @@ private:
 	static volatile unsigned long newAs_flag;
 	static volatile unsigned long quit_flag;
 	static volatile unsigned long quitserver_flag;
+	
+public:
+#ifndef WIN32
 	static void sig_usr1(int);
 	static void sig_usr2(int);
-
-public:
+#endif
 #ifdef USE_FDS
 	static void fdCB(void* ua, int fd, int opened);
 #endif

@@ -252,7 +252,12 @@ void gatePvData::init(gateServer* m,gateAsEntry* pase, const char* name)
 		status=-1;
 	else
 	{
+#ifdef USE_313
 		status=ca_search_and_connect(pv_name,&chID,::connectCB,this);
+#else
+		status=ca_create_channel(pv_name,::connectCB,this,
+		  CA_PRIORITY_DEFAULT,&chID);
+#endif
 		if(status != ECA_NORMAL) {
 			fprintf(stderr,"gatePvData::init: ca_search_and_connect for %s:\n"
 			  " %s\n",
@@ -596,6 +601,7 @@ int gatePvData::unmonitor(void)
 
 	if(monitored())
 	{
+#ifdef USE_313
 		rc=ca_clear_event(evID);
 		if(rc != ECA_NORMAL) {
 			fprintf(stderr,"%s gatePvData::unmonitor: ca_clear_event failed "
@@ -605,6 +611,17 @@ int gatePvData::unmonitor(void)
 		} else {
 			rc=0;
 		}
+#else
+		rc=ca_clear_subscription(evID);
+		if(rc != ECA_NORMAL) {
+			fprintf(stderr,"%s gatePvData::unmonitor: ca_clear_subscription failed "
+			  "for %s:\n"
+			  " %s\n",
+			  timeStamp(),name()?name():"Unknown",ca_message(rc));
+		} else {
+			rc=0;
+		}
+#endif
 		markNotMonitored();
 	}
 	return rc;
@@ -617,6 +634,7 @@ int gatePvData::alhUnmonitor(void)
 
 	if(alhMonitored())
 	{
+#ifdef USE_313
 		rc=ca_clear_event(alhID);
 		if(rc != ECA_NORMAL) {
 			fprintf(stderr,"%s gatePvData::alhUnmonitor: ca_clear_event failed "
@@ -626,6 +644,17 @@ int gatePvData::alhUnmonitor(void)
 		} else {
 			rc=0;
 		}
+#else
+		rc=ca_clear_subscription(alhID);
+		if(rc != ECA_NORMAL) {
+			fprintf(stderr,"%s gatePvData::alhUnmonitor: "
+			  "ca_clear_subscription failed for %s:\n"
+			  " %s\n",
+			  timeStamp(),name()?name():"Unknown",ca_message(rc));
+		} else {
+			rc=0;
+		}
+#endif
 		markAlhNotMonitored();
 	}
 	return rc;
@@ -651,6 +680,7 @@ int gatePvData::monitor(void)
 
 		if(ca_read_access(chID)) {
 			gateDebug1(5,"gatePvData::monitor() type=%ld\n",eventType());
+#ifdef USE_313
 			rc=ca_add_masked_array_event(eventType(),0,chID,::eventCB,this,
 			  0.0,0.0,0.0,&evID,GR->eventMask());
 			if(rc != ECA_NORMAL) {
@@ -667,6 +697,24 @@ int gatePvData::monitor(void)
 				checkEvent();
 #endif
 			}
+#else
+			rc=ca_create_subscription(eventType(),0,chID,GR->eventMask(),
+			  ::eventCB,this,&evID);
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::monitor: "
+				  "ca_create_subscription failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
+				rc=-1;
+			} else {
+				rc=0;
+				markMonitored();
+#if OMIT_CHECK_EVENT
+#else
+				checkEvent();
+#endif
+			}
+#endif
 		} else {
 			rc=-1;
 		}
@@ -684,6 +732,7 @@ int gatePvData::alhMonitor(void)
 		if(ca_read_access(chID))
 		{
 			gateDebug1(5,"gatePvData::alhMonitor() type=%d\n",DBR_STSACK_STRING);
+#ifdef USE_313
 			rc=ca_add_masked_array_event(DBR_STSACK_STRING,0,chID,::alhCB,this,
 				0.0,0.0,0.0,&alhID,DBE_ALARM);
 			if(rc != ECA_NORMAL) {
@@ -700,6 +749,24 @@ int gatePvData::alhMonitor(void)
 				checkEvent();
 #endif
 			}
+#else
+			rc=ca_create_subscription(DBR_STSACK_STRING,0,chID,DBE_ALARM,
+			  ::alhCB,this,&alhID);
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::alhMonitor: "
+				  "ca_create_subscription failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
+				rc=-1;
+			} else {
+				rc=0;
+				markAlhMonitored();
+#if OMIT_CHECK_EVENT
+#else
+				checkEvent();
+#endif
+			}
+#endif
 		} else {
 			rc=-1;
 		}
@@ -1063,7 +1130,7 @@ void gatePvData::putCB(EVENT_ARGS args)
 	pv->vc->putCB(args.status);
 }
 
-// This is the callback registered with ca_add_array_event in the
+// This is the callback registered with ca_add_subscription in the
 // monitor routine.  If conditions are right, it calls the routines
 // that copy the data into the GateVcData's event_data.
 void gatePvData::eventCB(EVENT_ARGS args)
@@ -1122,7 +1189,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 	}
 }
 
-// This is the callback registered with ca_add_event in the
+// This is the callback registered with ca_add_subscription in the
 // alhMonitor routine.  If conditions are right, it calls the routines
 // that copy the data into the GateVcData's event_data.
 void gatePvData::alhCB(EVENT_ARGS args)

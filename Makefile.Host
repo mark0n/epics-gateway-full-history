@@ -10,6 +10,7 @@
 #*************************************************************************
 
 # Makefile.Host for Gateway
+# This is the version used for 3.13 builds and may be out of date
 
 TOP = ../../..
 include $(TOP)/config/CONFIG_EXTENSIONS

@@ -148,20 +148,38 @@ void gateAsCa(void)
 			gateDebug1(11,"Access security searching for %s\n",pasginp->inp);
 			
 			// Note calls gateAsCB immediately called for local Pvs
+#ifdef USE_313
 			int status=ca_search_and_connect(pasginp->inp,&pcapvt->ch_id,
 			  connectCB,pasginp);
 			if(status != ECA_NORMAL) {
 				fprintf(stderr,"%s gateAsCa: ca_search_and_connect failed:\n"
 				  " %s\n",timeStamp(),ca_message(status));
 			}
+#else
+			int status=ca_create_channel(pasginp->inp,connectCB,pasginp,
+			  CA_PRIORITY_DEFAULT,&pcapvt->ch_id);
+			if(status != ECA_NORMAL) {
+				fprintf(stderr,"%s gateAsCa: ca_create_channel failed:\n"
+				  " %s\n",timeStamp(),ca_message(status));
+			}
+#endif
 			
 			// Note calls eventCB immediately called for local Pvs
+#ifdef USE_313
 			status=ca_add_event(DBR_STS_DOUBLE,pcapvt->ch_id,
 			  eventCB,pasginp,0);
 			if(status != ECA_NORMAL) {
 				fprintf(stderr,"%s gateAsCa: ca_add_event failed:\n"
 				  " %s\n",timeStamp(),ca_message(status));
 			}
+#else
+			status=ca_create_subscription(DBR_STS_DOUBLE,1,pcapvt->ch_id,
+			  DBE_VALUE|DBE_ALARM,eventCB,pasginp,NULL);
+			if(status != ECA_NORMAL) {
+				fprintf(stderr,"%s gateAsCa: ca_create_subscription failed:\n"
+				  " %s\n",timeStamp(),ca_message(status));
+			}
+#endif
 			
 			pasginp=(ASGINP*)ellNext((ELLNODE*)pasginp);
 		}
