@@ -20,6 +20,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.32  2000/06/15 14:08:03  lange
+ * -= ack/nak; -= update rate limit for atomic data
+ *
  * Revision 1.31  2000/05/02 13:49:39  lange
  * Uses GNU regex library (0.12) for pattern matching;
  * Fixed some CAS beacon problems (reconnecting IOCs)
@@ -588,7 +591,7 @@ void gateVcData::flushAsyncReadQueue(void)
 	gateAsyncR* asyncr;
 
 	while((asyncr=rio.first()))	{
-		gateDebug2(1,"gateVcData::flushAsyncReadQueue() posting asyncr %p (DD at %p)\n",
+		gateDebug2(5,"gateVcData::flushAsyncReadQueue() posting asyncr %p (DD at %p)\n",
 				   asyncr,&asyncr->DD());
 		asyncr->removeFromQueue();
 		
