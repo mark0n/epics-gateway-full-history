@@ -1,6 +1,8 @@
 #ifndef gateNewServer_H
 #define gateNewServer_H
 
+#define DEBUG_TIMES 1
+
 /*
  * Author: Jim Kowalkowski
  * Date: 7/96
@@ -90,8 +92,8 @@ public:
 	gatePvNode(gatePvData& d) : pvd(&d) { }
 	~gatePvNode(void) { }
 
-	gatePvData* getData(void)	{ return pvd; }
-	void destroy(void)			{ delete pvd; delete this; }
+	gatePvData* getData(void) { return pvd; }
+	void destroy(void) { delete pvd; delete this; }
 };
 
 // ---------------------- fd manager ------------------------
@@ -99,8 +101,16 @@ public:
 class gateFd : public fdReg
 {
 public:
+#if DEBUG_TIMES
 	gateFd(const int fdIn,const fdRegType typ,gateServer& s):
-		fdReg(fdIn,typ),server(s) { } 
+	  fdReg(fdIn,typ),server(s) {
+	    static int count=0;
+	    printf("gateFd::gateFd: [%d] fd=%d\n",++count,fdIn);
+	}
+#else    
+	gateFd(const int fdIn,const fdRegType typ,gateServer& s):
+		fdReg(fdIn,typ),server(s) { }
+#endif	
 	virtual ~gateFd(void);
 private:
 	virtual void callBack(void);
@@ -109,6 +119,8 @@ private:
 
 // ---------------------------- server -------------------------------
 
+
+// server stats definitions
 #define statActive	0
 #define statAlive	1
 #define statVcTotal	2
@@ -298,7 +310,7 @@ inline int gateServer::vcAdd(const char* name, gateVcData& pv)
 	{ return vc_list.add(name,pv); }
 inline int gateServer::vcFind(const char* name, gateVcData*& pv)
 	{ return vc_list.find(name,pv); }
-inline int gateServer::vcDelete(const char* name, gateVcData*& pv)
-	{ return vc_list.remove(name,pv); }
+inline int gateServer::vcDelete(const char* name, gateVcData*& vc)
+	{ return vc_list.remove(name,vc); }
 
 #endif

@@ -72,6 +72,8 @@
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 
+#define OMIT_CHECK_EVENT 1
+
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -239,7 +241,10 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 #endif
 	}
 
+#if OMIT_CHECK_EVENT
+#else
 	checkEvent(); // do ca_pend_event
+#endif
 }
 
 aitEnum gatePvData::nativeType(void)
@@ -538,7 +543,10 @@ int gatePvData::monitor(void)
 			{
 				rc=0;
 				markMonitored();
+#if OMIT_CHECK_EVENT
+#else
 				checkEvent();
+#endif
 			}
 			else
 				rc=-1;
@@ -569,7 +577,10 @@ int gatePvData::get(void)
 			rc=ca_array_get_callback(dataType(),1 /*totalElements()*/,
 				chan,getCB,this);
 			SEVCHK(rc,"get with callback bad");
+#if OMIT_CHECK_EVENT
+#else
 			checkEvent();
+#endif
 		}
 		break;
 	case gatePvInactive:
@@ -626,7 +637,10 @@ int gatePvData::put(gdd* dd)
 
 		SEVCHK(rc,"put callback bad");
 		markAckNakNeeded();
+#if OMIT_CHECK_EVENT
+#else
 		checkEvent();
+#endif
 		break;
 	case gatePvInactive:
 		gateDebug0(2,"gatePvData::put() inactive PV\n");
@@ -680,7 +694,10 @@ int gatePvData::putDumb(gdd* dd)
 			break;
 		}
 		SEVCHK(rc,"put dumb bad");
+#if OMIT_CHECK_EVENT
+#else
 		checkEvent();
+#endif
 		break;
 	case gatePvInactive:
 		gateDebug0(2,"gatePvData::putDumb() inactive PV\n");
@@ -810,7 +827,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 				{
 					gateDebug0(5,"gatePvData::eventCB() need add/remove\n");
 					pv->markAddRemoveNotNeeded();
-					pv->vc->add(dd);
+					pv->vc->vcAdd(dd);
 				}
 				else
 					pv->vc->eventData(dd);

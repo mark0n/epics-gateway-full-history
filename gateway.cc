@@ -374,6 +374,8 @@ static int startEverything(void)
 			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=20000000;
 		lim.rlim_cur=core_len;
 #if DEBUG_GATEWAY == 0
+	      // KE: Truncating the core file makes it unusable -- may as well delete
+	      //  it or not create it or set limit to zero or ...
 		if(setrlimit(RLIMIT_CORE,&lim)<0)
 			fprintf(stderr,"Failed to set core limit to %d\n",
 				(int)lim.rlim_cur);
@@ -388,6 +390,16 @@ static int startEverything(void)
 	save_segv=signal(SIGSEGV,sig_end);
 
 	syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Starting");
+
+	char timeStampStr[16];
+	long now;
+	struct tm *tblock;
+	
+	time(&now);
+	tblock=localtime(&now);
+	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+	printf("%s Starting Gateway Server PID=%d\n",
+	  timeStampStr,sid);	  
 
 	gatewayServer();
 	return 0;
@@ -671,7 +683,9 @@ int main(int argc, char** argv)
 					unlink(log_file);
 			}
 		}
-		if( (freopen(log_file,"w",stderr))==NULL )
+	      // KE: This was formerly "w" instead of "a" and stderr was
+	      //  overwriting the top of the log file
+		if( (freopen(log_file,"a",stderr))==NULL )
 		{
 			fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
 			fflush(stderr);

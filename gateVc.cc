@@ -4,12 +4,6 @@
 // $Id$
 //
 // $Log$
-// Revision 1.21  1998/12/22 19:01:57  evans
-// Has JBA ENUM hack changes if ENUM_HACK is defined.  (Needs hacks in
-// base to work.)  Fixed bug with removing items from pv_con_list (fixes
-// frequent core dumping).  This version has been in production use for
-// several weeks, is stable.
-//
 // Revision 1.20  1997/10/28 19:14:00  jba
 // pv_name change.
 //
@@ -205,14 +199,14 @@ const char* gateVcData::getName() const
 void gateVcData::destroy(void)
 {
 	gateDebug0(1,"gateVcData::destroy()\n");
-	remove();
+	vcRemove();
 	casPV::destroy();
 }
 
 casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const u, const char * const h)
 {
-	gateDebug0(5,"~gateVcData::createChannel()\n");
+	gateDebug0(5,"gateVcData::createChannel()\n");
 	gateChan* c =  new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,u,h));
 	return c;
 }
@@ -238,23 +232,23 @@ void gateVcData::dumpAttributes(void)
 	if(data) data->dump();
 }
 
-void gateVcData::remove(void)
+void gateVcData::vcRemove(void)
 {
-	gateDebug1(1,"gateVcData::remove() name=%s\n",name());
+	gateDebug1(1,"gateVcData::vcRemove() name=%s\n",name());
 
 	switch(getState())
 	{
 	case gateVcClear:
-		gateDebug0(1,"gateVcData::remove() clear\n");
+		gateDebug0(1,"gateVcData::vcRemove() clear\n");
 		break;
 	case gateVcConnect:
 	case gateVcReady:
-		gateDebug0(1,"gateVcData::remove() connect/ready -> clear\n");
+		gateDebug0(1,"gateVcData::vcRemove() connect/ready -> clear\n");
 		setState(gateVcClear);
 		pv->deactivate();
 		break;
 	default:
-		gateDebug0(1,"gateVcData::remove() default state\n");
+		gateDebug0(1,"gateVcData::vcRemove() default state\n");
 		break;
 	}
 }
@@ -305,10 +299,10 @@ void gateVcData::ack(void)
 	}
 }
 
-void gateVcData::add(gdd* dd)
+void gateVcData::vcAdd(gdd* dd)
 {
 	// an add indicates that the attributes and value are ready
-	gateDebug2(1,"gateVcData::add(gdd=%8.8x) name=%s\n",(int)dd,name());
+	gateDebug2(1,"gateVcData::vcAdd(gdd=%8.8x) name=%s\n",(int)dd,name());
 
 	if(event_data) event_data->unreference();
 	event_data=dd;
@@ -321,16 +315,16 @@ void gateVcData::add(gdd* dd)
 	switch(getState())
 	{
 	case gateVcConnect:
-		gateDebug0(1,"gateVcData::add() connecting -> ready\n");
+		gateDebug0(1,"gateVcData::vcAdd() connecting -> ready\n");
 		setState(gateVcReady);
 		vcNew();
 		break;
 	case gateVcReady:
-		gateDebug0(1,"gateVcData::add() ready\n");
+		gateDebug0(1,"gateVcData::vcAdd() ready\n");
 	case gateVcClear:
-		gateDebug0(1,"gateVcData::add() clear\n");
+		gateDebug0(1,"gateVcData::vcAdd() clear\n");
 	default:
-		gateDebug0(1,"gateVcData::add() default state\n");
+		gateDebug0(1,"gateVcData::vcAdd() default state\n");
 	}
 }
 
@@ -482,8 +476,8 @@ void gateVcData::vcNew(void)
 			else
 #endif
 			{
-				if(attributes())	table.smartCopy(&asyncr->DD(),attributes());
-				if(value())			table.smartCopy(&asyncr->DD(),value());
+				if(attributes()) table.smartCopy(&asyncr->DD(),attributes());
+				if(value())	 table.smartCopy(&asyncr->DD(),value());
 			}
 
 			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
@@ -534,7 +528,12 @@ void gateVcData::vcDelete(void)
 {
 	gateDebug1(10,"gateVcData::vcDelete() name=%s\n",name());
 }
+
+#if NODEBUG
+void gateVcData::vcPutComplete(gateBool /*b*/)
+#else
 void gateVcData::vcPutComplete(gateBool b)
+#endif
 {
 	gateDebug2(10,"gateVcData::vcPutComplete(gateBool=%d) name=%s\n",
 		(int)b,name());
@@ -657,7 +656,11 @@ unsigned gateVcData::maxDimension(void) const
 	return dim;
 }
 
+#if NODEBUG
+aitIndex gateVcData::maxBound(unsigned /*dim*/) const
+#else
 aitIndex gateVcData::maxBound(unsigned dim) const
+#endif
 {
 	gateDebug3(10,"gateVcData::maxBound(%u) %s %d\n",
 		dim,name(),(int)maximumElements());

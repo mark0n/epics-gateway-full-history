@@ -163,3 +163,9 @@ private:
 };
 
 #endif
+
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* c-basic-offset: 8 */
+/* c-comment-only-line-offset: 0 */
+/* End: */

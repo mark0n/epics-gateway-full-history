@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.16  1997/09/25 18:19:56  jba
+ * Moved location of gateAsyncR and gateAsyncW.
+ *
  * Revision 1.15  1997/05/20 15:48:30  jbk
  * changes for the latest CAS library in EPICS 3.13.beta9
  *
@@ -92,7 +95,7 @@ public:
 
 	virtual aitBool readAccess(void) const;
 	virtual aitBool writeAccess(void) const;
-    virtual void setOwner(const char* const user,const char* const host);
+	virtual void setOwner(const char* const user,const char* const host);
 
 	const char* getUser(void);
 	const char* getHost(void);
@@ -167,7 +170,7 @@ public:
 	void setPV(gatePvData* t)	{ pv=t; }
 	gateVcState getState(void)	{ return pv_state; }
 	gdd* attributes(void)		{ return data; }
-	gdd* value(void)			{ return event_data; }
+	gdd* value(void)		{ return event_data; }
 	gdd* attribute(int) 		{ return NULL; } // not done
 	aitEnum nativeType(void) const;
 	aitIndex maximumElements(void) const;
@@ -191,10 +194,10 @@ public:
 	int put(gdd*);
 	int putDumb(gdd*);
 
-	void remove(void);
+	void vcRemove(void);
 	void ack(void);
 	void nak(void);
-	void add(gdd*);
+	void vcAdd(gdd*);
 	void eventData(gdd*);
 	void pvData(gdd*);
 

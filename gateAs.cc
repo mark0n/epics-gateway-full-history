@@ -93,7 +93,7 @@ int gateAs::initPvList(const char* lfile)
 
 int gateAs::readPvList(const char* lfile)
 {
-	int i,lev,line=0;
+	int i,lev,line,expl_as=0;
 	FILE* fd;
 	char inbuf[200];
 	char *name,*cmd,*asg,*asl,*rname,*ptr;
@@ -113,6 +113,7 @@ int gateAs::readPvList(const char* lfile)
 	else
 		return 0;
 
+	line=0;
 	while(fgets(inbuf,sizeof(inbuf),fd))
 	{
 		if((ptr=strchr(inbuf,'#'))) *ptr='\0';
@@ -124,29 +125,28 @@ int gateAs::readPvList(const char* lfile)
 		{
 			if((cmd=strtok(NULL," \t\n")))
 			{
-				if(strcmp(cmd,"DENY")==0)
+				if(strcasecmp(cmd,"DENY")==0)
 					pd=new gateAsDeny(name,head_deny);
-				else if(strcmp(cmd,"ALIAS")==0)
-				{
-					if((rname=strtok(NULL," \t\n")))
-						pa=new gateAsAlias(name,rname,head_alias);
-					else
-						fprintf(stderr,"No alias given in line %d\n",line);
-				}
 				else
 				{
+					// check for ALIAS command (has one extra argument)
+					if(strcasecmp(cmd,"ALIAS")==0)
+					{
+						if((rname=strtok(NULL," \t\n")))
+							pa=new gateAsAlias(name,rname,head_alias);
+						else
+							fprintf(stderr,"No alias given in PV list file (line %d)\n",line);
+					}
+
 					// try to get two more fields - asg/asl
+					expl_as=0;
+					asg=default_group;
+					lev=1;
 					if((asg=strtok(NULL," \t\n")))
 					{
-						if((asl=strtok(NULL," \t\n")))
-						{
-							if(sscanf(asl,"%d",&lev)!=1)
-							{
-								lev=1;
-							}
-						}
-						else
-							lev=1;
+						expl_as=1;
+						if((asl=strtok(NULL," \t\n")) &&
+							(sscanf(asl,"%d",&lev)!=1)) lev=1;
 					}
 					else
 					{
@@ -154,7 +154,8 @@ int gateAs::readPvList(const char* lfile)
 						lev=1;
 					}
 
-					if(strcmp(cmd,"PATTERN")==0)
+					// check for commands and set up appropriate entries
+					if(strcasecmp(cmd,"PATTERN")==0)
 					{
 						if((name[0]>='0' && name[0]<='9') ||
 						   (name[0]>='a' && name[0]<='z') ||
@@ -163,26 +164,50 @@ int gateAs::readPvList(const char* lfile)
 						else
 							pe=new gateAsEntry(name,asg,lev,head_pat);
 					}
-					else if(strcmp(cmd,"PV")==0)
-						pe=new gateAsEntry(name,asg,lev,head_pv);
+
+					else if(((strcasecmp(cmd,"PV")==0) || (strcasecmp(cmd,"ALIAS")==0)))
+					{
+						// if asg/asl not explicitly set and matching pattern exists,
+						// use its asg/asl as default
+						if(!expl_as)
+						{
+							for(pe=pat_table[name[0]];
+								 pe&&patmatch((char*)pe->name,name)==0;
+								 pe=pe->next);
+							if(pe==NULL)		// not found? try special patterns
+							{
+								for(pe=head_pat;
+									 pe&&patmatch((char*)pe->name,name)==0;
+									 pe=pe->next);
+							}
+							if(pe)				// pattern asg/asl overwrites defaults
+							{
+								asg=(char*)pe->group;
+								lev=pe->level;
+							}
+						}
+
+						// new entry only if no explicit entry (PV or ALIAS) exists
+						for(pe=head_pv;pe && strcmp(pe->name,name)!=0;pe=pe->next);
+						if(pe==NULL)
+							pe=new gateAsEntry(name,asg,lev,head_pv);
+						else if(expl_as)
+							fprintf(stderr,
+								"PV '%s' already defined "
+								"(ignoring access info in line %d of PV list file)\n",name,line);
+					}
+					else
+						fprintf(stderr,
+							"Invalid command '%s' in PV list file (line %d)\n",cmd,line);
 				}
 			}
 			else
-				fprintf(stderr,"No type information given in line %d\n",line);
+				fprintf(stderr,"No command given in PV list file (line %d)\n",line);
 		}
 	}
 	fclose(fd);
 
-	// resolve the aliases - slow and horrid, only done once here
-//	for(pa=head_alias;pa;pa=pa->next)
-//	{
-//		if((pe=findEntry(pa->name))==NULL)
-//			pe=new gateAsEntry(pa->name,default_group,1,head_pv);
-//
-//		pe->alias=pa->alias;
-//	}
-
-	// fix all the pattern lists so that they alway search the special patterns
+	// fix all the pattern lists so that they always search the special patterns
 	for(i=0;i<128;i++)
 	{
 		for(pe=pat_table[i];pe && pe->next;pe=pe->next);
@@ -218,7 +243,8 @@ const char* gateAs::getAlias(const char* pv) const
 {
 	gateAsAlias* pa;
 	for(pa=head_alias;pa && strcmp(pa->name,pv)!=0;pa=pa->next);
-	return pa?pa->alias:NULL;
+      // KE: Why is (const char*) needed here?
+	return pa?pa->alias:(const char*)NULL;
 }
 
 gateAsNode* gateAs::getInfo(gateAsEntry* e,const char* u,const char* h)
@@ -391,3 +417,9 @@ void gateAs::report(FILE* fd)
 	if(rules_installed==aitTrue) fprintf(fd,"\nRules are installed\n");
 	if(use_default_rules==aitTrue) fprintf(fd,"\nUsing default rules\n");
 }
+
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* c-basic-offset: 8 */
+/* c-comment-only-line-offset: 0 */
+/* End: */

@@ -91,6 +91,13 @@
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 #define DEBUG_PV_CONNNECT_CLEANUP 0
+#define DEBUG_TIMES 1
+#define DEBUG_EXCEPTION 1
+
+//#define GATE_TIME_STAT_INTERVAL 60 /* sec */
+#define GATE_TIME_STAT_INTERVAL 1800 /* sec (half hour) */
+
+#define USE_FDS 0
 
 #include <stdio.h>
 #include <string.h>
@@ -112,7 +119,24 @@
 
 void gateAsCa(void);
 
-// ---------------------------- genereral main processing function -----------
+// ---------------------------- utilities ------------------------------------
+static char *timeStamp(void)
+  // Gets current time and puts it in a static array
+  // The calling program should copy it to a safe place
+  //   e.g. strcpy(savetime,timestamp());
+{
+	static char timeStampStr[16];
+	long now;
+	struct tm *tblock;
+	
+	time(&now);
+	tblock=localtime(&now);
+	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+	
+	return timeStampStr;
+}
+
+// ---------------------------- general main processing function -------------
 
 typedef void (*SigFunc)(int);
 
@@ -153,9 +177,21 @@ void gatewayServer(void)
 void gateServer::mainLoop(void)
 {
 	int not_done=1;
-	osiTime delay(0u,500000000u);
+	// KE: ca_poll should be called every 100 ms
+	// fdManager::process can block in select for delay time
+	// so delay must be less than 100 ms to insure ca_poll gets called
+	//	osiTime delay(0u,500000000u);    // (sec, nsec) (500 ms)
+	//	osiTime delay(0u,100000000u);    // (sec, nsec) (100 ms)
+	osiTime delay(0u,0u);    // (sec, nsec) (0 ms, select will not block)
 	SigFunc old;
 	unsigned char cnt=0;
+#if DEBUG_TIMES
+	osiTime zero, begin, end, fdTime, pendTime, cleanTime, lastPrintTime;
+	unsigned long nLoops=0;
+
+	printf("%s gateServer::mainLoop: Starting and printing statistics every %d seconds\n",
+	  timeStamp(),GATE_TIME_STAT_INTERVAL);
+#endif
 
 	as_rules=global_resources->getAs();
 	gateAsCa(); // putrid hack for access security calculation rules
@@ -169,11 +205,55 @@ void gateServer::mainLoop(void)
 	time(&start_time);
 	exist_count=0;
 
+#if DEBUG_TIMES
+	lastPrintTime=osiTime::getCurrent();
+	fdTime=zero;
+	pendTime=zero;
+	cleanTime=zero;
+#endif
 	while(not_done)
-	{
+	    {
+#if DEBUG_TIMES
+		nLoops++;
+		begin=osiTime::getCurrent();
+#endif
+	      // Process
 		fileDescriptorManager.process(delay);
-		checkEvent();
-
+#if DEBUG_TIMES
+		end=osiTime::getCurrent();
+		fdTime+=(end-begin);
+		begin=end;
+#endif
+		// Poll
+		//  KE: used to be checkEvent();
+		ca_poll();
+#if DEBUG_TIMES
+		end=osiTime::getCurrent();
+		pendTime+=(end-begin);
+		begin=end;
+#endif
+	      // Cleanup
+		connectCleanup();
+		inactiveDeadCleanup();
+#if DEBUG_TIMES
+		end=osiTime::getCurrent();
+		cleanTime+=(end-begin);
+		if((end-lastPrintTime).getSec() > GATE_TIME_STAT_INTERVAL) {
+			printf("%s gateServer::mainLoop: [%ld,%ld,%ld] loops: %lu process: %.3f pend: %.3f clean: %.3f\n",
+			  timeStamp(),
+			  pv_con_list.count(),pv_list.count(),vc_list.count(),
+			  nLoops,
+			  (double)(fdTime)/(double)nLoops,
+			  (double)(pendTime)/(double)nLoops,
+			  (double)(cleanTime)/(double)nLoops);
+			nLoops=0;
+			lastPrintTime=osiTime::getCurrent();
+			fdTime=zero;
+			pendTime=zero;
+			cleanTime=zero;
+		}
+#endif
+		
 		// make sure messages get out
 #if 0
 	        // KE: ++cnt==0 is always false -- stdout is not getting flushed
@@ -183,12 +263,11 @@ void gateServer::mainLoop(void)
 #endif
 		if(report_flag2) { report2(); report_flag2=0; }
 		if(command_flag) { gateCommands(global_resources->commandFile()); command_flag=0; }
-	}
+	    }
 }
 
 void gateServer::gateCommands(const char* cfile)
 {
-
 	FILE* fd;
 	char inbuf[200];
 	char *cmd,*ptr;
@@ -310,9 +389,18 @@ gateFd::~gateFd(void)
 
 void gateFd::callBack(void)
 {
+#if DEBUG_TIMES
+    osiTime begin(osiTime::getCurrent());
+#endif
 	gateDebug0(51,"gateFd::callback()\n");
 	// server.checkEvent();  old way
-	ca_pend_event(GATE_REALLY_SMALL); // new way
+	ca_poll();
+#if DEBUG_TIMES
+	osiTime end(osiTime::getCurrent());
+	printf("  gateFd::callBack: pend: %.3f\n",
+	  (double)(end-begin));
+#endif
+
 }
 
 // ----------------------- server methods --------------------
@@ -323,7 +411,9 @@ gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 	gateDebug0(5,"gateServer()\n");
 	// this is a CA client, initialize the library
 	SEVCHK(ca_task_initialize(),"CA task initialize");
+#if USE_FDS
 	SEVCHK(ca_add_fd_registration(fdCB,this),"CA add fd registration");
+#endif
 	SEVCHK(ca_add_exception_event(exCB,NULL),"CA add exception event");
 
 #if 0
@@ -382,6 +472,10 @@ gateServer::~gateServer(void)
 		delete vc;
 	}
 
+	// remove all server stats
+	for(int i=0;i<statCount;i++)
+		delete stat_table[i].pv;
+
 	SEVCHK(ca_flush_io(),"CA flush io");
 	SEVCHK(ca_task_exit(),"CA task exit");
 }
@@ -389,7 +483,7 @@ gateServer::~gateServer(void)
 void gateServer::checkEvent(void)
 {
 	gateDebug0(51,"gateServer::checkEvent()\n");
-	ca_pend_event(GATE_REALLY_SMALL);
+	ca_poll();
 	connectCleanup();
 	inactiveDeadCleanup();
 }
@@ -426,7 +520,11 @@ void gateServer::quickDelay(void)   { delay_current=&delay_quick; }
 void gateServer::normalDelay(void)  { delay_current=&delay_normal; }
 osiTime& gateServer::currentDelay(void) { return *delay_current; }
 
+#if DEBUG_EXCEPTION
+void gateServer::exCB(EXCEPT_ARGS args)
+#else
 void gateServer::exCB(EXCEPT_ARGS /*args*/)
+#endif
 {
 	gateDebug0(9,"exCB: -------------------------------\n");
 	/*
@@ -445,6 +543,48 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 
 	// this is the exception callback
 	// problem - log a message about the PV
+#if DEBUG_EXCEPTION
+#define MAX_EXCEPTIONS 25    
+	static int nexceptions=0;
+	static int ended=0;
+	
+	if(ended) return;
+	if(nexceptions++ > MAX_EXCEPTIONS) {
+	    ended=1;
+	    fprintf(stderr,"gateServer::exCB: Channel Access Exception:\n"
+	      "Too many exceptions [%d]\n"
+	      "No more will be handled\n",
+	      MAX_EXCEPTIONS);
+	    ca_add_exception_event(NULL, NULL);
+	    return;
+	}
+	
+	fprintf(stderr,"%s gateServer::exCB: Channel Access Exception:\n"
+	  "  Channel Name: %s\n"
+	  "  Native Type: %s\n"
+	  "  Native Count: %hu\n"
+	  "  Access: %s%s\n"
+	  "  IOC: %s\n"
+	  "  Message: %s\n"
+	  "  Context: %s\n"
+	  "  Requested Type: %s\n"
+	  "  Requested Count: %ld\n"
+	  "  Source File: %s\n"
+	  "  Line number: %u\n",
+	  timeStamp(),
+	  args.chid?ca_name(args.chid):"Unavailable",
+	  args.chid?dbf_type_to_text(ca_field_type(args.chid)):"Unavailable",
+	  args.chid?ca_element_count(args.chid):0,
+	  args.chid?(ca_read_access(args.chid)?"R":""):"Unavailable",
+	  args.chid?(ca_write_access(args.chid)?"W":""):"",
+	  args.chid?ca_host_name(args.chid):"Unavailable",
+	  ca_message(args.stat)?ca_message(args.stat):"Unavailable",
+	  args.ctx?args.ctx:"Unavailable",
+	  dbf_type_to_text(args.type),
+	  args.count,
+	  args.pFile?args.pFile:"Unavailable",
+	  args.pFile?args.lineNo:0);
+#endif
 }
 
 void gateServer::connectCleanup(void)
@@ -461,7 +601,7 @@ void gateServer::connectCleanup(void)
 	unsigned long pos=1;
 	unsigned long total=pv_con_list.count();
 #endif
-
+	
 #if DEBUG_PV_CONNNECT_CLEANUP 
 #if 0
 	printf("."); fflush(stdout);
@@ -529,7 +669,7 @@ void gateServer::inactiveDeadCleanup(void)
 
 #if DEBUG_PV_LIST
 	int ifirst=1;
-	char timeStampStr[20];  // 16 should be enough
+	char timeStampStr[16];
 #endif
 
 	for(node=pv_list.first();node;)
@@ -553,10 +693,7 @@ void gateServer::inactiveDeadCleanup(void)
 			int status=pv_list.remove(pv->name(),cnode);
 #if DEBUG_PV_LIST
 			if(ifirst) {
-			    long now;
-			    time(&now);
-			    struct tm *tblock=localtime(&now);
-			    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
 			printf("%s gateServer::inactiveDeadCleanup(dead): [%ld,%ld,%ld]: "
@@ -592,10 +729,7 @@ void gateServer::inactiveDeadCleanup(void)
 			int status=pv_list.remove(pv->name(),cnode);
 #if DEBUG_PV_LIST
 			if(ifirst) {
-			    long now;
-			    time(&now);
-			    struct tm *tblock=localtime(&now);
-			    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+			    strcpy(timeStampStr,timeStamp());
 			    ifirst=0;
 			}
 			printf("%s gateServer::inactiveDeadCleanup(inactive): [%ld,%ld,%ld]: "
@@ -628,7 +762,11 @@ void gateServer::inactiveDeadCleanup(void)
 	if(in_check)	setInactiveCheckTime();
 }
 
+#if NODEBUG
+pvExistReturn gateServer::pvExistTest(const casCtx& /*c*/,const char* pvname)
+#else
 pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
+#endif
 {
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%8.8x,pv=%s)\n",(int)&c,pvname);
 	gatePvData* pv;
@@ -640,7 +778,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 
 	++exist_count;
 
-	// trap PVs that start with hostname here
+	// trap server stats PVs here
 	for(i=0;i<statCount;i++)
 	{
 		if(strcmp(pvname,stat_table[i].pvname)==0)
@@ -692,7 +830,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	}
 	else if(conFind(real_name,pv)==0)
 	{
-		gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",real_name);
+		gateDebug1(5,"gateServer::pvExistTest() %s is connecting\n",real_name);
 		rc=pverDoesNotExistHere;
 	}
 	else
@@ -733,6 +871,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	const char* real_name;
 	int i;
 
+	// trap (and create if needed) server stats PVs
 	for(i=0;i<statCount;i++)
 	{
 		if(strcmp(pvname,stat_table[i].pvname)==0)
@@ -748,7 +887,7 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 		real_name=pvname;
 	else
 	{
-		gateDebug2(5,"gateServer::pvExistTest() PV %s has real name %s\n",
+		gateDebug2(5,"gateServer::createPV() PV %s has real name %s\n",
 			pvname,real_name);
 	}
 
@@ -780,9 +919,19 @@ void gateServer::setStat(int type,long x)
 void gateServer::initStats(void)
 {
 	int i;
+	struct utsname ubuf;
+
+	// set up PV names for server stats and fill them into the stat_table
+	if(uname(&ubuf)<0)
+		host_name=strDup("gateway");
+	else
+		host_name=strDup(ubuf.nodename);
+
+	host_len=strlen(host_name);
+
 	for(i=0;i<statCount;i++)
 	{
-		stat_table[i].pvname=new char[host_len+1+strlen(stat_table[i].name)+1];
+                stat_table[i].pvname=new char[host_len+1+strlen(stat_table[i].name)+1];
 		sprintf(stat_table[i].pvname,"%s.%s",host_name,stat_table[i].name);
 	}
 }
@@ -804,4 +953,18 @@ gateServerStats gateServer::stat_table[] = {
 	{ "fd",NULL,NULL,&gateServer::total_fd },
 	{ "pvtotal",NULL,NULL,&gatePvData::total_pv },
 };
+
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* c-basic-offset: 8 */
+/* c-comment-only-line-offset: 0 */
+/* End: */
+
+
+
+
+
+
+
+
 
