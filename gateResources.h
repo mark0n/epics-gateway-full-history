@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.3  1996/07/26 02:34:44  jbk
+ * Interum step.
+ *
  * Revision 1.2  1996/07/23 16:32:38  jbk
  * new gateway that actually runs
  *
@@ -17,6 +20,7 @@
 #define GATE_SCRIPT_FILE "GATEWAY.killer"
 #define GATE_PV_LIST_FILE "GATEWAY_PV_LIST_FILE"
 #define GATE_PV_ACCESS_FILE "GATEWAY_PV_ACCESS_FILE"
+#define GATE_PV_ALIAS_FILE "GATEWAY_PV_ALIAS_FILE"
 #define GATE_LOG "GATEWAY_LOG"
 #define GATE_HOME "."
 #define GATE_SUFFIX "default"

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.4  1996/09/07 13:01:51  jbk
+// fixed bugs.  reference the gdds from CAS now.
+//
 // Revision 1.3  1996/07/26 02:34:44  jbk
 // Interum step.
 //
@@ -31,6 +34,7 @@ gateResources::gateResources(void)
 	home_dir=strdup(GATE_HOME);
 	pv_access_file=strdup(GATE_PV_ACCESS_FILE);
 	pv_list_file=strdup(GATE_PV_LIST_FILE);
+	pv_alias_file=strdup(GATE_PV_ALIAS_FILE);
 	debug_level=0;
 	suffix=strdup(GATE_SUFFIX);
 	prefix=strdup(GATE_LOG);
@@ -155,7 +159,7 @@ int gateResources::setAliasFile(char* file)
 
 	if(alias_buffer) delete [] alias_buffer;
 	if(alias_table) delete [] alias_table;
-	delete [] pv_alias_file;
+	if(pv_alias_file) delete [] pv_alias_file;
 	pv_alias_file=strdup(file);
 
 	if( (pv_fd=fopen(pv_alias_file,"r"))==NULL ||

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.1  1996/07/23 16:32:36  jbk
+ * new gateway that actually runs
+ *
  */
 
 #include <sys/types.h>
@@ -49,6 +52,7 @@ class gateServer;
 class gatePvData
 {
 public:
+	gatePvData(gateServer*,const char* name);
 	gatePvData(gateServer*,gateVcData*,const char* name);
 	gatePvData(gateServer*,gateExistData*,const char* name);
 	~gatePvData(void);
@@ -105,6 +109,7 @@ public:
 protected:
 	gatePvData(void) { }
 	void init(gateServer*,const char* name);
+	void initClear(void);
 
 	void setInactiveTime(void);
 	void setActiveTime(void);

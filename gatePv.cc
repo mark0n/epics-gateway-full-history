@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.4  1996/09/06 11:56:21  jbk
+// little fixes
+//
 // Revision 1.3  1996/08/14 21:10:32  jbk
 // next wave of updates, menus stopped working, units working, value not
 // working correctly sometimes, can't delete the channels
@@ -56,11 +59,20 @@ void gateStringDestruct::run(void* v)
 
 // ------------------------- pv data methods ------------------------
 
+gatePvData::gatePvData(gateServer* m,const char* name)
+{
+	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
+	initClear();
+	init(m,name);
+}
+
 gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
 {
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateVcData=%8.8x,name=%s)\n",
 		(int)m,(int)d,name);
-	vc=d;
+	initClear();
+	setVC(d);
+	markAddRemoveNeeded();
 	init(m,name);
 }
 
@@ -68,7 +80,8 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 {
 	gateDebug3(5,"gatePvData(gateServer=%8.8x,gateExistData=%8.8x,name=%s)\n",
 		(int)m,(int)d,name);
-	vc=NULL;
+	initClear();
+	markAckNakNeeded();
 	addET(d);
 	init(m,name);
 }
@@ -82,24 +95,24 @@ gatePvData::~gatePvData(void)
 	delete [] pv_name;
 }
 
-void gatePvData::init(gateServer* m,const char* n)
+void gatePvData::initClear(void)
 {
-	gateDebug2(5,"gatePvData::init(gateServer=%8.8x,name=%s)\n",(int)m,n);
+	setVC(NULL);
 	status=0;
-	mrg=m;
-	pv_name=strdup(n);
-	setState(gatePvDead);
-	setTimes();
 	markNotMonitored();
 	markNoGetPending();
 	markNoAbort();
 	markAckNakNotNeeded();
 	markAddRemoveNotNeeded();
+	setState(gatePvDead);
+}
 
-	if(VC())	// VC present
-		markAddRemoveNeeded();
-	else		// ET present
-		markAckNakNeeded();
+void gatePvData::init(gateServer* m,const char* n)
+{
+	gateDebug2(5,"gatePvData::init(gateServer=%8.8x,name=%s)\n",(int)m,n);
+	mrg=m;
+	pv_name=strdup(n);
+	setTimes();
 
 	setState(gatePvConnect);
 

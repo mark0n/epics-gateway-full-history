@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.6  1996/09/07 13:01:52  jbk
+// fixed bugs.  reference the gdds from CAS now.
+//
 // Revision 1.5  1996/09/06 11:56:23  jbk
 // little fixes
 //
@@ -123,7 +126,7 @@ gateServer::~gateServer(void)
 	SEVCHK(ca_task_exit(),"CA task exit");
 }
 
-unsigned gateServer::maxSimultAsyncOps(void) const { return 2000u; }
+unsigned gateServer::maxSimultAsyncOps(void) const { return 5000u; }
 
 void gateServer::checkEvent(void)
 {
@@ -288,8 +291,6 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",pv->name());
 			const aitString x = pv->name();
 			cname.put(x);
-			// x.dump();
-			// cname.dump();
 			rc=S_casApp_success;
 			break;
 		  }
@@ -308,8 +309,9 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		if(conFind(r_name,pv)==0)
 		{
 			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
-			ed=new gateExistData(*this,pv,c,&cname);
-			rc=S_casApp_asyncCompletion;
+			// ed=new gateExistData(*this,pv,c,&cname);
+			// rc=S_casApp_asyncCompletion;
+			rc=S_casApp_pvNotFound;
 		}
 		else
 		{
@@ -318,8 +320,35 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 			{
 				// don't know - need to check
 				gateDebug1(5,"gateServer::pvExistTest() %s new\n",r_name);
-				ed=new gateExistData(*this,r_name,c,&cname);
-				rc=S_casApp_asyncCompletion;
+				pv=new gatePvData(this,r_name);
+
+				switch(pv->getState())
+				{
+				case gatePvInactive:
+				case gatePvActive:
+				 {
+					gateDebug1(5,"gateServer::pvExistTest() %s OK\n",r_name);
+					const aitString y = pv->name();
+					cname.put(y);
+					rc=S_casApp_success;
+					break;
+				 }
+				case gatePvDead:
+					gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",r_name);
+					rc=S_casApp_pvNotFound;
+					break;
+				case gatePvConnect:
+					// Should use gateExistData here:
+					// ed=new gateExistData(*this,r_name,c,&cname);
+					// rc=S_casApp_asyncCompletion;
+					gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",
+						r_name);
+					rc=S_casApp_pvNotFound;
+					break;
+				default:
+					rc=S_casApp_pvNotFound;
+					break;
+				}
 			}
 			else
 			{
