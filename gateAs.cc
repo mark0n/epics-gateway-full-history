@@ -28,6 +28,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.17  2002/07/29 16:06:00  jba
+ * Added license information.
+ *
  * Revision 1.16  2002/07/18 15:07:38  lange
  * Optimisation (connect time): expression matching only once in pvExistTest()
  *
@@ -114,7 +117,8 @@ void gateAsNode::client_callback(ASCLIENTPVT p,asClientStatus /*s*/)
 	if(v->user_func) v->user_func(v->user_arg);
 }
 
-gateAs::gateAs(const char* lfile, const char* afile)
+gateAs::gateAs(const char* lfile, const char* afile) :
+	denyFromListUsed(false)
 {
 	if(initialize(afile))
 		fprintf(stderr,"Failed to install access security file %s\n",afile);
@@ -122,7 +126,8 @@ gateAs::gateAs(const char* lfile, const char* afile)
 	readPvList(lfile);
 }
 
-gateAs::gateAs(const char* lfile)
+gateAs::gateAs(const char* lfile) :
+	denyFromListUsed(false)
 {
 	readPvList(lfile);
 }
@@ -154,6 +159,8 @@ int gateAs::readPvList(const char* lfile)
 	char *cmd,*asg,*asl,*ptr;
 	gateAsEntry* pe;
 	gateAsLine*  pl;
+
+	denyFromListUsed=false;
 
 	if(lfile)
 	{
@@ -196,15 +203,18 @@ int gateAs::readPvList(const char* lfile)
 		{
 			// Arbitrary number of arguments: [from] host names
 			if((hname=strtok(NULL,", \t\n")) && strcasecmp(hname,"FROM")==0)
-				hname=strtok(NULL,", \t\n");
+			  hname=strtok(NULL,", \t\n");
 			if(hname)           // host name(s) present
-				do
-				{
-					pe = new gateAsEntry(name);
-					if(pe->init(hname,deny_from_table,host_list,line)==aitFalse)
-						delete pe;
-				}
-				while((hname=strtok(NULL,", \t\n")));
+			  do
+			  {
+				  pe = new gateAsEntry(name);
+				  if(pe->init(hname,deny_from_table,host_list,line)==aitFalse) {
+					  delete pe;
+				  } else {
+					  denyFromListUsed=true;
+				  }
+			  }
+			  while((hname=strtok(NULL,", \t\n")));
 			else
 			{                   // no host name specified
 				pe = new gateAsEntry(name);

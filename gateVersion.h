@@ -27,6 +27,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.12  2002/07/30 15:41:31  evans
+ * Changed version to 1.3.3.2 after license changes.
+ *
  * Revision 1.11  2002/07/29 16:06:04  jba
  * Added license information.
  *
@@ -42,9 +45,9 @@
 #define GATEWAY_VERSION       1
 #define GATEWAY_REVISION      3
 #define GATEWAY_MODIFICATION  3
-#define GATEWAY_UPDATE_LEVEL  2
+#define GATEWAY_UPDATE_LEVEL  3
 
-#define GATEWAY_VERSION_STRING "CA Proxy Gateway Version 1.3.3.2"
+#define GATEWAY_VERSION_STRING "CA Proxy Gateway Version 1.3.3.3"
 
 #define GATEWAY_CREDITS_STRING  \
           "Developed at Argonne National Laboratory and BESSY\n\n" \

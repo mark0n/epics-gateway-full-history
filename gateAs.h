@@ -29,6 +29,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.18  2002/07/29 16:06:01  jba
+ * Added license information.
+ *
  * Revision 1.17  2002/07/18 15:07:45  lange
  * Optimisation (connect time): expression matching only once in pvExistTest()
  *
@@ -259,6 +262,8 @@ public:
 
 	inline gateAsEntry* findEntry(const char* pv, const char* host = 0);
 
+	bool isDenyFromListUsed(void) const { return denyFromListUsed; }
+
 	int readPvList(const char* pvlist_file);
 	void report(FILE*);
 	static long reInitialize(const char* as_file_name);
@@ -272,6 +277,8 @@ private:
 	gateHostList host_list;
 	tsSLList<gateAsLine> line_list;
 	tsHash<gateAsList> deny_from_table;
+
+	bool denyFromListUsed;
 
 	static unsigned char eval_order;
 

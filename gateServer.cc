@@ -29,6 +29,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.42  2002/07/29 16:06:03  jba
+ * Added license information.
+ *
  * Revision 1.41  2002/07/24 15:17:21  evans
  * Added CPUFract stat PV.  Added GATEWAY_UPDATE_LEVEL to gateVersion.h.
  * Printed BASE_VERSION_STRING to header of gateway.log.
@@ -754,9 +757,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",&ctx,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
-	gateAsEntry* node;
+	gateAsEntry* pNode;
 	char real_name[GATE_MAX_PVNAME_LENGTH];
-	char hostname[GATE_MAX_HOSTNAME_LENGTH];
 
 	++exist_count;
 
@@ -771,18 +773,34 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	}
 #endif
 
-	getClientHostName(ctx, hostname, sizeof(hostname));
-
-	// See if requested name is allowed and check for aliases
-
-	if ( !(node = getAs()->findEntry(pvname, hostname)) )
-	{
-		gateDebug2(1,"gateServer::pvExistTest() %s (from %s) is not allowed\n",
-				   pvname, hostname);
-		return pverDoesNotExistHere;
+	// Getting the host name is expensive.  Only do it is the
+	// deny_from_list is used
+	if(getAs()->isDenyFromListUsed()) {
+		char hostname[GATE_MAX_HOSTNAME_LENGTH];
+		
+		// Get the hostname and check if it is allowed
+		getClientHostName(ctx, hostname, sizeof(hostname));
+		
+		// See if requested name is allowed and check for aliases
+		if ( !(pNode = getAs()->findEntry(pvname, hostname)) )
+		{
+			gateDebug2(1,"gateServer::pvExistTest() %s (from %s) is not allowed\n",
+			  pvname, hostname);
+			return pverDoesNotExistHere;
+		}
+	} else {
+		// See if requested name is allowed and check for aliases.
+		// NULL will avoid checking the deny_from_list
+		if ( !(pNode = getAs()->findEntry(pvname, NULL)) )
+		{
+			gateDebug1(1,"gateServer::pvExistTest() %s is not allowed\n",
+			  pvname);
+			return pverDoesNotExistHere;
+		}
 	}
 
-    node->getRealName(pvname, real_name, sizeof(real_name));
+
+    pNode->getRealName(pvname, real_name, sizeof(real_name));
 
     gateDebug3(1,"gateServer::pvExistTest() %s (from %s) real name %s\n",
                pvname, hostname, real_name);
@@ -820,7 +838,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 	{
 		// not in the lists -- make a new one
 		gateDebug1(5,"gateServer::pvExistTest() %s creating new gatePv\n",pvname);
-		pv=new gatePvData(this,node,real_name);
+		pv=new gatePvData(this,pNode,real_name);
 		
 		switch(pv->getState())
 		{
