@@ -30,6 +30,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.34  2002/07/29 16:06:04  jba
+ * Added license information.
+ *
  * Revision 1.33  2002/07/18 13:19:03  lange
  * Small debug level issue fixed.
  *
@@ -49,11 +52,15 @@ static char RcsId[] = "@(#)$Id$";
 
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 #include <time.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#ifdef WIN32
+#else
+# include <unistd.h>
+#endif
 
 #include "gdd.h"
 #include "gddApps.h"
@@ -134,11 +141,11 @@ gateChan::~gateChan(void)
 void gateChan::setOwner(const char* const u, const char* const h)
 	{ node->changeInfo(u,h); }
 
-aitBool gateChan::readAccess(void) const
-	{ return (node->readAccess()&&vc.readAccess())?aitTrue:aitFalse; }
+bool gateChan::readAccess(void) const
+	{ return (node->readAccess()&&vc.readAccess())?true:false; }
 
-aitBool gateChan::writeAccess(void) const
-	{ return (node->writeAccess()&&vc.writeAccess())?aitTrue:aitFalse; }
+bool gateChan::writeAccess(void) const
+	{ return (node->writeAccess()&&vc.writeAccess())?true:false; }
 
 const char* gateChan::getUser(void) { return node->user(); }
 const char* gateChan::getHost(void) { return node->host(); }
@@ -181,8 +188,10 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 {
 	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 
-	select_mask|=(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
-	alh_mask|=mrg->alarmEventMask;
+	select_mask|=(mrg->alarmEventMask()|
+	  mrg->valueEventMask()|
+	  mrg->logEventMask());
+	alh_mask|=mrg->alarmEventMask();
 
 	// Important Note: The exist test should have been performed for this
 	// PV already, which means that the gatePvData exists and is connected
@@ -269,13 +278,13 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 
 void gateVcData::report(void)
 {
-	tsDLFwdIter<gateChan> iter(chan);
-	gateChan* p;
-
 	printf("%-30s event rate = %5.2f\n",pv_name,pv->eventRate());
 
-	for(p=iter.first();p;p=iter.next())
-		p->report();
+	tsDLIter<gateChan> iter=chan.firstIter();
+	while(iter.valid()) {
+		iter->report();
+		iter++;
+	}
 }
 
 void gateVcData::vcRemove(void)
@@ -371,8 +380,9 @@ void gateVcData::setEventData(gdd* dd)
 	else
 		event_data = dd;
 
+#ifdef TODO
 	if(pv->fieldType() == DBR_ENUM) event_data->setRelated(pv_data);
-
+#endif
 #if DEBUG_GDD
 	dumpdd(4,"event_data(after)",name(),event_data);
 #endif
@@ -624,7 +634,7 @@ void gateVcData::flushAsyncReadQueue(void)
 void gateVcData::vcPostEvent(void)
 {
 	gateDebug1(10,"gateVcData::vcPostEvent() name=%s\n",name());
-	time_t t;
+//	time_t t;
 
 	if(needPosting())
 	{
@@ -724,11 +734,9 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 		  timeStamp(),at,name());
 		fflush(stderr);
 		return S_casApp_noSupport;
-		break;
-	case gddAppType_className:
+	case gddAppType_class:
 		dd.put(str);
 		return S_casApp_noSupport;
-		break;
 	case gddAppType_dbr_stsack_string:
 		if((event_data && !(event_data->applicationType()==gddAppType_dbr_stsack_string))
 		   || !pv->alhMonitored())
@@ -764,7 +772,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	}
 }
 
-caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
+caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 {
 	int docallback=GATE_DOCALLBACK;
 
@@ -778,14 +786,13 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 	// Branch on application type
 	unsigned at=dd.applicationType();
 	switch(at) {
-	case gddAppType_className:
+	case gddAppType_class:
 	case gddAppType_dbr_stsack_string:
 		fprintf(stderr,"%s gateVcData::write: "
 		  "Got unsupported app type %d for %s\n",
 		  timeStamp(),at,name());
 		fflush(stderr);
 		return S_casApp_noSupport;
-		break;
 	case gddAppType_ackt:
 	case gddAppType_acks:
 		docallback = GATE_NOCALLBACK;
@@ -920,13 +927,13 @@ void gateVcData::setWriteAccess(aitBool b)
 
 void gateVcData::postAccessRights(void)
 {
-	tsDLFwdIter<gateChan> iter(chan);
-	gateChan* p;
-
 	gateDebug0(5,"gateVcData::postAccessRights() posting access rights\n");
 
-	for(p=iter.first();p;p=iter.next())
-		p->postAccessRightsEvent();
+	tsDLIter<gateChan> iter=chan.firstIter();
+	while(iter.valid()) {
+		iter->postAccessRightsEvent();
+		iter++;
+	}
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

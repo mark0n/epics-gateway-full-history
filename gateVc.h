@@ -31,6 +31,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.25  2002/07/29 16:06:04  jba
+ * Added license information.
+ *
  * Revision 1.24  2000/06/15 14:08:22  lange
  * -= ack/nak; -= update rate limit for atomic data
  *
@@ -41,7 +44,11 @@
  *********************************************************************-*/
 
 #include <sys/types.h>
-#include <sys/time.h>
+
+#ifdef WIN32
+#else
+# include <sys/time.h>
+#endif
 
 #include "casdef.h"
 #include "aitTypes.h"
@@ -75,8 +82,8 @@ public:
 	gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n);
 	~gateChan(void);
 
-	virtual aitBool readAccess(void) const;
-	virtual aitBool writeAccess(void) const;
+	virtual bool readAccess(void) const;
+	virtual bool writeAccess(void) const;
 	virtual void setOwner(const char* const user,const char* const host);
 
 	const char* getUser(void);
@@ -102,7 +109,7 @@ public:
 	virtual void interestDelete(void);
 	virtual aitEnum bestExternalType(void) const;
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
-	virtual caStatus write(const casCtx &ctx, gdd &value);
+	virtual caStatus write(const casCtx &ctx, const gdd &value);
 	virtual void destroy(void);
 	virtual unsigned maxDimension(void) const;
 	virtual aitIndex maxBound(unsigned dim) const;

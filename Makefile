@@ -8,12 +8,8 @@
 # This file is distributed subject to a Software License Agreement found
 # in the file LICENSE that is included with this distribution. 
 #*************************************************************************
-#
-# Author: Jim Kowalkowski
-# Date: 2/96
-#
-# $Id$
-#
+
+# Makefile for Gateway
 
 TOP = ../..
 ifneq ($(wildcard $(TOP)/config)x,x)

@@ -15,37 +15,27 @@ TOP = ../../..
 include $(TOP)/config/CONFIG_EXTENSIONS
 
 # Use of GNU regex library (version 0.12) for patterns and aliasing
-GNU_REGEX_INC = ../../../../regex-0.12
-GNU_REGEX_LIB = ../../../../regex-0.12
-# GNU_REGEX_INC = /home/phoebus/EVANS/src/regexp/regex-0.12
-# GNU_REGEX_LIB = /home/phoebus/EVANS/src/regexp/regex-0.12
+# (These should be defined in extensions/config/CONFIG_SITE.Host.xxx)
+# GNU_REGEX_INC = ../../../../regex-0.12
+# GNU_REGEX_LIB = ../../../../regex-0.12
 
 # Optimization
-OPTIMIZE = YES
-ifeq ($(OPTIMIZE),YES)
-#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGWANJ
-  HOST_OPT = YES
-else
-#  EPICS_BASE = /home/phoebus/EVANS/epics/baseGWANJDebug
-  HOST_OPT = NO
-endif
+#HOST_OPT = NO
 
 # Compiler options
 #USR_CXXFLAGS += -xsb
 
-SHARED_LIBRARIES=NO
-
-STATIC_BUILD=YES
-
 # Patches for HPUX / aCC
 # NORMAL to suppress "future errors", needs immediate binding as using shared libs produces core dumps
-ifeq ($(HOST_ARCH),hp700)
+ifeq ($(OS_CLASS),hp700)
   CXXCMPLR=NORMAL
   USR_LDFLAGS += -Wl,-Bimmediate
 endif
 
 # Purify
-#CXX = purify -first-only -chain-length=25 $($(CPLUSPLUS)_$(CXXCMPLR))
+#PURIFY=YES
+PURIFY_FLAGS = -first-only -chain-length=26 -max_threads=256
+#CXX = purify -first-only -chain-length=26 -max_threads=160 $($(CPLUSPLUS)_$(CXXCMPLR))
 
 # Quantify -collection-granularity=function runs faster than default=line
 # Quantify -use-machine=sparcstation_5 sets timing for Nike
@@ -59,6 +49,8 @@ USR_CXXFLAGS += -DNODEBUG
 USR_CXXFLAGS += -DSTAT_PVS
 # Use rate statistics
 USR_CXXFLAGS += -DRATE_STATS
+# Use control PV's
+USR_CXXFLAGS += -DCONTROL_PVS
 # Use CAS diagnostics statistics
 USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Install exception handler and print exceptions to log file
@@ -66,29 +58,64 @@ USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
 
 USR_INCLUDES += -I$(GNU_REGEX_INC)
 
+USR_LIBS_DEFAULT += ca cas asHost Com gdd
+#USR_LIBS_WIN32 += ca cas asHost Com gdd regex
+ca_DIR = $(EPICS_BASE_LIB)
+cas_DIR = $(EPICS_BASE_LIB)
+asHost_DIR = $(EPICS_BASE_LIB)
+Com_DIR = $(EPICS_BASE_LIB)
+gdd_DIR = $(EPICS_BASE_LIB)
+#regex_DIR = $(GNU_REGEX_LIB)
 
-PROD_LIBS += gate ca cas As Com gdd
+WIN32_RUNTIME=MD
+USR_CXXFLAGS_WIN32 += /DWIN32 /D_WINDOWS
+USR_LDFLAGS_WIN32 += /SUBSYSTEM:CONSOLE
 
-gate_DIR = .
+USR_CXXFLAGS_solaris += -mt
 
-
-LIBRARY = gate
-
-LIBSRCS += gatePv.cc
-LIBSRCS += gateResources.cc
-LIBSRCS += gateServer.cc
-LIBSRCS += gateAs.cc
-LIBSRCS += gateVc.cc
-LIBSRCS += gateAsyncIO.cc
-LIBSRCS += gateAsCa.cc
-LIBSRCS += gateStat.cc
-
+gateway_SRCS += gateway.cc
+gateway_SRCS += gatePv.cc
+gateway_SRCS += gateResources.cc
+gateway_SRCS += gateServer.cc
+gateway_SRCS += gateAs.cc
+gateway_SRCS += gateVc.cc
+gateway_SRCS += gateAsyncIO.cc
+gateway_SRCS += gateAsCa.cc
+gateway_SRCS += gateStat.cc
 
 PROD = gateway
 
-SRCS += gateway.cc
-
-
 include $(TOP)/config/RULES.Host
 
-LIBOBJS += $(GNU_REGEX_LIB)/regex.o
+PRODNAME_OBJS += $(GNU_REGEX_LIB)/regex$(OBJ)
+
+xxxx:
+	@echo HOST_OPT: $(HOST_OPT)
+	@echo PURIFY: $(PURIFY)
+	@echo PURIFYCMD: $(PURIFYCMD)
+	@echo QUANTIFY: $(QUANTIFY)
+	@echo QUANTIFYCMD: $(QUANTIFYCMD)
+	@echo CXX $(CXX)
+	@echo CXXFLAGS $(CXXFLAGS)
+	@echo LINK.cc: $(LINK.cc)
+	@echo LINK.c: $(LINK.c)
+	@echo TARGET_OBJS: $(TARGET_OBJS)
+	@echo PRODNAME_OBJS: $(PRODNAME_OBJS)
+	@echo PROD_LD_OBJS: $(PROD_LD_OBJS)
+	@echo PRODUCT_OBJS: $(PRODUCT_OBJS)
+	@echo PROD_OBJS: $(PROD_OBJS)
+	@echo EPICS_BASE: $(EPICS_BASE)
+	@echo HOST_ARCH: $(HOST_ARCH)
+	@echo ARCH_DEP_LDFLAGS_ML_NO: $(ARCH_DEP_LDFLAGS_ML_NO)
+	@echo ARCH_DEP_LDFLAGS_ML_YES: $(ARCH_DEP_LDFLAGS_ML_YES)
+	@echo ARCH_DEP_LDFLAGS_ML: $(ARCH_DEP_LDFLAGS_ML)
+	@echo ARCH_DEP_LDFLAGS_MD_NO: $(ARCH_DEP_LDFLAGS_MD_NO)
+	@echo ARCH_DEP_LDFLAGS_MD_YES: $(ARCH_DEP_LDFLAGS_MD_YES)
+	@echo ARCH_DEP_LDFLAGS_MD: $(ARCH_DEP_LDFLAGS_MD)
+	@echo ACC_SFLAGS_YES: $(ACC_SFLAGS_YES)
+	@echo ACC_SFLAGS_NO: $(ACC_SFLAGS_NO)
+
+# **************************** Emacs Editing Sequences *****************
+# Local Variables:
+# mode: makefile
+# End:

@@ -133,8 +133,11 @@ template <class T>
 class tsDLHashNode : public tsDLNode<T>
 {
 public:
-	T* getNext(void) { return tsDLNode<T>::getNext(); }
-	T* getPrev(void) { return tsDLNode<T>::getPrev(); }
+#if 0
+  // These are now private
+    T* getNext(void) { return tsDLNode<T>::getNext(); }
+    T* getPrev(void) { return tsDLNode<T>::getPrev(); }
+#endif
 };
 
 #endif

@@ -16,15 +16,22 @@
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
-#include <unistd.h>
 #include <stdlib.h>
+#ifdef USE_SYSLOG
 #include <syslog.h>
+#endif
 #include <signal.h>
-#include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/time.h>
-#include <sys/resource.h>
+
+#ifdef WIN32
+# include <direct.h>
+# include <process.h>
+#else
+# include <sys/wait.h>
+# include <unistd.h>
+# include <sys/resource.h>
+#endif
 
 #include "epicsVersion.h"
 #include "gateResources.h"
@@ -34,6 +41,12 @@ static int startEverything(char *prefix);
 void gatewayServer(char *prefix);
 void print_instructions(void);
 int manage_gateway(void);
+
+// Global variables
+#ifndef WIN32
+static pid_t gate_pid;
+#endif
+static int death_flag=0;
 
 // still need to add client and server IP addr info using 
 // the CA environment variables.
@@ -128,7 +141,9 @@ static int client_port=0;
 static int make_server=0;
 static char* home_directory;
 static const char* log_file=NULL;
+#ifndef WIN32
 static pid_t parent_pid;
+#endif
 
 struct parm_stuff
 {
@@ -165,6 +180,8 @@ static PARM_STUFF ptable[] = {
     { NULL,                  -1, -1,               NULL }
 };
 
+extern "C" {
+
 typedef void (*SIG_FUNC)(int);
 
 static SIG_FUNC save_hup = NULL;
@@ -182,40 +199,86 @@ static void sig_end(int sig)
 	
 	switch(sig)
 	{
+#ifndef WIN32
 	case SIGHUP:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGHUP)");
+#endif
+		fprintf(stderr,"PV Gateway Ending (SIGHUP)\n");
 		if(save_hup) save_hup(sig);
 		break;
+#endif //#ifndef WIN32
 	case SIGTERM:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGTERM)");
+#endif
+		fprintf(stderr,"PV Gateway Ending (SIGTERM)\n");
 		if(save_term) save_term(sig);
 		break;
 	case SIGINT:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGINT)");
+#endif
+		fprintf(stderr,"PV Gateway Ending (SIGINT)\n");
 		if(save_int) save_int(sig);
 		break;
 	case SIGILL:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGILL)");
+#endif
+		fprintf(stderr,"PV Gateway Aborting (SIGILL)\n");
 		if(save_ill) save_ill(sig);
 		abort();
-		break;
+#ifndef WIN32
 	case SIGBUS:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGBUS)");
+#endif
+		fprintf(stderr,"PV Gateway Aborting (SIGBUS)\n");
 		if(save_bus) save_bus(sig);
 		abort();
-		break;
+#endif //#ifndef WIN32
 	case SIGSEGV:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGSEGV)");
+#endif
+		fprintf(stderr,"PV Gateway Aborting (SIGSEGV)\n");
 		if(save_segv) save_segv(sig);
 		abort();
-		break;
 	default:
+#ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Exiting (Unknown Signal)");
+#endif
+		fprintf(stderr,"PV Gateway Exiting (Unknown Signal)\n");
 		break;
 	}
 	
 	exit(0);
 }
+
+#ifndef WIN32
+static void sig_chld(int /*sig*/)
+{
+#ifdef SOLARIS
+	while(waitpid(-1,NULL,WNOHANG)>0);
+#else
+	while(wait3(NULL,WNOHANG,NULL)>0);
+#endif
+	signal(SIGCHLD,sig_chld);
+}
+#endif //#ifndef WIN32
+
+#ifndef WIN32
+static void sig_stop(int /*sig*/)
+{
+	if(gate_pid)
+	  kill(gate_pid,SIGTERM);
+	
+	death_flag=1;
+}
+#endif
+
+} // End extern "C"
 
 static int startEverything(char *prefix)
 {
@@ -224,8 +287,10 @@ static int startEverything(char *prefix)
 	char gate_ca_list[100];
 	char gate_ca_port[30];
 	int sid;
+#ifndef WIN32
 	FILE* fd;
 	struct rlimit lim;
+#endif
 
 	if(client_ip_addr)
 	{
@@ -256,6 +321,10 @@ static int startEverything(char *prefix)
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_port);
 	}
 
+	sid=getpid();
+	
+#ifndef WIN32
+	// Make script file ("gateway.killer" by default)
 	if((fd=fopen(GATE_SCRIPT_FILE,"w"))==(FILE*)NULL)
 	{
 		fprintf(stderr,"open of script file %s failed\n",
@@ -263,8 +332,6 @@ static int startEverything(char *prefix)
 		fd=stderr;
 	}
 
-	sid=getpid();
-	
 	fprintf(fd,"\n");
 	fprintf(fd,"# options:\n");
 	fprintf(fd,"# home=<%s>\n",home_directory);
@@ -284,7 +351,7 @@ static int startEverything(char *prefix)
 	fprintf(fd,"# \n");
 	fprintf(fd,"# use the following to execute commands in command file:\n");
 	fprintf(fd,"#    kill -USR1 %d\n",sid);
-	fprintf(fd,"# use the following the get a PV summary report in log:\n");
+	fprintf(fd,"# use the following to get a PV summary report in the log:\n");
 	fprintf(fd,"#    kill -USR2 %d\n",sid);
 
 	fprintf(fd,"# \n");
@@ -308,7 +375,10 @@ static int startEverything(char *prefix)
 	
 	if(fd!=stderr) fclose(fd);
 	chmod(GATE_SCRIPT_FILE,00755);
+#endif  //#ifndef WIN32
 	
+#ifndef WIN32
+	// Make script file ("gateway.restart" by default)
 	if((fd=fopen(GATE_RESTART_FILE,"w"))==(FILE*)NULL)
 	{
 		fprintf(stderr,"open of restart file %s failed\n",
@@ -321,7 +391,10 @@ static int startEverything(char *prefix)
 	
 	if(fd!=stderr) fclose(fd);
 	chmod(GATE_RESTART_FILE,00755);
+#endif  //#ifndef WIN32
 	
+#ifndef WIN32
+	// Set process limits
 	if(getrlimit(RLIMIT_NOFILE,&lim)<0)
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");
 	else
@@ -352,15 +425,20 @@ static int startEverything(char *prefix)
 				(int)lim.rlim_cur);
 #endif
 	}
+#endif  //#ifndef WIN32
 
+#ifndef WIN32
 	save_hup=signal(SIGHUP,sig_end);
+	save_bus=signal(SIGBUS,sig_end);
+#endif
 	save_term=signal(SIGTERM,sig_end);
 	save_int=signal(SIGINT,sig_end);
 	save_ill=signal(SIGILL,sig_end);
-	save_bus=signal(SIGBUS,sig_end);
 	save_segv=signal(SIGSEGV,sig_end);
 
+#ifdef USE_SYSLOG
 	syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Starting");
+#endif
 
 	char timeStampStr[16];
 	long now;
@@ -371,7 +449,7 @@ static int startEverything(char *prefix)
 	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 	printf("%s %s [%s %s]\n",
 	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__);	  
-	printf("%s PID=%d\n",BASE_VERSION_STRING,sid);
+	printf("%s PID=%d\n",EPICS_VERSION_STRING,sid);
 
 	gatewayServer(prefix);
 	return 0;
@@ -379,9 +457,11 @@ static int startEverything(char *prefix)
 
 int main(int argc, char** argv)
 {
-	int i,j,k;
+#ifndef WIN32
 	uid_t uid;
 	gid_t gid;
+#endif
+	int i,j,k;
 	int not_done=1;
 	int no_error=1;
 	int level=0;
@@ -397,9 +477,11 @@ int main(int argc, char** argv)
 	char* access_file=NULL;
 	char* command_file=NULL;
 	char* stat_prefix=NULL;
+	time_t t;
+#ifndef WIN32
 	char cur_time[300];
 	struct stat sbuf;
-	time_t t;
+#endif
 
 	home_dir=getenv("GATEWAY_HOME");
 	home_directory=new char[HOME_DIR_SIZE];
@@ -466,6 +548,7 @@ int main(int argc, char** argv)
 					read_only=1;
 					not_done=0;
 					break;
+#ifndef WIN32
 				case PARM_UID:
 					if(++i>=argc) no_error=0;
 					else
@@ -479,6 +562,8 @@ int main(int argc, char** argv)
 						}
 					}
 					break;
+#endif
+#ifndef WIN32
 				case PARM_GID:
 					if(++i>=argc) no_error=0;
 					else
@@ -492,6 +577,7 @@ int main(int argc, char** argv)
 						}
 					}
 					break;
+#endif
 				case PARM_PVLIST:
 					if(++i>=argc) no_error=0;
 					else
@@ -709,13 +795,17 @@ int main(int argc, char** argv)
 	}
 	getcwd(home_directory,HOME_DIR_SIZE);
 
+#ifndef WIN32
 	if(make_server)
 	{
 		// start watcher process
 		if(manage_gateway()) return 0;
 	}
 	else
+	{
 		parent_pid=getpid();
+	}
+#endif
 
 	// ****************************************
 	// gets here if this is interactive gateway
@@ -729,6 +819,8 @@ int main(int argc, char** argv)
 		if(log_file==NULL) log_file=GATE_LOG;
 		time(&t);
 
+#ifndef WIN32
+		// Save log file if it exists
 		if(stat(log_file,&sbuf)==0)
 		{
 			if(sbuf.st_size>0)
@@ -743,8 +835,10 @@ int main(int argc, char** argv)
 					unlink(log_file);
 			}
 		}
-	      // KE: This was formerly "w" instead of "a" and stderr was
-	      //  overwriting the top of the log file
+#endif
+
+		// KE: This was formerly "w" instead of "a" and stderr was
+		//  overwriting the top of the log file
 		if( (freopen(log_file,"a",stderr))==NULL )
 		{
 			fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
@@ -789,8 +883,10 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\treconnect=%ld\n",gr->reconnectInhibit());
 		fprintf(stderr,"\tinactive=%ld\n",gr->inactiveTimeout());
 		fprintf(stderr,"\tmask=%s\n",gr->eventMaskString());
+#ifndef WIN32
 		fprintf(stderr,"\tuser id=%d\n",getuid());
 		fprintf(stderr,"\tgroup id=%d\n",getgid());
+#endif
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
 		return -1;
@@ -826,8 +922,10 @@ int main(int argc, char** argv)
 		fprintf(stderr," inactive timeout = %ld\n",gr->inactiveTimeout());
 		fprintf(stderr," dead timeout = %ld\n",gr->deadTimeout());
 		fprintf(stderr," event mask = %s\n",gr->eventMaskString());
+#ifndef WIN32
 		fprintf(stderr," user id= %d\n",getuid());
 		fprintf(stderr," group id= %d\n",getgid());
+#endif
 		if(gr->isReadOnly())
 			fprintf(stderr," read only mode\n");
 		fflush(stderr);
@@ -921,29 +1019,9 @@ void print_instructions(void)
 	pr(stderr," setgid(2) to this group id number.\n\n");
 }
 
+#ifndef WIN32
 // -------------------------------------------------------------------
 //  part that watches the gateway process and ensures that it stays up
-
-static pid_t gate_pid;
-static int death_flag=0;
-
-static void sig_chld(int /*sig*/)
-{
-#ifdef SOLARIS
-	while(waitpid(-1,NULL,WNOHANG)>0);
-#else
-	while(wait3(NULL,WNOHANG,NULL)>0);
-#endif
-	signal(SIGCHLD,sig_chld);
-}
-
-static void sig_stop(int /*sig*/)
-{
-	if(gate_pid)
-	  kill(gate_pid,SIGTERM);
-	
-	death_flag=1;
-}
 
 int manage_gateway(void)
 {
@@ -1002,7 +1080,9 @@ int manage_gateway(void)
 		rc=0;
 
 	return rc;
+
 }
+#endif //#ifdef WIN32
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */

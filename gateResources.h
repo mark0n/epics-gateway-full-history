@@ -33,8 +33,12 @@
 #define GATE_MAX_HOSTNAME_LENGTH 64u
 #define GATE_MAX_PVLIST_LINE_LENGTH 1024u
 
-#include <sys/time.h>
 #include <string.h>
+
+#ifdef WIN32
+#else
+#include <sys/time.h>
+#endif
 
 #include "cadef.h"
 

@@ -20,8 +20,18 @@
 #include <string.h>
 #include <sys/stat.h>
 #include <sys/types.h>
-#include <unistd.h>
 #include <time.h>
+
+#ifdef WIN32
+/* WIN32 does not have unistd.h and does not define the following constants */
+# define F_OK 00
+# define W_OK 02
+# define R_OK 04
+# include <direct.h>     /* for getcwd (usually in sys/parm.h or unistd.h) */
+# include <io.h>         /* for access, chmod  (usually in unistd.h) */
+#else
+# include <unistd.h>
+#endif
 
 #include "cadef.h"
 
@@ -57,6 +67,8 @@ gateResources::gateResources(void)
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
 	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
 	setDeadTimeout(GATE_DEAD_TIMEOUT);
+	setDisconnectTimeout(GATE_DISCONNECT_TIMEOUT);
+	setReconnectInhibit(GATE_RECONNECT_INHIBIT);
 
 	gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
 

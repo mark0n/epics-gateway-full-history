@@ -14,27 +14,25 @@
 #include "gateAs.h"
 #include "gateResources.h"
 
-extern "C" {
 #include "alarm.h"
 #include "cadef.h"
 #include "epicsPrint.h"
-}
 
-extern ASBASE *pasbase;
+epicsShareExtern volatile ASBASE *pasbase;
 
 // code hacked out of Marty Kraimer's IOC core version
 
-typedef struct capvt {
+typedef struct _capvt {
 	struct dbr_sts_double rtndata;
 	chid ch_id;
 	int gotFirstEvent;
-};
-typedef struct capvt CAPVT;
+} CAPVT;
 
 static volatile int ready = 0;
 static volatile int count = 0;
 static time_t start_time;
 
+extern "C" {
 static void connectCB(struct connection_handler_args arg)
 {
     chid	chid = arg.chid;
@@ -90,6 +88,7 @@ static void eventCB(struct event_handler_args arg)
         }
     }
 }
+} // extern "C"
 
 void gateAsCa(void)
 {
@@ -170,3 +169,10 @@ void gateAsCaClear(void)
 
 }
 
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* tab-width: 4 */
+/* c-basic-offset: 4 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

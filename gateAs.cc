@@ -45,9 +45,15 @@ static char RcsId[] = "@(#)$Id$";
 
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <unistd.h>
 #include <fcntl.h>
+
+#ifdef WIN32
+# define strcasecmp stricmp
+# include <string.h>
+#else
+# include <unistd.h>
+# include <string.h>
+#endif
 
 #include "tsSLList.h"
 
@@ -64,6 +70,16 @@ unsigned char gateAs::eval_order = GATE_ALLOW_FIRST;
 aitBool gateAs::rules_installed = aitFalse;
 aitBool gateAs::use_default_rules = aitFalse;
 FILE* gateAs::rules_fd = NULL;
+
+// extern "C" wrappers needed for callbacks
+extern "C" {
+	static void clientCallback(ASCLIENTPVT p, asClientStatus s) {
+		gateAsNode::clientCallback(p, s);
+	}
+	static int readFunc(char* buf, int max_size) {
+		return gateAs::readFunc(buf, max_size);
+	}
+}
 
 void gateAsEntry::getRealName(const char* pv, char* rname, int len)
 {
@@ -111,7 +127,17 @@ void gateAsEntry::getRealName(const char* pv, char* rname, int len)
     return;
 }
 
-void gateAsNode::client_callback(ASCLIENTPVT p,asClientStatus /*s*/)
+gateAsNode::gateAsNode(gateAsEntry* e,const char* user, const char* host)
+{
+	asc=NULL;
+	entry=NULL;
+	user_func=NULL;
+	if(e&&asAddClient(&asc,e->as,e->level,(char*)user,(char*)host)==0)
+	  asPutClientPvt(asc,this);
+	asRegisterClientCallback(asc,::clientCallback);
+}
+
+void gateAsNode::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
 {
 	gateAsNode* v = (gateAsNode*)asGetClientPvt(p);
 	if(v->user_func) v->user_func(v->user_arg);
@@ -134,13 +160,14 @@ gateAs::gateAs(const char* lfile) :
 
 gateAs::~gateAs(void)
 {
-	tsSLIterRm<gateAsHost>* pihl = new tsSLIterRm<gateAsHost>(host_list);
+	tsSLIter<gateAsHost> pi = host_list.firstIter();
 	gateAsList* l;
-	gateAsHost* ph;
 
-	while((ph=pihl->next()))
+	gateAsHost *pNode;
+	while(pi.pointer())
 	{
-		deny_from_table.remove(ph->host,l);
+		pNode=pi.pointer();
+		deny_from_table.remove(pNode->host,l);
 		deleteAsList(*l);
 	}
 
@@ -336,12 +363,12 @@ long gateAs::initialize(const char* afile)
 		if((rules_fd=fopen(afile,"r"))==NULL)
 		{
 			use_default_rules=aitTrue;
-			rc=asInitialize(readFunc);
+			rc=asInitialize(::readFunc);
 			if(rc) fprintf(stderr,"Failed to set default security rules\n");
 		}
 		else
 		{
-			rc=asInitialize(readFunc);
+			rc=asInitialize(::readFunc);
 			if(rc) fprintf(stderr,"Failed to read security file: %s\n",afile);
 			fclose(rules_fd);
 		}
@@ -349,7 +376,7 @@ long gateAs::initialize(const char* afile)
 	else
 	{
 		use_default_rules=aitTrue;
-		rc=asInitialize(readFunc);
+		rc=asInitialize(::readFunc);
 		if(rc) fprintf(stderr,"Failed to set default security rules\n");
 	}
 
@@ -409,11 +436,6 @@ int gateAs::readFunc(char* buf, int max)
 
 void gateAs::report(FILE* fd)
 {
-	tsSLIter<gateAsEntry>* pi;
-	gateAsEntry* pe;
-	gateAsList* pl=NULL;
-	tsSLIter<gateAsHost>* phl;
-	gateAsHost* ph;
 	time_t t;
 	time(&t);
 
@@ -421,37 +443,49 @@ void gateAs::report(FILE* fd)
 		   "Configuration Report: %s",ctime(&t));
 	fprintf(fd,"\n============================ Allowed PV Report ============================\n");
 	fprintf(fd," Pattern                        ASG             ASL Alias\n");
-	pi = new tsSLIter<gateAsEntry>(allow_list);
-	while((pe=pi->next()))
+	tsSLIter<gateAsEntry> pi1 = allow_list.firstIter();
+	gateAsEntry *pNode1;
+	while(pi1.pointer())
 	{
-		fprintf(fd," %-30s %-16s %d ",pe->name,pe->group,pe->level);
-		if(pe->alias) fprintf(fd," %s\n",pe->alias);
+		pNode1=pi1.pointer();
+		fprintf(fd," %-30s %-16s %d ",pNode1->name,pNode1->group,pNode1->level);
+		if(pNode1->alias) fprintf(fd," %s\n",pNode1->alias);
 		else fprintf(fd,"\n");
+		pi1++;
 	}
-	delete pi;
 
 	fprintf(fd,"\n============================ Denied PV Report  ============================\n");
-	pi = new tsSLIter<gateAsEntry>(deny_list);
-	if((pe=pi->next())) {
+	tsSLIter<gateAsEntry> pi2 = deny_list.firstIter();
+	gateAsEntry *pNode2;
+	if(pi2.pointer()) {
 		fprintf(fd,"\n==== Denied from ALL Hosts:\n");
-		do
-			fprintf(fd," %s\n",pe->name);
-		while((pe=pi->next()));
-	}
-	delete pi;
-	phl = new tsSLIter<gateAsHost>(host_list);
-	while((ph=phl->next()))
-	{
-		fprintf(fd,"\n==== Denied from Host %s:\n",ph->host);
-		if(deny_from_table.find(ph->host,pl)==0)
+		while(pi2.pointer())
 		{
-			pi = new tsSLIter<gateAsEntry>(*pl);
-			while((pe=pi->next()))
-				fprintf(fd," %s\n",pe->name);
-			delete pi;
+			pNode2=pi2.pointer();
+			fprintf(fd," %s\n",pNode2->name);
+			pi2++;
 		}
 	}
-	delete phl;
+
+	tsSLIter<gateAsHost> pi3 = host_list.firstIter();
+	gateAsHost *pNode3;
+	while(pi3.pointer())
+	{
+		pNode3=pi3.pointer();
+		fprintf(fd,"\n==== Denied from Host %s:\n",pNode3->host);
+		gateAsList* pl=NULL;
+		if(deny_from_table.find(pNode3->host,pl)==0)
+		{
+			tsSLIter<gateAsEntry> pi4 = pl->firstIter();
+			gateAsEntry *pNode4;
+			while(pi4.pointer())
+			{
+				pNode4=pi4.pointer();
+				fprintf(fd," %s\n",pNode4->name);
+			}
+		}
+		pi3++;
+	}
 
 	if(eval_order==GATE_DENY_FIRST)
 		fprintf(fd,"\nEvaluation order: deny, allow\n");

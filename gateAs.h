@@ -63,9 +63,20 @@
 
 
 extern "C" {
+#include <ellLib.h>
 #include "asLib.h"
 #include "gpHash.h"
-                    // Patch for regex.h not testing __cplusplus, only __STDC__
+}
+
+// KE: Put these here to avoid redefining RE_DUP_MAX as defined in
+// regex.h
+#include "tsSLList.h"
+#include "tsHash.h"
+#include "aitTypes.h"
+
+extern "C" {
+// Patch for regex.h not testing __cplusplus, only __STDC__
+// KE: This leaves __STDC_ changed in some cases
 #ifndef __STDC__
 #    define __STDC__ 1
 #    include "regex.h"
@@ -78,10 +89,6 @@ extern "C" {
 #    include "regex.h"
 #endif
 }
-
-#include "tsSLList.h"
-#include "tsHash.h"
-#include "aitTypes.h"
 
 /*
  * Standard FALSE and TRUE macros
@@ -101,7 +108,6 @@ class gateAsHost;
 
 typedef tsSLList<gateAsEntry> gateAsList;
 typedef tsSLList<gateAsHost> gateHostList;
-
 
 //  ----------------- AS host (to build up host list) ------------------ 
 
@@ -189,22 +195,13 @@ private:
 	}
 };
 
-//  -------------- AS node (information for CAS Channels) -------------- 
+//  -------------- AS node (information for CAS Channels) --------------
 
 class gateAsNode
 {
 public:
-	gateAsNode(void)
-		{ asc=NULL; entry=NULL; }
-	gateAsNode(gateAsEntry* e,const char* user, const char* host):entry(e)
-	{
-		asc=NULL;
-		user_func=NULL;
-		if(e&&asAddClient(&asc,e->as,e->level,(char*)user,(char*)host)==0)
-			asPutClientPvt(asc,this);
-		asRegisterClientCallback(asc,client_callback);
-	}
-
+	gateAsNode(void) { asc=NULL; entry=NULL; }
+	gateAsNode(gateAsEntry* e,const char* user, const char* host);
 	~gateAsNode(void)
 		{ if(asc) asRemoveClient(&asc); asc=NULL; }
 
@@ -225,11 +222,13 @@ public:
 		{ user_arg=uarg; user_func=ufunc; }
 
 private:
-    static void client_callback(ASCLIENTPVT,asClientStatus);
 	ASCLIENTPVT asc;
 	gateAsEntry* entry;
 	void* user_arg;
 	void (*user_func)(void*);
+
+public:
+	static void clientCallback(ASCLIENTPVT p, asClientStatus s);
 };
 
 class gateAsLine : public tsSLNode<gateAsLine>
@@ -287,30 +286,31 @@ private:
 	static aitBool use_default_rules;
 	static FILE* rules_fd;
 	static long initialize(const char* as_file_name);
-	static int readFunc(char* buf, int max_size);
 
 	void deleteAsList(gateAsList& list)
 	{
-		tsSLIterRm<gateAsEntry>* pi = new tsSLIterRm<gateAsEntry>(list);
-		while(pi->next()) pi->remove();
-		delete pi;
+		while(list.first()) list.get();
 	}
+
 	void deleteAsList(tsSLList<gateAsLine>& list)
-	{
-		tsSLIterRm<gateAsLine>* pi = new tsSLIterRm<gateAsLine>(list);
-		while(pi->next()) pi->remove();
-		delete pi;
+    {
+		while(list.first()) list.get();
 	}
+
 	gateAsEntry* findEntryInList(const char* pv, gateAsList& list) const
 	{
-		tsSLIter<gateAsEntry>* pi = new tsSLIter<gateAsEntry>(list);
-		gateAsEntry* pe;
+		tsSLIter<gateAsEntry> pi = list.firstIter();
 
-		while((pe=pi->next()) &&
-			  (re_match(&pe->pat_buff,pv,strlen(pv),0,&pe->regs) != (int)strlen(pv)));
-		delete pi;
-		return pe;
+		while(pi.pointer()) {
+			if(re_match(&pi->pat_buff,pv,strlen(pv),0,&pi->regs) ==
+			  (int)strlen(pv)) break;
+			pi++;
+		}
+		return pi.pointer();
 	}
+
+public:
+	static int readFunc(char* buf, int max_size);
 };
 
 inline gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
@@ -325,7 +325,6 @@ inline gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
 
 	return findEntryInList(pv, allow_list);
 }
-
 
 #endif /* _GATEAS_H_ */
 

@@ -19,6 +19,7 @@
 // post_data  is a flag that switches posting updates on/off
 
 #define DEBUG_UMR 0
+#define DEBUG_POST_DATA 0
 
 #define USE_OSI_TIME 1
 
@@ -56,10 +57,9 @@ static struct timespec *timeSpec(void)
 {
 #if USE_OSI_TIME
 	static struct timespec ts;
-        osiTime osit(osiTime::getCurrent());
+        epicsTime osit(epicsTime::getCurrent());
 	// EPICS is 20 years ahead of its time
-	ts.tv_sec=(time_t)osit.getSecTruncToLong()-631152000ul;
-	ts.tv_nsec=osit.getNSecTruncToLong();
+	ts=osit;
 #else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
@@ -145,20 +145,35 @@ aitEnum gateStat::bestExternalType(void) const
 #endif
 }
 
-caStatus gateStat::write(const casCtx & /*ctx*/, gdd & /*dd*/)
+caStatus gateStat::write(const casCtx & /*ctx*/, const gdd &dd)
 {
-#if 0
-	// KE: Why success?  It isn't supported
-	return S_casApp_success;
-#else
-	return S_casApp_noSupport;
+    gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+	caStatus retVal=S_casApp_noSupport;
+    
+    if(value) {
+		table.smartCopy(value,&dd);
+		double val;
+		value->getConvert(val);
+		serv->setStat(type,val);
+		retVal=serv->processStat(type,val);
+    } else {
+		retVal=S_casApp_noMemory;
+    }
+#if DEBUG_UMR
+    fflush(stderr);
+    print("gateStat::write: name=%s\n",name);
+    fflush(stdout);
+    dd.dump();
+    fflush(stderr);
 #endif
+    return retVal;
 }
 
 caStatus gateStat::read(const casCtx & /*ctx*/, gdd &dd)
 {
 	static const aitString str = "Gateway Statistics PV";
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
+	caStatus retVal=S_casApp_noSupport;
 
 	// Branch on application type
 	unsigned at=dd.applicationType();
@@ -171,17 +186,18 @@ caStatus gateStat::read(const casCtx & /*ctx*/, gdd &dd)
 		  timeStamp(),
 		  at,name?name:"Unknown Stat PV");
 		fflush(stderr);
-		return S_casApp_noSupport;
+		retVal=S_casApp_noSupport;
 		break;
-	case gddAppType_className:
+	case gddAppType_class:
 		dd.put(str);
-		return S_casApp_success;
+		retVal=S_casApp_success;
 		break;
 	default:
 		// Copy the current state
 		if(attr) table.smartCopy(&dd,attr);
 		if(value) table.smartCopy(&dd,value);
-		return S_casApp_success;
+		retVal=S_casApp_success;
+		break;
 	}
 #if DEBUG_UMR
 	fflush(stderr);
@@ -190,6 +206,7 @@ caStatus gateStat::read(const casCtx & /*ctx*/, gdd &dd)
 	dd.dump();
 	fflush(stderr);
 #endif
+	return retVal;
 }
 
 void gateStat::postData(long val)
@@ -203,7 +220,7 @@ void gateStat::postData(long val)
 	if(post_data) postEvent(serv->select_mask,*value);
 #if DEBUG_UMR
 	fflush(stderr);
-	printf("gateStat::postData(long): name=%s\n",name);
+	printf("gateStat::postData(l): name=%s\n",name);
 	fflush(stdout);
 	value->dump();
 	fflush(stderr);
@@ -214,6 +231,12 @@ void gateStat::postData(long val)
 
 void gateStat::postData(unsigned long val)
 {
+#if DEBUG_POST_DATA
+	fflush(stdout);
+	printf("gateStat::postData(ul): name=%s val=%ld\n",
+	  name,val);
+	fflush(stdout);
+#endif
 #ifdef STAT_DOUBLE
 	value->put((aitFloat64)val);
 #else
@@ -221,9 +244,9 @@ void gateStat::postData(unsigned long val)
 #endif
 	value->setTimeStamp(timeSpec());
 	if(post_data) postEvent(serv->select_mask,*value);
-#if DEBUG_UMR
+#if DEBUG_UMR || DEBUG_POST_DATA
 	fflush(stderr);
-	printf("gateStat::postData(unsigned long): name=%s\n",name);
+	printf("gateStat::postData(ul): name=%s\n",name);
 	fflush(stdout);
 	value->dump();
 	fflush(stderr);
@@ -241,7 +264,7 @@ void gateStat::postData(double val)
 	if(post_data) postEvent(serv->select_mask,*value);
 #if DEBUG_UMR
 	fflush(stderr);
-	printf("gateStat::postData(double): name=%s\n",name);
+	printf("gateStat::postData(dbl): name=%s\n",name);
 	fflush(stdout);
 	value->dump();
 	fflush(stderr);

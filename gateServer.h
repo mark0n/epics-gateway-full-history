@@ -30,6 +30,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.28  2002/07/29 16:06:03  jba
+ * Added license information.
+ *
  * Revision 1.27  2002/07/24 15:17:21  evans
  * Added CPUFract stat PV.  Added GATEWAY_UPDATE_LEVEL to gateVersion.h.
  * Printed BASE_VERSION_STRING to header of gateway.log.
@@ -40,8 +43,13 @@
  *********************************************************************-*/
 
 #include <sys/types.h>
-#include <sys/time.h>
-#include <sys/utsname.h>
+
+#ifdef WIN32
+#else
+# include <unistd.h>
+# include <sys/time.h>
+# include <sys/utsname.h>
+#endif
 
 #include "casdef.h"
 #include "tsHash.h"
@@ -56,7 +64,7 @@ class gateAs;
 class gateStat;
 class gdd;
 
-typedef struct exception_handler_args       EXCEPT_ARGS;
+typedef struct exception_handler_args EXCEPT_ARGS;
 
 // ---------------------- list nodes ------------------------
 
@@ -103,12 +111,13 @@ private:
 
 // server stats definitions
 #ifdef STAT_PVS
-#define statActive     0
-#define statAlive      1
-#define statVcTotal    2
-#define statFd         3
-#define statPvTotal    4
-#define NEXT_STAT_PV   5
+#define statVcTotal    0
+#define statPvTotal    1
+#define statAlive      2
+#define statActive     3
+#define statInactive   4
+#define statDead       5
+#define NEXT_STAT_PV   6
 #else		     
 #define NEXT_STAT_PV   0
 #endif
@@ -127,41 +136,57 @@ private:
 #ifdef CAS_DIAGNOSTICS
 #define statServerEventRate        NEXT_RATE_STAT
 #define statServerEventRequestRate NEXT_RATE_STAT+1
-#define NEXT_CAS_STAT              NEXT_RATE_STAT+2
+#define NEXT_CONTROL_PV            NEXT_RATE_STAT+2
 #else
-#define NEXT_CAS_STAT              NEXT_RATE_STAT
+#define NEXT_CONTROL_PV            NEXT_RATE_STAT
+#endif
+
+#ifdef CONTROL_PVS
+#define statCommandFlag            NEXT_CONTROL_PV
+#define statReport1Flag            NEXT_CONTROL_PV+1
+#define statReport2Flag            NEXT_CONTROL_PV+2
+#define statReport3Flag            NEXT_CONTROL_PV+3
+#define statNewAsFlag              NEXT_CONTROL_PV+4
+#define statQuitFlag               NEXT_CONTROL_PV+5
+#define NEXT_CAS_STAT              NEXT_CONTROL_PV+6
+#else
+#define NEXT_CAS_STAT              NEXT_CONTROL_PV
 #endif
 
 // Number of server stats definitions
 #define statCount NEXT_CAS_STAT
 
-struct gateServerStats
+typedef struct gateServerStats
 {
 	const char* name;
 	char* pvname;
 	gateStat* pv;
-	unsigned long* init_value;
+	// Volatile so it can be used with flags, which are volatile
+	// Pointer so it will use the current value at initialization
+	volatile unsigned long* init_value;
 	const char *units;
 	short precision;
-};
-typedef struct gateServerStats;
+} gateServerStats;
 
 #if defined(RATE_STATS) || defined(CAS_DIAGNOSTICS)
-#include "osiTimer.h"
-class gateRateStatsTimer : public osiTimer
+#include "epicsTimer.h"
+class gateRateStatsTimer : public epicsTimerNotify
 {
-public:
-	gateRateStatsTimer(const osiTime &delay, gateServer *m) : 
-	  osiTimer(delay), startTime(osiTime::getCurrent()), interval(delay), 
-	  mrg(m) {}
-	virtual void expire();
-	virtual const osiTime delay() const { return interval; }
-	virtual osiBool again() const { return osiTrue; }
-	virtual const char *name() const { return "gateRateStatsTimer"; }
-private:
-	osiTime startTime;
-	osiTime interval;
-	gateServer* mrg;
+  public:
+    gateRateStatsTimer(epicsTimerQueue &queue,
+      double intervalIn, gateServer *m) : 
+      interval(intervalIn), startTime(epicsTime::getCurrent()),
+      mrg(m), timer(queue.createTimer()) {}
+    virtual expireStatus expire(const epicsTime &curTime);
+    void start() { timer.start(*this,interval); }
+    void stop() { timer.cancel(); }
+  protected:
+    virtual ~gateRateStatsTimer() { timer.destroy(); }
+  private:
+    double interval;
+    epicsTime startTime;
+    gateServer *mrg;
+    epicsTimer &timer;
 };
 #endif
 
@@ -170,7 +195,7 @@ private:
 class gateServer : public caServer
 {
 public:
-	gateServer(unsigned pv_count_est, char *prefix=NULL);
+	gateServer(char *prefix=NULL);
 	virtual ~gateServer(void);
 
 	// CAS virtual overloads
@@ -180,7 +205,7 @@ public:
 	void mainLoop(void);
 	void gateCommands(const char* cfile);
 	void newAs(void);
-	void report(void);
+	void report1(void);
 	void report2(void);
 	void refreshBeacon(void) const;
 	gateAs* getAs(void) { return as_rules; }
@@ -191,8 +216,9 @@ public:
 	unsigned long exist_count;
 #if statCount
 	gateServerStats *getStatTable(int type) { return &stat_table[type]; }
-	void setStat(int type,double val);
-	void setStat(int type,unsigned long val);
+	void setStat(int type, double val);
+	void setStat(int type, unsigned long val);
+	caStatus processStat(int type, double val);
 	void clearStat(int type);
 	void initStats(char *prefix);
 	char* stat_prefix;
@@ -200,11 +226,12 @@ public:
 	gateServerStats stat_table[statCount];
 #endif	
 #ifdef STAT_PVS
+	unsigned long total_vc;
+	unsigned long total_pv;
 	unsigned long total_alive;
 	unsigned long total_active;
-	unsigned long total_pv;
-	unsigned long total_vc;
-	unsigned long total_fd;
+	unsigned long total_inactive;
+	unsigned long total_dead;
 #endif
 #ifdef RATE_STATS
 	unsigned long client_event_count;
@@ -217,7 +244,7 @@ public:
 
 	static void quickDelay(void);
 	static void normalDelay(void);
-	static osiTime& currentDelay(void);
+	static double currentDelay(void);
 
 	int pvAdd(const char* name, gatePvData& pv);
 	int pvDelete(const char* name, gatePvData*& pv);
@@ -269,17 +296,22 @@ private:
 
 	gateAs* as_rules;
 
-	static void exCB(EXCEPT_ARGS args);
-	static void fdCB(void* ua, int fd, int opened);
+	static double delay_quick;
+	static double delay_normal;
+	static double delay_current;
 
-	static osiTime delay_quick;
-	static osiTime delay_normal;
-	static osiTime* delay_current;
-
-	static volatile int command_flag;
-	static volatile int report_flag2;
+	static volatile unsigned long command_flag;
+	static volatile unsigned long report1_flag;
+	static volatile unsigned long report2_flag;
+	static volatile unsigned long report3_flag;
+	static volatile unsigned long newAs_flag;
+	static volatile unsigned long quit_flag;
 	static void sig_usr1(int);
 	static void sig_usr2(int);
+
+public:
+	static void exCB(EXCEPT_ARGS args);
+	static void errlogCB(void *userData, const char *message);
 };
 
 // --------- time functions

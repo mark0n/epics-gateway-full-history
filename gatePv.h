@@ -31,6 +31,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.14  2002/07/29 16:06:02  jba
+ * Added license information.
+ *
  * Revision 1.13  2000/10/18 16:06:28  lange
  * Bugfix in beacon relay mechanism
  *
@@ -48,7 +51,11 @@
 #define GATE_DOCALLBACK 1
 
 #include <sys/types.h>
-#include <sys/time.h>
+
+#ifdef WIN32
+#else
+# include <sys/time.h>
+#endif
 
 #include "aitTypes.h"
 #include "gddAppTable.h"
@@ -151,7 +158,7 @@ public:
 	int alhMonitor(void);           // add alh info monitor
 	int alhUnmonitor(void);         // delete alh info monitor
 	int get(void);                  // get callback
-	int put(gdd*, int docallback);  // put with or without callback
+	int put(const gdd*, int docallback);  // put with or without callback
 	
 	time_t timeInactive(void) const;
 	time_t timeActive(void) const;
@@ -227,13 +234,6 @@ private:
 	time_t dead_alive_time; // when PV went dead / came alive
 	time_t last_trans_time; // last transaction occurred at this time
 
-	static void connectCB(CONNECT_ARGS args);	// connection callback
-	static void accessCB(ACCESS_ARGS args);		// access security callback
-	static void eventCB(EVENT_ARGS args);       // value-changed callback
-    static void alhCB(EVENT_ARGS args);         // alh info value-changed callback
-	static void putCB(EVENT_ARGS args);         // put callback
-	static void getCB(EVENT_ARGS args);         // get callback
-
 	// Callback functions used in eventCB
 	gdd* eventStringCB(void*);
 	gdd* eventEnumCB(void*);
@@ -252,6 +252,14 @@ private:
 	gdd* dataDoubleCB(void*);
 	gdd* dataCharCB(void*);
 	gdd* dataLongCB(void*);
+
+public:
+	static void connectCB(CONNECT_ARGS args);	// connection callback
+	static void accessCB(ACCESS_ARGS args);		// access security callback
+	static void eventCB(EVENT_ARGS args);       // value-changed callback
+    static void alhCB(EVENT_ARGS args);         // alh info value-changed callback
+	static void putCB(EVENT_ARGS args);         // put callback
+	static void getCB(EVENT_ARGS args);         // get callback
 };
 
 inline void gatePvData::addET(const casCtx& c)

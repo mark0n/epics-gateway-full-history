@@ -35,7 +35,7 @@ public:
 	virtual void interestDelete(void);
 	virtual aitEnum bestExternalType(void) const;
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
-	virtual caStatus write(const casCtx &ctx, gdd &value);
+	virtual caStatus write(const casCtx &ctx, const gdd &value);
 	virtual unsigned maxSimultAsyncOps(void) const;
 	virtual const char *getName() const;
 

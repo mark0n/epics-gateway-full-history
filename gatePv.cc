@@ -30,6 +30,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.33  2002/07/29 16:06:02  jba
+ * Added license information.
+ *
  * Revision 1.32  2001/12/20 12:42:46  lange
  * fix for memory leak in flushAsyncETQueue() by Joan Sage
  *
@@ -48,6 +51,7 @@ static char RcsId[] = "@(#)$Id$";
  *
  *********************************************************************-*/
 
+#define DEBUG_TOTAL_PV 0
 #define DEBUG_PV_CON_LIST 0
 #define DEBUG_PV_LIST 0
 #define DEBUG_VC_DELETE 0
@@ -59,11 +63,15 @@ static char RcsId[] = "@(#)$Id$";
 
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
 #include <fcntl.h>
 #include <time.h>
 #include <sys/types.h>
-#include <sys/time.h>
+
+#ifdef WIN32
+#else
+# include <unistd.h>
+# include <sys/time.h>
+#endif
 
 #include "tsDLList.h"
 
@@ -77,6 +85,28 @@ static char RcsId[] = "@(#)$Id$";
 #include "gatePv.h"
 #include "gateVc.h"
 #include "gateAs.h"
+
+// extern "C" wrappers needed by CA routines for callbacks
+extern "C" {
+	extern void connectCB(CONNECT_ARGS args) {	// connection callback
+		gatePvData::connectCB(args);
+	}
+	extern void accessCB(ACCESS_ARGS args) {	// access security callback
+		gatePvData::accessCB(args);
+	}
+	extern void eventCB(EVENT_ARGS args) {      // value-changed callback
+		gatePvData::eventCB(args);
+	}
+    extern void alhCB(EVENT_ARGS args) {        // alh info value-changed callback
+		gatePvData::alhCB(args);
+	}
+	extern void putCB(EVENT_ARGS args) {        // put callback
+		gatePvData::putCB(args);
+	}
+	extern void getCB(EVENT_ARGS args) {        // get callback
+		gatePvData::getCB(args);
+	}
+}
 
 // quick access to global_resources
 #define GR global_resources
@@ -149,8 +179,14 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
 	initClear();
 #ifdef STAT_PVS
 	m->setStat(statPvTotal,++m->total_pv);
+	m->total_dead=m->total_pv-m->total_alive;
+	m->setStat(statDead,m->total_dead);
 #endif
 	init(m,e,name);
+#if DEBUG_TOTAL_PV
+	printf("gatePvdata: name=%s total_pv=%ld total_alive=%ld\n",
+	  name,mrg->total_pv,mrg->total_alive);
+#endif
 }
 
 gatePvData::~gatePvData(void)
@@ -161,7 +197,15 @@ gatePvData::~gatePvData(void)
 	if(getState() == gatePvInactive || getState() == gatePvActive)
 	{
 		mrg->setStat(statAlive,--mrg->total_alive);
+		mrg->total_inactive=mrg->total_alive-mrg->total_active;
+		mrg->setStat(statInactive,mrg->total_inactive);
 	}
+	mrg->total_dead=mrg->total_pv-mrg->total_alive;
+	mrg->setStat(statDead,mrg->total_dead);
+#endif
+#if DEBUG_TOTAL_PV
+	printf("~gatePvdata: name=%s total_pv=%ld total_alive=%ld\n",
+	  name(),mrg->total_pv),mrg->total_alive;
 #endif
 	unmonitor();
 	alhUnmonitor();
@@ -206,13 +250,13 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		status=-1;
 	else
 	{
-		status=ca_search_and_connect(pv_name,&chID,connectCB,this);
+		status=ca_search_and_connect(pv_name,&chID,::connectCB,this);
 		SEVCHK(status,"gatePvData::init() - search and connect");
 	}
 
 	if(status==ECA_NORMAL)
 	{
-		status=ca_replace_access_rights_event(chID,accessCB);
+		status=ca_replace_access_rights_event(chID,::accessCB);
 		if(status==ECA_NORMAL)
 			status=0;
 		else
@@ -242,8 +286,8 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		char timeStampStr[20];  // 16 should be enough
 		strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		
-		printf("%s gatePvData::init: [%d,%d,%d]: name=%s\n",
-		  timeStampStr,
+		printf("%s gatePvData::init: [%d,%d,%d,%d]: name=%s\n",
+		  timeStampStr,mrg->total_pv,
 		  mrg->pvConList()->count(),mrg->pvList()->count(),
 		  mrg->vcList()->count(),pv_name);
 #endif
@@ -267,6 +311,8 @@ int gatePvData::activate(gateVcData* vcd)
 	  vcd,name());
 #ifdef STAT_PVS
 	mrg->setStat(statActive,++mrg->total_active);
+	mrg->total_inactive=mrg->total_alive-mrg->total_active;
+	mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 	
 	int rc=-1;
@@ -306,6 +352,8 @@ int gatePvData::deactivate(void)
 	gateDebug1(5,"gatePvData::deactivate() name=%s\n",name());
 #ifdef STAT_PVS
 	mrg->setStat(statActive,--mrg->total_active);
+	mrg->total_inactive=mrg->total_alive-mrg->total_active;
+	mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 #if DEBUG_VC_DELETE
 	printf("gatePvData::deactivate: %s\n",name());
@@ -371,6 +419,10 @@ int gatePvData::life(void)
 
 #ifdef STAT_PVS
 		mrg->setStat(statAlive,++mrg->total_alive);
+		mrg->total_dead=mrg->total_pv-mrg->total_alive;
+		mrg->setStat(statDead,mrg->total_dead);
+		mrg->total_inactive=mrg->total_alive-mrg->total_active;
+		mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 
 #if DEBUG_PV_LIST
@@ -381,9 +433,9 @@ int gatePvData::life(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::life: [%d,%d,%d]: name=%s "
+		    printf("%s gatePvData::life: [%d,%d,%d,%d]: name=%s "
 				   "state=gatePvConnect->%s\n",
-		      timeStampStr,
+		      timeStampStr,mrg->total_pv,
 		      mrg->pvConList()->count(),mrg->pvList()->count(),
 		      mrg->vcList()->count(),pv_name,getStateName());
 		}
@@ -398,6 +450,10 @@ int gatePvData::life(void)
 		setState(gatePvInactive);
 #ifdef STAT_PVS
 		mrg->setStat(statAlive,++mrg->total_alive);
+		mrg->total_dead=mrg->total_pv-mrg->total_alive;
+		mrg->setStat(statDead,mrg->total_dead);
+		mrg->total_inactive=mrg->total_alive-mrg->total_active;
+		mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 		break;
 
@@ -430,11 +486,17 @@ int gatePvData::death(void)
 		if(vc) delete vc; // get rid of VC
 #ifdef STAT_PVS
 		mrg->setStat(statActive,--mrg->total_active);
+		mrg->total_inactive=mrg->total_alive-mrg->total_active;
+		mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 	case gatePvInactive:
 		setState(gatePvDisconnect);
 #ifdef STAT_PVS
 		mrg->setStat(statAlive,--mrg->total_alive);
+		mrg->total_dead=mrg->total_pv-mrg->total_alive;
+		mrg->setStat(statDead,mrg->total_dead);
+		mrg->total_inactive=mrg->total_alive-mrg->total_active;
+		mrg->setStat(statInactive,mrg->total_inactive);
 #endif
 		break;
 	case gatePvConnect:
@@ -457,9 +519,8 @@ int gatePvData::death(void)
 		    char timeStampStr[20];  // 16 should be enough
 		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
 		    
-		    printf("%s gatePvData::death: [%d,%d,%d]: name=%s "
-				   "state=%s->gatePvDead\n",
-		      timeStampStr,
+		    printf("%s gatePvData::death: [%d,%d,%d,%d]: name=%s state=%s\n",
+		      timeStampStr,mrg->total_pv,
 		      mrg->pvConList()->count(),mrg->pvList()->count(),
 		      mrg->vcList()->count(),pv_name,getStateName());
 		}
@@ -525,7 +586,7 @@ int gatePvData::monitor(void)
 		if(ca_read_access(chID))
 		{
 			gateDebug1(5,"gatePvData::monitor() type=%ld\n",eventType());
-			rc=ca_add_masked_array_event(eventType(),0,chID,eventCB,this,
+			rc=ca_add_masked_array_event(eventType(),0,chID,::eventCB,this,
 				0.0,0.0,0.0,&evID,GR->eventMask());
 			SEVCHK(rc,"gatePvData::Monitor() add event");
 
@@ -557,7 +618,7 @@ int gatePvData::alhMonitor(void)
 		if(ca_read_access(chID))
 		{
 			gateDebug1(5,"gatePvData::alhMonitor() type=%d\n",DBR_STSACK_STRING);
-			rc=ca_add_masked_array_event(DBR_STSACK_STRING,0,chID,alhCB,this,
+			rc=ca_add_masked_array_event(DBR_STSACK_STRING,0,chID,::alhCB,this,
 				0.0,0.0,0.0,&alhID,DBE_ALARM);
 			SEVCHK(rc,"gatePvData::alhMonitor() add event");
 
@@ -597,7 +658,7 @@ int gatePvData::get(void)
 			// always get only one element, the monitor will get
 			// all the rest of the elements
 			rc=ca_array_get_callback(dataType(),1 /*totalElements()*/,
-				chID,getCB,this);
+				chID,::getCB,this);
 			SEVCHK(rc,"get with callback bad");
 #if OMIT_CHECK_EVENT
 #else
@@ -622,14 +683,14 @@ int gatePvData::get(void)
 // for a successful put and as good an error code as we can generate
 // otherwise.  There is unfortunately no S_casApp return code defined
 // for failure.
-int gatePvData::put(gdd* dd, int docallback)
+int gatePvData::put(const gdd* dd, int docallback)
 {
 	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",dd,name());
 	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	chtype cht;
 	gatePvCallbackId *cbid;
 	aitString* str;
-	void *pValue;
+	const void *pValue;
 	unsigned long count;
 	static int full=0;
 
@@ -715,7 +776,7 @@ int gatePvData::put(gdd* dd, int docallback)
 #endif		
 			if(!cbid) return S_casApp_noMemory;
 			callback_list.add(*cbid);
-			stat=ca_array_put_callback(cht,count,chID,pValue,putCB,(void *)cbid);
+			stat=ca_array_put_callback(cht,count,chID,pValue,::putCB,(void *)cbid);
 			SEVCHK(stat,"put callback bad");
 		} else {
 			stat=ca_array_put(cht,count,chID,pValue);

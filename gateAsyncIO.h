@@ -27,6 +27,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.2  2002/07/29 16:06:02  jba
+ * Added license information.
+ *
  * Revision 1.1  2000/04/05 15:59:32  lange
  * += ALH awareness; += DENY from <host>; async pvExistTest; some code cleaning
  *
@@ -87,13 +90,13 @@ private:
 class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
 {
 public:
-	gateAsyncW(const casCtx &ctx, gdd& ddIn, tsDLList<gateAsyncW> *wioIn) :
+	gateAsyncW(const casCtx &ctx, const gdd& ddIn, tsDLList<gateAsyncW> *wioIn) :
 	  casAsyncWriteIO(ctx),dd(ddIn),wio(wioIn)
 	  { dd.reference(); }
 
 	virtual ~gateAsyncW(void);
 
-	gdd& DD(void) const { return dd; }
+	const gdd& DD(void) const { return dd; }
 	void removeFromQueue(void) {
 		if(wio) {
 			// We trust the server library to remove the asyncIO
@@ -103,21 +106,21 @@ public:
 		}
 	}
 private:
-	gdd& dd;
+	const gdd& dd;
 	tsDLList<gateAsyncW> *wio;
 };
 
 class gatePendingWrite : public casAsyncWriteIO
 {
 public:
-	gatePendingWrite(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
+	gatePendingWrite(const casCtx &ctx, const gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
 		{ dd.reference(); }
 
 	virtual ~gatePendingWrite(void);
 
-	gdd& DD(void) const { return dd; }
+	const gdd &DD(void) const { return dd; }
 private:
-	gdd& dd;
+	const gdd &dd;
 };
 
 #endif
