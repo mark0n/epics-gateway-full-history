@@ -516,10 +516,18 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 	// this is the exception callback
 	// problem - log a message about the PV
 #if HANDLE_EXCEPTIONS
-#define MAX_EXCEPTIONS 25    
+#define MAX_EXCEPTIONS 100
 	static int nexceptions=0;
 	static int ended=0;
 	
+	if (args.stat == ECA_DISCONN) {
+		fprintf (stderr, "%s Warning: %s %s \n",
+				 timeStamp(),
+				 ca_message(args.stat)?ca_message(args.stat):"<no message>",
+				 args.ctx?args.ctx:"<no context>");
+		return;
+	}
+
 	if(ended) return;
 	if(nexceptions++ > MAX_EXCEPTIONS) {
 	    ended=1;
@@ -530,7 +538,7 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 	    ca_add_exception_event(NULL, NULL);
 	    return;
 	}
-	
+
 	fprintf(stderr,"%s gateServer::exCB: Channel Access Exception:\n"
 	  "  Channel Name: %s\n"
 	  "  Native Type: %s\n"

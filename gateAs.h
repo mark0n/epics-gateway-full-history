@@ -19,6 +19,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.14  2001/03/15 19:11:13  lange
+ * Fixed a few minor Solaris warnings
+ *
  * Revision 1.13  2000/06/15 12:51:04  lange
  * Patch for using regex.h with the HP aCC Compiler.
  *
@@ -41,7 +44,7 @@ extern "C" {
 #include "gpHash.h"
                     // Patch for regex.h not testing __cplusplus, only __STDC__
 #ifndef __STDC__
-#    define __STDC__
+#    define __STDC__ 1
 #    include "regex.h"
 #    undef __STDC__
 #else
