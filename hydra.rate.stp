@@ -20,16 +20,16 @@ Strip.Option.GridXon          1
 Strip.Option.GridYon          1
 Strip.Option.AxisYcolorStat   1
 Strip.Option.GraphLineWidth   2
-Strip.Curve.0.Name            hydra.clientEventRate
-Strip.Curve.1.Name            hydra.postEventRate
-Strip.Curve.2.Name            hydra.serverEventRate
-Strip.Curve.3.Name            hydra.serverPostRate
-Strip.Curve.4.Name            hydra.loopRate
-Strip.Curve.5.Name            hydra.existTestRate
-Strip.Curve.6.Name            hydra.pvtotal
-Strip.Curve.7.Name            hydra.alive
-Strip.Curve.8.Name            hydra.active
-Strip.Curve.9.Name            hydra.cpuFract
+Strip.Curve.0.Name            hydra:clientEventRate
+Strip.Curve.1.Name            hydra:clientPostRate
+Strip.Curve.2.Name            hydra:serverEventRate
+Strip.Curve.3.Name            hydra:serverPostRate
+Strip.Curve.4.Name            hydra:loopRate
+Strip.Curve.5.Name            hydra:existTestRate
+Strip.Curve.6.Name            hydra:pvtotal
+Strip.Curve.7.Name            hydra:connected
+Strip.Curve.8.Name            hydra:active
+Strip.Curve.9.Name            hydra:cpuFract
 Strip.Curve.0.Units           
 Strip.Curve.1.Units           
 Strip.Curve.2.Units           
