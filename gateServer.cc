@@ -107,7 +107,7 @@ void gateServer::mainLoop(void)
 	osiTime delay(0u,10000000u);     // (sec, nsec) (10 ms)
 	//	osiTime delay(0u,0u);    // (sec, nsec) (0 ms, select will not block)
 	SigFunc old;
-	unsigned char cnt=0;
+//	unsigned char cnt=0;    RL: unused
 
 	printf("Statistics PV prefix is %s\n",stat_prefix);
 
@@ -285,7 +285,7 @@ void gateServer::report2(void)
 	rate=diff?(double)exist_count/(double)diff:0;
 
 	printf("\n");
-	printf("Exist test rate = %lf\n",rate);
+	printf("Exist test rate = %f\n",rate);
 	printf("Total real PV count = %d\n",(int)pv_list.count());
 	printf("Total connecting PV count = %d\n",(int)pv_con_list.count());
 	printf("Total virtual PV count = %d\n",(int)vc_list.count());
@@ -344,12 +344,12 @@ void gateFd::callBack(void)
 // ----------------------- server methods --------------------
 
 gateServer::gateServer(unsigned pvcount, char *prefix ) :
+	caServer(pvcount),
 	total_alive(0u),
 	total_active(0u),
 	total_pv(0u),
 	total_vc(0u),
-	total_fd(0u),
-	caServer(pvcount)
+	total_fd(0u)
 {
 	gateDebug0(5,"gateServer()\n");
 
@@ -465,14 +465,14 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 	if((opened))
 	{
 #ifdef STAT_PVS
-		s->setStat(statFd,++s->total_fd);
+		s->setStat(statFd,++(s->total_fd));
 #endif
 		reg=new gateFd(fd,fdrRead,*s);
 	}
 	else
 	{
 #ifdef STAT_PVS
-		s->setStat(statFd,--s->total_fd);
+		s->setStat(statFd,--(s->total_fd));
 #endif
 		gateDebug0(5,"gateServer::fdCB() need to delete gateFd\n");
 		reg=fileDescriptorManager.lookUpFD(fd,fdrRead);
@@ -659,6 +659,10 @@ void gateServer::inactiveDeadCleanup(void)
 			gateDebug1(3,"gateServer::inactiveDeadCleanup() dead PV %s\n",
 				pv->name());
 			int status=pv_list.remove(pv->name(),cnode);
+#ifdef STAT_PVS
+			if(pv->getState()==gatePvActive)
+				setStat(statActive,--total_active);
+#endif
 #if DEBUG_PV_LIST
 			if(ifirst) {
 			    strcpy(timeStampStr,timeStamp());
@@ -741,7 +745,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	pvExistReturn rc;
 	const char* real_name;
 	gateAsEntry* node;
-	char* stat_name=NULL;
+//	char* stat_name=NULL;          RL: unused
 
 	++exist_count;
 
