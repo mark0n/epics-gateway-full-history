@@ -76,12 +76,8 @@ gateResources::gateResources(void)
       command_file=strDup(GATE_COMMAND_FILE);
     else
       command_file=NULL;
-    
-    if(access(GATE_PUTLOG_FILE,F_OK)==0)
-      putlog_file=strDup(GATE_PUTLOG_FILE);
-    else
-      putlog_file=NULL;
-    putlogFp=NULL;
+
+	putlog_file=NULL;
     
     debug_level=0;
     ro=0;

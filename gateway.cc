@@ -102,7 +102,7 @@ void operator delete(void* x)
 //	-ro = read only server, no puts allowed
 //	-? = display usage
 //
-//	GATEWAY_HOME = environement variable pointing to the home of the gateway
+//	GATEWAY_HOME = environment variable pointing to the home of the gateway
 //
 // Defaults:
 //	Home directory = .
@@ -903,26 +903,7 @@ int main(int argc, char** argv)
 		}
 	}
 
-	global_resources = new gateResources;
-	gateResources* gr = global_resources;
-
-	// Set defaults, order is somewhat important
-	if(level)				gr->setDebugLevel(level);
-	if(read_only)			gr->setReadOnly();
-	if(mask)				gr->setEventMask(mask);
-	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
-	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
-	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
-	if(disconnect_tout>=0)	gr->setDisconnectTimeout(disconnect_tout);
-	if(reconnect_tinhib>=0)	gr->setReconnectInhibit(reconnect_tinhib);
-	if(access_file)			gr->setAccessFile(access_file);
-	if(pvlist_file)			gr->setListFile(pvlist_file);
-	if(command_file)		gr->setCommandFile(command_file);
-	if(putlog_file)	    	gr->setPutlogFile(putlog_file);
-#ifndef WIN32
-	gr->setServerMode(make_server);
-#endif
-
+	// Check if command line was valid
 	if(no_error==0)	{
 		int ii;
 
@@ -945,6 +926,12 @@ int main(int argc, char** argv)
 
 		getcwd(home_directory,HOME_DIR_SIZE);
 
+		// Get the default resources. The values of access_file,
+		// pvlist_file, command_file, and putlog_file depend on
+		// whether the default filenames exist in the cwd.
+		global_resources = new gateResources;
+		gateResources* gr = global_resources;
+
 		// Print defaults
 		fprintf(stderr,"\nDefaults are:\n");
 		fprintf(stderr,"\tdebug=%d\n",gr->debugLevel());
@@ -966,12 +953,13 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tgroup id=%ld\n",(long)getgid());
 #endif
 		if(gr->isReadOnly())
-			fprintf(stderr," read only mode\n");
+			fprintf(stderr,"\tread only mode\n");
+		fprintf(stderr,"  (The default filenames depend on which "
+		  "files exist in home)\n");
 		return -1;
 	}
-
-	// ----------------------------------
-	// Go to gateway's home directory now
+	
+	// Change to the specified home directory
 	if(home_dir)
 	{
 		if(chdir(home_dir)<0)
@@ -982,6 +970,29 @@ int main(int argc, char** argv)
 		}
 	}
 	getcwd(home_directory,HOME_DIR_SIZE);
+
+	// Get the default resources. The values of access_file,
+	// pvlist_file, command_file, and putlog_file depend on
+	// whether the default filenames exist in the cwd.
+	global_resources = new gateResources;
+	gateResources* gr = global_resources;
+
+	// Set command-line values, order is somewhat important
+	if(level)				gr->setDebugLevel(level);
+	if(read_only)			gr->setReadOnly();
+	if(mask)				gr->setEventMask(mask);
+	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
+	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
+	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
+	if(disconnect_tout>=0)	gr->setDisconnectTimeout(disconnect_tout);
+	if(reconnect_tinhib>=0)	gr->setReconnectInhibit(reconnect_tinhib);
+	if(access_file)			gr->setAccessFile(access_file);
+	if(pvlist_file)			gr->setListFile(pvlist_file);
+	if(command_file)		gr->setCommandFile(command_file);
+	if(putlog_file)	    	gr->setPutlogFile(putlog_file);
+#ifndef WIN32
+	gr->setServerMode(make_server);
+#endif
 
 #ifndef WIN32
 	if(make_server)
@@ -995,13 +1006,11 @@ int main(int argc, char** argv)
 	}
 #endif
 
-	// ****************************************
-	// gets here if this is interactive gateway
-	// ****************************************
+	// *******************************************
+	// gets here if this is an interactive gateway
+	// *******************************************
 
-	// ----------------------------------------
-	// change stderr and stdout to the log file
-
+	// Change stderr and stdout to the log file
 	if(log_file || make_server)
 	{
 		if(log_file==NULL) log_file=GATE_LOG_FILE;

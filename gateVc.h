@@ -78,6 +78,7 @@ public:
 	casPV *getCasPv(void) const { return casPv; }
 
 	gateAsClient *getAsClient(void) const { return asclient; }
+	void deleteAsClient(void);
 	
 	void setCasPv(casPV *casPvIn) { casPv=casPvIn; }
 

@@ -102,7 +102,7 @@ void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 // derived-class constructor adds the derived gateChan to the
 // chan_list in the casPv.  casPv is set to NULL when the casPv
 // removes it from its chan_list in the casPv destructor.  This
-// prevents anyone, inclusing the server, from calling removeChan when
+// prevents anyone, including the server, from calling removeChan when
 // the casPv is gone.
 gateChan::gateChan(const casCtx &ctx, casPV *casPvIn, gateAsEntry *asentry,
   const char * const user, const char * const host) :
@@ -116,7 +116,7 @@ gateChan::gateChan(const casCtx &ctx, casPV *casPvIn, gateAsEntry *asentry,
 
 gateChan::~gateChan(void)
 {
-	delete asclient;
+	deleteAsClient();
 }
 
 #if 0
@@ -131,13 +131,29 @@ const char* gateChan::getHost(void) { return asclient->host(); }
 void gateChan::post_rights(void* v)
 {
 	gateChan *p = (gateChan *)v;
-	p->postAccessRightsEvent();
+	// Do not post the event if the casPv is NULL, which means the
+	// gateChan has been removed from the gateVcData::chan_list which
+	// means the gateChan is not relevant anymore, even though it may
+	// not yet have been destroyed.  Actually, post_rights should not
+	// be called if casPv is NULL since the asclient should also have
+	// been destroyed in that event, but it is a safety feature.
+	if(p && p->getCasPv()) {
+		p->postAccessRightsEvent();
+	}
 }
 
 void gateChan::report(void)
 {
 	printf("  %s@%s (%s access)\n",getUser(),getHost(),
 	  readAccess()?(writeAccess()?"read/write":"read only"):"no");
+}
+
+void gateChan::deleteAsClient(void)
+{
+	if(asclient) {
+		delete asclient;
+		asclient = NULL;
+	}
 }
 
 // ------------------------gateVcChan
@@ -291,8 +307,8 @@ gateVcData::~gateVcData(void)
 	// really necessary thing to do.
 	gateVcChan *pChan;
 	while((pChan=chan_list.first()))	{
-		
 		removeChan(pChan);
+		pChan->deleteAsClient();
 	}
 
 	// Clear the async io lists to insure the gateAsyncX's do not try
