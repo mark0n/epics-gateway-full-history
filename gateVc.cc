@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.18  1997/06/09 18:03:38  jba
+// Removed unused vars, changed delete to free for pv_name.
+//
 // Revision 1.17  1997/05/20 15:48:29  jbk
 // changes for the latest CAS library in EPICS 3.13.beta9
 //
@@ -174,8 +177,8 @@ gateVcData::~gateVcData(void)
 	if(in_list_flag) mrg->vcDelete(pv_name,x);
 	if(data) data->unreference();
 	if(event_data) event_data->unreference();
-	free(pv_name);
-	pv_name="Error";
+	delete [] pv_name;
+	pv_name=strDup("Error");
 	pv->setVC(NULL);
 	mrg->setStat(statVcTotal,--total_vc);
 }

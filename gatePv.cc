@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.15  1997/03/17 16:00:59  jbk
+// bug fixes and additions
+//
 // Revision 1.14  1997/02/21 17:31:15  jbk
 // many many bug fixes and improvements
 //
@@ -164,7 +167,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	setTimes();
 	setState(gatePvConnect);
 	status=0;
-	pv_name=strdup(name);
+	pv_name=strDup(name);
 
 	if(ae==NULL)
 		status=-1;
