@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.17  1997/05/20 15:48:29  jbk
+// changes for the latest CAS library in EPICS 3.13.beta9
+//
 // Revision 1.16  1997/03/17 16:01:05  jbk
 // bug fixes and additions
 //
@@ -171,7 +174,7 @@ gateVcData::~gateVcData(void)
 	if(in_list_flag) mrg->vcDelete(pv_name,x);
 	if(data) data->unreference();
 	if(event_data) event_data->unreference();
-	delete [] pv_name;
+	free(pv_name);
 	pv_name="Error";
 	pv->setVC(NULL);
 	mrg->setStat(statVcTotal,--total_vc);
@@ -223,7 +226,6 @@ void gateVcData::dumpAttributes(void)
 void gateVcData::remove(void)
 {
 	gateDebug1(1,"gateVcData::remove() name=%s\n",name());
-	gatePvData* dpv;
 
 	switch(getState())
 	{
@@ -401,8 +403,6 @@ void gateVcData::vcNew(void)
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
 	gateAsyncW* asyncw;
 	gateAsyncR* asyncr;
-	aitUint16 val;
-	aitFixedString* fs;
 
 	// what do I do here? should do async completion to createPV
 	// or should be async complete if there is a pending read
@@ -445,6 +445,9 @@ void gateVcData::vcNew(void)
 				{
 					if(value())
 					{
+						aitUint16 val;
+						aitFixedString* fs;
+
 						// hideous special case for reading enum as string
 						attributes()->getRef(fs);
 						value()->getConvert(val);
@@ -536,8 +539,6 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	gateDebug1(10,"gateVcData::read() name=%s\n",name());
 	caStatus rc=S_casApp_success;
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
-	aitFixedString* fs;
-	aitInt16 val;
 
 	// ---- handle async return if PV not ready
 	if(!ready())
@@ -550,6 +551,9 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	else
 	{
 #if 0
+		aitFixedString* fs;
+		aitInt16 val;
+
 		if(attributes() &&
 			attributes()->applicationType()==global_resources->appEnum &&
 			dd.applicationType()==global_resources->appValue)
