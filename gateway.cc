@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.15  1997/05/15 14:35:50  jba
+// Added gateway restart script report.
+//
 // Revision 1.14  1997/03/17 16:01:08  jbk
 // bug fixes and additions
 //
@@ -348,7 +351,11 @@ static int startEverything(void)
 		fprintf(stderr,"Cannot retrieve the process FD limits\n");
 	else
 	{
-		lim.rlim_cur=1000000;
+		long core_len=1000000;
+		char * core_size=getenv("GATEWAY_CORE_SIZE");
+		if (core_size)
+			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=1000000;
+		lim.rlim_cur=core_len;
 		if(setrlimit(RLIMIT_CORE,&lim)<0)
 			fprintf(stderr,"Failed to set core limit to %d\n",
 				(int)lim.rlim_cur);
