@@ -13,6 +13,12 @@ extern int patmatch(char *pattern, char *string);
 char* const gateAs::default_group = "DEFAULT";
 char* const gateAs::default_pattern = "*";
 
+void gateAsNode::client_callback(ASCLIENTPVT p,asClientStatus /*s*/)
+{
+	gateAsNode* v = (gateAsNode*)asGetClientPvt(p);
+	if(v->user_func) v->user_func(v->user_arg);
+}
+
 gateAs::gateAs(const char* lfile, const char* afile)
 {
 	if(initialize(afile))
@@ -67,14 +73,17 @@ gateAs::~gateAs(void)
 
 int gateAs::initPvList(const char* lfile)
 {
+	int i;
+
 	head_deny=NULL;
 	head_alias=NULL;
 	head_pat=NULL;
 	head_pv=NULL;
 	head_lines=NULL;
-
-	// default_entry=new gateAsEntry(default_pattern,default_group,1,head_pat);
 	default_entry=NULL;
+
+	pat_table=new gateAsEntry*[128];
+	for(i=0;i<128;i++) pat_table[i]=NULL;
 
 	return readPvList(lfile);
 }
@@ -128,8 +137,12 @@ int gateAs::readPvList(const char* lfile)
 					if((asg=strtok(NULL," \t\n")))
 					{
 						if((asl=strtok(NULL," \t\n")))
+						{
 							if(sscanf(asl,"%d",&lev)!=1)
+							{
 								lev=1;
+							}
+						}
 						else
 							lev=1;
 					}
@@ -140,7 +153,14 @@ int gateAs::readPvList(const char* lfile)
 					}
 
 					if(strcmp(cmd,"PATTERN")==0)
-						pe=new gateAsEntry(name,asg,lev,head_pat);
+					{
+						if((name[0]>='0' && name[0]<='9') ||
+						   (name[0]>='a' && name[0]<='z') ||
+						   (name[0]>='A' && name[0]<='Z'))
+							pe=new gateAsEntry(name,asg,lev,pat_table[name[0]]);
+						else
+							pe=new gateAsEntry(name,asg,lev,head_pat);
+					}
 					else if(strcmp(cmd,"PV")==0)
 						pe=new gateAsEntry(name,asg,lev,head_pv);
 				}
@@ -158,6 +178,16 @@ int gateAs::readPvList(const char* lfile)
 			pe=new gateAsEntry(pa->name,default_group,1,head_pv);
 
 		pe->alias=pa->alias;
+	}
+
+	// fix all the pattern lists so that they alway search the special patterns
+	for(i=0;i<128;i++)
+	{
+		for(pe=pat_table[i];pe && pe->next;pe=pe->next);
+		if(pe)
+			pe->next=head_pat;
+		else
+			pat_table[i]=head_pat;
 	}
 
 	return 0;
@@ -191,8 +221,14 @@ const char* gateAs::getAlias(const char* pv) const
 
 gateAsNode* gateAs::getInfo(gateAsEntry* e,const char* u,const char* h)
 {
-	gateDebug3(12,"entry=%8.8x user=%s host=%s\n",(int)e,u,h);
-	return new gateAsNode(e,u,h);
+	gateAsNode* node;
+	gateDebug3(1,"entry=%8.8x user=%s host=%s\n",(int)e,u,h);
+	node=new gateAsNode(e,u,h);
+	gateDebug2(1," node: user=%s host=%s\n",node->user(),node->host());
+	gateDebug2(1,"  read=%s write=%s\n",
+		node->readAccess()?"True":"False",node->writeAccess()?"True":"False");
+	gateDebug3(1,"  name=%s group=%s level=%d\n",e->name,e->group,e->level);
+	return node;
 }
 
 gateAsNode* gateAs::getInfo(const char* pv,const char* u,const char* h)
@@ -221,7 +257,7 @@ gateAsEntry* gateAs::findEntry(const char* pv) const
 		for(pe=head_pv;pe && strcmp(pe->name,pv)!=0;pe=pe->next);
 		if(pe==NULL)
 		{
-			for(pe=head_pat;
+			for(pe=pat_table[pv[0]];
 				pe&&patmatch((char*)pe->name,(char*)pv)==0;
 				pe=pe->next);
 		}

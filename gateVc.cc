@@ -69,6 +69,7 @@ gateChan::gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n)
 	:casChannel(ctx),vc(v),node(n)
 {
 	vc.addChan(this);
+	n->setUserFunction(post_rights,this);
 }
 
 gateChan::~gateChan(void)
@@ -93,6 +94,22 @@ void gateChan::report(void)
 {
 	printf("  %-12.12s %-36.36s read=%s write=%s\n",getUser(),getHost(),
 		readAccess()?"true":"false",writeAccess()?"true":"false");
+}
+
+void gateChan::post_rights(void* v)
+{
+	gateChan* p = (gateChan*)v;
+	gdd* val = p->vc.value();
+
+	if(val==NULL)
+	{
+		val=new gddScalar(0,aitEnumFloat64);
+		p->postEvent(p->vc.select_mask,*val);
+		val->unreference();
+	}
+	else
+		p->postEvent(p->vc.select_mask,*val);
+
 }
 
 // ------------------------gateVcData
@@ -121,6 +138,8 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	post_value_changes=0;
 	status=0;
 	markNoList();
+
+	select_mask|=(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
 
 	// Important Note: The exist test should have been performed for this
 	// PV already, which means that the gatePvData exists and is connected
@@ -191,7 +210,7 @@ void gateVcData::report(void)
 	tsDLFwdIter<gateChan> iter(chan);
 	gateChan* p;
 
-	printf("%-30.30s\n",pv_name);
+	printf("%-30.30s - event rate=%lf\n",pv_name,pv->eventRate());
 
 	for(p=iter.first();p;p=iter.next())
 		p->report();
@@ -381,7 +400,6 @@ void gateVcData::vcNew(void)
 {
 	gateDebug1(10,"gateVcData::vcNew() name=%s\n",name());
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
-	casEventMask select(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
 	gateAsyncW* asyncw;
 	gateAsyncR* asyncr;
 	aitUint16 val;
@@ -451,19 +469,27 @@ void gateVcData::vcNew(void)
 	}
 
 	if(needInitialPosting())
-		postEvent(select,*event_data); // event data need to be posted
+		postEvent(select_mask,*event_data); // event data need to be posted
 }
 
 void gateVcData::vcEvent(void)
 {
 	gateDebug1(10,"gateVcData::vcEvent() name=%s\n",name());
-	casEventMask select(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
 	if(needPosting())
 	{
 		gateDebug0(2,"gateVcData::vcEvent() posting event\n");
-		if(timeLastTrans()>=1) // hardcoded to 1 second for monitor updates
+		if(event_data->isAtomic())
 		{
-			postEvent(select,*event_data);
+			// hardcoded to 1 second for monitor updates
+			if(timeLastTrans()>=1)
+			{
+				postEvent(select_mask,*event_data);
+				setTransTime();
+			}
+		}
+		else
+		{
+			postEvent(select_mask,*event_data);
 			setTransTime();
 		}
 	}
@@ -613,12 +639,34 @@ aitIndex gateVcData::maximumElements(void) const
 	return pv?pv->maxElements():0;
 }
 
+void gateVcData::setReadAccess(aitBool b)
+{
+	read_access=b;
+	postAccessRights();
+}
+
 void gateVcData::setWriteAccess(aitBool b)
 {
 	if(global_resources->isReadOnly())
 		write_access=aitFalse;
 	else
 		write_access=b;
+
+	postAccessRights();
+}
+
+void gateVcData::postAccessRights(void)
+{
+	tsDLFwdIter<gateChan> iter(chan);
+	gateChan* p;
+
+	if(event_data)
+	{
+		gateDebug0(5,"gateVcData::vcEvent() posting access rights\n");
+
+		for(p=iter.first();p;p=iter.next())
+			p->postEvent(select_mask,*event_data);
+	}
 }
 
 // ------------------------------- aync read/write pending methods ----------

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.3  1996/12/17 14:32:24  jbk
+ * Updates for access security
+ *
  * Revision 1.2  1996/09/10 15:04:11  jbk
  * many fixes.  added instructions to usage. fixed exist test problems.
  *
@@ -89,6 +92,7 @@ public:
 	chtype dataType(void) const			{ return data_type; }
 	chtype eventType(void) const		{ return event_type; }
 	void checkEvent(void)				{ ca_pend_event(GATE_REALLY_SMALL); }
+	double eventRate(void);
 
 	int activate(gateVcData* from);	// change inactive to active due to connect
 	int deactivate(void);		// change active to inactive due to disconnect
@@ -146,6 +150,7 @@ private:
 	gateAsEntry* ae;
 	aitUint32 max_elements;
 	int status;
+	unsigned long event_count;
 	char* pv_name;		// name of the pv I am connected to
 	chid chan;			// channel access ID
 	evid event;			// CA event thing

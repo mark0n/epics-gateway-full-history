@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.11  1996/12/17 14:32:27  jbk
+// Updates for access security
+//
 // Revision 1.10  1996/12/11 13:04:02  jbk
 // All the changes needed to implement access security.
 // Bug fixes for createChannel and access security stuff
@@ -46,13 +49,8 @@
 
 gateResources* global_resources;
 
-gateResources::gateResources(char* home)
+gateResources::gateResources(void)
 {
-	if(home) setHome(home);
-	
-	home_dir=strDup(GATE_HOME);
-	log_file=strDup(GATE_LOG);
-
 	if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
 		access_file=strDup(GATE_PV_ACCESS_FILE);
 	else
@@ -64,7 +62,6 @@ gateResources::gateResources(char* home)
 		pvlist_file=NULL;
 
 	debug_level=0;
-	log_on=0;
 	ro=0;
 
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
@@ -86,8 +83,6 @@ gateResources::~gateResources(void)
 {
 	if(access_file)	delete [] access_file;
 	if(pvlist_file)	delete [] pvlist_file;
-	if(home_dir)	delete [] home_dir;
-	if(log_file)	delete [] log_file;
 }
 
 int gateResources::appValue=0;
@@ -97,25 +92,6 @@ int gateResources::appMenuitem=0;
 int gateResources::appFixed=0;
 int gateResources::appUnits=0;
 int gateResources::appAttributes=0;
-
-int gateResources::setHome(char* dir)
-{
-	int rc;
-
-	if(chdir(dir)<0)
-	{
-		perror("Change to home directory failed");
-		fprintf(stderr,"-->Bad home <%s>\n",dir); fflush(stderr);
-		rc=-1;
-	}
-	else
-	{
-		delete [] home_dir;
-		home_dir=strDup(dir);
-		rc=0;
-	}
-	return rc;
-}
 
 int gateResources::setListFile(char* file)
 {
@@ -131,63 +107,10 @@ int gateResources::setAccessFile(char* file)
 	return 0;
 }
 
-int gateResources::setLogFile(char* file)
-{
-	if(log_file) delete [] log_file;
-	log_file=strDup(file);
-	if(log_on) setUpLogging();
-	return 0;
-}
-
 int gateResources::setDebugLevel(int level)
 {
 	debug_level=level;
 	return 0;
-}
-
-int gateResources::setUpLogging(void)
-{
-	int rc=0;
-#ifdef DEBUG_MODE
-	return rc;
-#else
-	char cur_time[300];
-	struct stat sbuf;
-	time_t t;
-	time(&t);
-
-	if(stat(log_file,&sbuf)==0)
-	{
-		if(sbuf.st_size>0)
-		{
-			sprintf(cur_time,"%s.%lu",log_file,(unsigned long)t);
-			if(link(log_file,cur_time)<0)
-			{
-				fprintf(stderr,"Failure to move old log file to new name %s",
-					cur_time);
-			}
-			else
-				unlink(log_file);
-		}
-	}
-	
-	if( (freopen(log_file,"w",stderr))==NULL )
-	{
-		fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
-		fflush(stderr);
-		rc=-1;
-	}
-
-	if( (freopen(log_file,"a",stdout))==NULL )
-	{
-		fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
-		fflush(stderr);
-		rc=-1;
-	}
-
-	log_on=1;
-	return rc;
-#endif
 }
 
 int gateResources::setUpAccessSecurity(void)

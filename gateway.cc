@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.12  1997/02/11 21:47:08  jbk
+// Access security updates, bug fixes
+//
 // Revision 1.11  1997/01/12 20:33:22  jbk
 // Limit the size of core files
 //
@@ -44,6 +47,7 @@
 #include <stdlib.h>
 #include <syslog.h>
 #include <signal.h>
+#include <sys/wait.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <sys/time.h>
@@ -53,6 +57,7 @@
 
 void gatewayServer(void);
 void print_instructions(void);
+int manage_gateway(void);
 
 // still need to add client and server IP addr info using 
 // the CA environment variables.
@@ -93,9 +98,9 @@ void operator delete(void* x)
 //
 // Defaults:
 //	Home directory = .
-//	Access security file = GATEWAY_PV_ACCESS_FILE
-//	process variable list file = GATEWAY_PV_LIST_FILE
-//	log file = GATEWAY_LOG.xx (xx=[client,server])
+//	Access security file = GATEWAY.access
+//	process variable list file = GATEWAY.pvlist
+//	log file = GATEWAY.log
 //	debug level = 0 (none)
 //  connect_timeout = 1 second
 //  inactive_timeout = 60*60*2 seconds (2 hours)
@@ -123,16 +128,22 @@ void operator delete(void* x)
 #define PARM_SERVER_PORT	12
 #define PARM_CLIENT_PORT	13
 #define PARM_HELP			14
-#define PARM_NS				15
+#define PARM_SERVER			15
 #define PARM_RO				16
 #define PARM_UID			17
+
+#define HOME_DIR_SIZE 300
+#define GATE_LOG      "GATEWAY.log"
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
 static char* client_ip_addr=NULL;
 static int server_port=0;
 static int client_port=0;
-static int no_server=0;
+static int make_server=0;
+static char* home_directory;
+static char* log_file=NULL;
+static pid_t parent_pid;
 
 struct parm_stuff
 {
@@ -156,9 +167,8 @@ static PARM_STUFF ptable[] = {
 	{ "-connect_timeout",	16,	PARM_CONNECT,		"seconds" },
 	{ "-inactive_timeout",	17,	PARM_INACTIVE,		"seconds" },
 	{ "-dead_timeout",		13,	PARM_DEAD,			"seconds" },
-	{ "-noserver",			9,	PARM_NS,			"(start interactively)" },
+	{ "-server",			9,	PARM_SERVER,		"(start as server)" },
 	{ "-uid",				4,	PARM_UID,			"user_id_number" },
-	{ "-ns",				3,	PARM_NS,			NULL },
 	{ "-ro",				3,	PARM_RO,			NULL },
 	{ "-help",				5,	PARM_HELP,			NULL },
 	{ NULL,			-1,	-1 }
@@ -172,6 +182,7 @@ static SIG_FUNC save_term = NULL;
 static SIG_FUNC save_bus = NULL;
 static SIG_FUNC save_ill = NULL;
 static SIG_FUNC save_segv = NULL;
+static SIG_FUNC save_chld = NULL;
 
 static void sig_end(int sig)
 {
@@ -265,18 +276,20 @@ static int startEverything(void)
 	
 	fprintf(fd,"\n");
 	fprintf(fd,"# options:\n");
-	fprintf(fd,"# home=<%s>\n",global_resources->homeDirectory());
+	fprintf(fd,"# home=<%s>\n",home_directory);
+	fprintf(fd,"# log file=<%s>\n",log_file);
 	fprintf(fd,"# access file=<%s>\n",global_resources->accessFile());
 	fprintf(fd,"# pvlist file=<%s>\n",global_resources->listFile());
-	fprintf(fd,"# log file=<%s>\n",global_resources->logFile());
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
 	fprintf(fd,"# dead timeout=%d\n",global_resources->deadTimeout());
 	fprintf(fd,"# connect timeout=%d\n",global_resources->connectTimeout());
 	fprintf(fd,"# inactive timeout=%d\n",global_resources->inactiveTimeout());
 	fprintf(fd,"# user id=%d\n",getuid());
 	fprintf(fd,"# \n");
-	fprintf(fd,"# use the following the get a report in the log file:\n");
+	fprintf(fd,"# use the following the get a complete PV report in log:\n");
 	fprintf(fd,"#    kill -USR1 %d\n",sid);
+	fprintf(fd,"# use the following the get a PV summary report in log:\n");
+	fprintf(fd,"#    kill -USR2 %d\n",sid);
 	fprintf(fd,"# \n");
 
 	if(global_resources->isReadOnly())
@@ -292,7 +305,8 @@ static int startEverything(void)
 	if(client_port)		fprintf(fd,"# %s\n",gate_ca_port);
 	if(server_port)		fprintf(fd,"# %s\n",gate_cas_port);
 
-	fprintf(fd,"\n kill %d\n\n",sid);
+	fprintf(fd,"\n kill %d # to kill everything\n\n",parent_pid);
+	fprintf(fd,"\n # kill %d # to kill off this gateway\n\n",sid);
 	fflush(fd);
 	
 	if(fd!=stderr) fclose(fd);
@@ -337,7 +351,6 @@ static int startEverything(void)
 int main(int argc, char** argv)
 {
 	int i,j,uid;
-
 	int not_done=1;
 	int no_error=1;
 	int gave_log_option=0;
@@ -349,9 +362,12 @@ int main(int argc, char** argv)
 	char* home_dir=NULL;
 	char* pvlist_file=NULL;
 	char* access_file=NULL;
-	char* log_file=NULL;
+	char cur_time[300];
+	struct stat sbuf;
+	time_t t;
 
 	home_dir=getenv("GATEWAY_HOME");
+	home_directory=new char[HOME_DIR_SIZE];
 
 	for(i=1;i<argc && no_error;i++)
 	{
@@ -378,8 +394,8 @@ int main(int argc, char** argv)
 				case PARM_HELP:
 					print_instructions();
 					return 0;
-				case PARM_NS:
-					no_server=1;
+				case PARM_SERVER:
+					make_server=1;
 					not_done=0;
 					break;
 				case PARM_RO:
@@ -552,7 +568,66 @@ int main(int argc, char** argv)
 		if(ptable[j].parm==NULL) no_error=0;
 	}
 
-	global_resources = new gateResources(home_dir);
+	// ----------------------------------
+	// Go to gateway's home directory now
+	if(home_dir)
+	{
+		if(chdir(home_dir)<0)
+		{
+			perror("Change to home directory failed");
+			fprintf(stderr,"-->Bad home <%s>\n",home_dir); fflush(stderr);
+			return -1;
+		}
+	}
+	getcwd(home_directory,HOME_DIR_SIZE);
+
+	if(make_server)
+	{
+		// start watcher process
+		if(manage_gateway()) return 0;
+	}
+	else
+		parent_pid=getpid();
+
+	// ****************************************
+	// gets here if this is interactive gateway
+	// ****************************************
+
+	// ----------------------------------------
+	// change stderr and stdout to the log file
+
+	if(log_file==NULL) log_file=GATE_LOG;
+	time(&t);
+
+	if(stat(log_file,&sbuf)==0)
+	{
+		if(sbuf.st_size>0)
+		{
+			sprintf(cur_time,"%s.%lu",log_file,(unsigned long)t);
+			if(link(log_file,cur_time)<0)
+			{
+				fprintf(stderr,"Failure to move old log file to new name %s",
+					cur_time);
+			}
+			else
+				unlink(log_file);
+		}
+	}
+	if( (freopen(log_file,"w",stderr))==NULL )
+	{
+		fprintf(stderr,"Redirect of stderr to file %s failed\n",log_file);
+		fflush(stderr);
+	}
+	if( (freopen(log_file,"a",stdout))==NULL )
+	{
+		fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
+		fflush(stderr);
+	}
+
+	// ----------------------------------------
+	// set up gateway resources
+
+	global_resources = new gateResources;
 	gateResources* gr = global_resources;
 
 	if(no_error==0)
@@ -568,10 +643,10 @@ int main(int argc, char** argv)
 		}
 		fprintf(stderr,"\nDefaults are:\n");
 		fprintf(stderr,"\tdebug=%d\n",gr->debugLevel());
-		fprintf(stderr,"\thome=%s\n",gr->homeDirectory());
+		fprintf(stderr,"\thome=%s\n",home_directory);
+		fprintf(stderr,"\tlog=%s\n",log_file);
 		fprintf(stderr,"\taccess=%s\n",gr->accessFile());
 		fprintf(stderr,"\tpvlist=%s\n",gr->listFile());
-		fprintf(stderr,"\tlog=%s\n",gr->logFile());
 		fprintf(stderr,"\tdead=%d\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%d\n",gr->connectTimeout());
 		fprintf(stderr,"\tinactive=%d\n",gr->inactiveTimeout());
@@ -587,7 +662,6 @@ int main(int argc, char** argv)
 	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
 	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
 	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
-	if(log_file)			gr->setLogFile(log_file);
 	if(access_file)			gr->setAccessFile(access_file);
 	if(pvlist_file)			gr->setListFile(pvlist_file);
 
@@ -596,10 +670,10 @@ int main(int argc, char** argv)
 	if(gr->debugLevel()>10)
 	{
 		fprintf(stderr,"\noption dump:\n");
-		fprintf(stderr," home=<%s>\n",gr->homeDirectory());
+		fprintf(stderr," home=<%s>\n",home_directory);
+		fprintf(stderr," log file=<%s>\n",log_file);
 		fprintf(stderr," access file=<%s>\n",gr->accessFile());
 		fprintf(stderr," list file=<%s>\n",gr->listFile());
-		fprintf(stderr," log file=<%s>\n",gr->logFile());
 		fprintf(stderr," debug level=%d\n",gr->debugLevel());
 		fprintf(stderr," connect timeout =%d\n",gr->connectTimeout());
 		fprintf(stderr," inactive timeout =%d\n",gr->inactiveTimeout());
@@ -610,40 +684,7 @@ int main(int argc, char** argv)
 		fflush(stderr);
 	}
 
-#ifdef DEBUG_MODE
 	startEverything();
-#else
-	if(no_server)
-	{
-		if(gave_log_option)
-			gr->setUpLogging();
-
-		startEverything();
-	}
-	else
-	{
-		gr->setUpLogging();
-
-		// disassociate from parent
-		switch(fork())
-		{
-		case -1: // error
-			perror("Cannot create gateway processes");
-			return -1;
-		case 0: // child
-#if defined linux || defined SOLARIS
-			setpgrp();
-#else
-			setpgrp(0,0);
-#endif
-			setsid();
-			startEverything();
-			break;
-		default: // parent
-			break;
-		}
-	}
-#endif
 	delete global_resources;
 	return 0;
 }
@@ -655,29 +696,16 @@ void print_instructions(void)
   pr(stderr,"-debug value: Enter value between 0-100.  50 gives lots of\n");
   pr(stderr," info, 1 gives small amount.\n\n");
 
-  pr(stderr,"-pv file_name: File with list of valid PV names in it.  The\n");
-  pr(stderr," list can contain wild cards.  Here is an example:\n");
-  pr(stderr,"\tmotor_pv\n\tthing\n\tS1:*\n\tS2:*:motor\n");
-  pr(stderr," A file with this info in it will allow clients to attach to\n");
-  pr(stderr," PVs motor_pv, thing, anything starting with \"S1:\", and\n");
-  pr(stderr," PVs starting with \"S2:\" and ending with \"motor\".\n\n");
+  pr(stderr,"-pvlist file_name: Name of file with all the allowed PVs in it\n");
+  pr(stderr," See the sample file GATEWAY.pvlist in the source distribution\n");
+  pr(stderr," for a description of how to create this file.\n");
 
-  pr(stderr,"-disallow file_name: File with list of PV names to ignore.\n");
-  pr(stderr," File is the same format as -pv option, but lists PVs that\n");
-  pr(stderr," the gateway should completely ignore.\n\n");
-
-  pr(stderr,"-alias file_name: File containing PV/alias pairs.  A list of\n");
-  pr(stderr," fake PV names that the client can access and the real names\n");
-  pr(stderr," that they get translated to.  Example:\n");
-  pr(stderr,"\tgap_size S1:C6:F3:gap_size_A\n");
-  pr(stderr,"\tcurrent S9:C3:F7:current_value\n");
-  pr(stderr," Clients can now attach to PV S1:C6:F3:gap_size_A using alias\n");
-  pr(stderr," PV gap_size and S9:C3:F7:current_value using PV current\n\n");
+  pr(stderr,"-access file_name: Name of file with all the EPICS access\n");
+  pr(stderr," security rules in it.  PVs in the pvlist file use groups\n");
+  pr(stderr," and rules defined in this file.\n");
 
   pr(stderr,"-log file_name: Name of file where all messages from the\n");
   pr(stderr," gateway go, including stderr and stdout.\n\n");
-
-  pr(stderr,"-access file_name: EPICS access security, not implemented.\n\n");
 
   pr(stderr,"-home directory: Home directory where all your gateway\n");
   pr(stderr," configuration files are kept and where the log file goes.\n\n");
@@ -714,13 +742,94 @@ void print_instructions(void)
   pr(stderr," marks the PV dead and holds the request and continues trying\n");
   pr(stderr," to connect for this long.\n\n");
 
-  pr(stderr,"-noserver: Start the server interactively at the terminal.  Do\n");
-  pr(stderr," not put the process in the background and do not detach it\n");
-  pr(stderr," from the terminal\n\n");
-
-  pr(stderr,"-ns: Same as -noserver.\n");
+  pr(stderr,"-server: Start as server. Detach from controlling terminal\n");
+  pr(stderr," and start a daemon that watches the gateway and automatically\n");
+  pr(stderr," restarted it if it dies\n");
 
   pr(stderr,"-uid number: Run the server with this id, server does a\n");
   pr(stderr," setuid(2) to this user id number.\n\n");
+}
+
+// -------------------------------------------------------------------
+//  part that watches the gateway process and ensures that it stays up
+
+static pid_t gate_pid;
+static int death_flag=0;
+
+static void sig_chld(int sig)
+{
+#ifdef SOLARIS
+	while(waitpid(-1,NULL,WNOHANG)>0);
+#else
+	while(wait3(NULL,WNOHANG,NULL)>0);
+#endif
+	signal(SIGCHLD,sig_chld);
+}
+
+static void sig_stop(int sig)
+{
+	if(gate_pid)
+		kill(gate_pid,SIGTERM);
+
+	death_flag=1;
+}
+
+int manage_gateway(void)
+{
+	time_t t,pt=0;
+	int rc;
+
+	save_chld=signal(SIGCHLD,sig_chld);
+	save_hup=signal(SIGHUP,sig_stop);
+	save_term=signal(SIGTERM,sig_stop);
+	save_int=signal(SIGINT,sig_stop);
+
+	// disassociate from parent
+	switch(fork())
+	{
+	case -1: // error
+		perror("Cannot create gateway processes");
+		return -1;
+	case 0: // child
+#if defined linux || defined SOLARIS
+		setpgrp();
+#else
+		setpgrp(0,0);
+#endif
+		setsid();
+		break;
+	default: // parent
+		return 1;
+	}
+
+	parent_pid=getpid();
+
+	do
+	{
+		time(&t);
+		if((t-pt)<5) sleep(6); // don't respawn faster than every 6 seconds
+		pt=t;
+
+		switch(gate_pid=fork())
+		{
+		case -1: // error
+			perror("Cannot create gateway processes");
+			gate_pid=0;
+			break;
+		case 0: // child
+			break;
+		default: // parent
+			pause();
+			break;
+		}
+	}
+	while(gate_pid && death_flag==0);
+
+	if(death_flag || gate_pid==-1)
+		rc=1;
+	else
+		rc=0;
+
+	return rc;
 }
 

@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.18  1997/02/11 21:47:06  jbk
+// Access security updates, bug fixes
+//
 // Revision 1.17  1996/12/17 14:32:29  jbk
 // Updates for access security
 //
@@ -82,19 +85,29 @@ void gateAsCa(void);
 typedef void (*SigFunc)(int);
 
 static SigFunc save_usr1=NULL;
+static SigFunc save_usr2=NULL;
 
 static void sig_pipe(int)
 {
 	fprintf(stderr,"Got SIGPIPE interrupt!");
+	signal(SIGPIPE,sig_pipe);
 }
 
 void gateServer::sig_usr1(int x)
 {
-	gateServer::report_flag=1;
-	if(save_usr1) save_usr1(x);
+	gateServer::report_flag1=1;
+	// if(save_usr1) save_usr1(x);
+	signal(SIGUSR1,gateServer::sig_usr1);
 }
 
-volatile int gateServer::report_flag=0;
+void gateServer::sig_usr2(int x)
+{
+	gateServer::report_flag2=1;
+	signal(SIGUSR2,gateServer::sig_usr2);
+}
+
+volatile int gateServer::report_flag1=0;
+volatile int gateServer::report_flag2=0;
 
 void gatewayServer(void)
 {
@@ -117,9 +130,12 @@ void gateServer::mainLoop(void)
 	// as_rules->report(stdout);
 
 	save_usr1=signal(SIGUSR1,sig_usr1);
+	save_usr2=signal(SIGUSR2,sig_usr2);
 	// this is horrible, CA server has sigpipe problem for now
 	old=signal(SIGPIPE,sig_pipe);
 	sigignore(SIGPIPE);
+	time(&start_time);
+	exist_count=0;
 
 	while(not_done)
 	{
@@ -128,7 +144,8 @@ void gateServer::mainLoop(void)
 
 		// make sure messages get out
 		if(++cnt==0) { fflush(stderr); fflush(stdout); }
-		if(report_flag) { report(); report_flag=0; }
+		if(report_flag1) { report(); report_flag1=0; }
+		if(report_flag2) { report2(); report_flag2=0; }
 	}
 }
 
@@ -136,12 +153,47 @@ void gateServer::report(void)
 {
 	gateVcData *node;
 	time_t t;
-
 	time(&t);
 	printf("Active virtual connection report: %s\n",ctime(&t));
 	for(node=vc_list.first();node;node=node->getNext())
 		node->report();
 	printf("--------------------------------------------------------\n");
+	fflush(stdout);
+}
+
+void gateServer::report2(void)
+{
+	gatePvNode* node;
+	time_t t,diff;
+	double rate;
+	int tot_dead=0,tot_inactive=0,tot_active=0,tot_connect=0;
+
+	time(&t);
+	diff=t-start_time;
+	rate=diff?(double)exist_count/(double)diff:0;
+
+	printf("\n");
+	printf("Exist test rate = %lf\n",rate);
+	printf("Total real PV count = %d\n",(int)pv_list.count());
+	printf("Total connecting PV count = %d\n",(int)pv_con_list.count());
+	printf("Total virtual PV count = %d\n",(int)vc_list.count());
+
+	for(node=pv_list.first();node;node=node->getNext())
+	{
+		switch(node->getData()->getState())
+		{
+		case gatePvDead: tot_dead++; break;
+		case gatePvInactive: tot_inactive++; break;
+		case gatePvActive: tot_active++; break;
+		case gatePvConnect: tot_connect++; break;
+		}
+	}
+
+	printf("Total dead PVs: %d\n",tot_dead);
+	printf("Total inactive PVs: %d\n",tot_inactive);
+	printf("Total active PVs: %d\n",tot_active);
+	printf("Total connecting PVs: %d\n",tot_connect);
+	printf("\n");
 	fflush(stdout);
 }
 
@@ -352,6 +404,8 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	caStatus rc;
 	const char* real_name;
 	gateAsEntry* node;
+
+	++exist_count;
 
 	if((real_name=as_rules->getAlias(pvname))==NULL)
 		real_name=pvname;

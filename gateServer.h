@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.11  1997/02/11 21:47:06  jbk
+ * Access security updates, bug fixes
+ *
  * Revision 1.10  1996/12/17 14:32:32  jbk
  * Updates for access security
  *
@@ -102,6 +105,7 @@ public:
 
 	void mainLoop(void);
 	void report(void);
+	void report2(void);
 	gateAs* getAs(void) { return as_rules; }
 
 	// CAS application management functions
@@ -150,6 +154,8 @@ private:
 	time_t last_connect_cleanup;	// cleared out connect pending list here
 
 	gateAs* as_rules;
+	unsigned long exist_count;
+	time_t start_time;
 
 	static void exCB(EXCEPT_ARGS args);
 	static void fdCB(void* ua, int fd, int opened);
@@ -158,8 +164,9 @@ private:
 	static osiTime delay_normal;
 	static osiTime* delay_current;
 
-	static volatile int report_flag;
+	static volatile int report_flag1,report_flag2;
 	static void sig_usr1(int);
+	static void sig_usr2(int);
 };
 
 inline time_t gateServer::timeDeadCheck(void) const

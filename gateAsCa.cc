@@ -90,7 +90,9 @@ static void eventCB(struct event_handler_args eha)
 		if(ready) asComputeAsg(pasg);
 	}
 	if(!ready) --count;
-	gateDebug1(11,"Access security connected to %s\n",pasginp->inp);
+	gateDebug2(11,"AS: %s %lf\n",pasginp->inp,pdata->value);
+	gateDebug2(11,"    stat=%d sevr=%d\n",
+		(int)pdata->status,(int)pdata->severity);
 }
 
 void gateAsCa(void)
@@ -134,7 +136,6 @@ void gateAsCa(void)
 		pasg=(ASG*)ellNext((ELLNODE*)pasg);
 	}
 	// SEVCHK(ca_pend_event(0.0),"ca_pend_event (gateAsCa)");
-	asComputeAllAsg();
 	time(&cur_time);
 
 	while(count>0 && (cur_time-start_time)<4)
@@ -142,6 +143,7 @@ void gateAsCa(void)
 		ca_pend_event(1.0);
 		time(&cur_time);
 	}
+	asComputeAllAsg();
 	if(count>0) printf("Access security did not connect to %d PVs\n",count);
 	ready=1;
 }

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.13  1997/02/11 21:47:04  jbk
+// Access security updates, bug fixes
+//
 // Revision 1.12  1997/01/12 20:34:08  jbk
 // bug fix
 //
@@ -268,6 +271,7 @@ int gatePvData::life(void)
 
 	gateExistData* et;
 	int rc=0;
+	event_count=0;
 
 	switch(getState())
 	{
@@ -335,6 +339,7 @@ int gatePvData::death(void)
 
 	gateExistData* et;
 	int rc=0;
+	event_count=0;
 
 	switch(getState())
 	{
@@ -574,6 +579,12 @@ int gatePvData::putDumb(gdd* dd)
 	return (rc==ECA_NORMAL)?0:-1;
 }
 
+double gatePvData::eventRate(void)
+{
+	time_t t = timeAlive();
+	return t?(double)event_count/(double)t:0;
+}
+
 void gatePvData::connectCB(CONNECT_ARGS args)
 {
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
@@ -686,6 +697,7 @@ void gatePvData::eventCB(EVENT_ARGS args)
 					pv->vc->eventData(dd);
 			}
 		}
+		++(pv->event_count);
 	}
 	// hopefully more monitors will come in that are successful
 }

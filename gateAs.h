@@ -66,12 +66,14 @@ class gateAsNode
 {
 public:
 	gateAsNode(void)
-		{ asc=NULL; }
-	gateAsNode(gateAsEntry* e,const char* user, const char* host)
+		{ asc=NULL; entry=NULL; }
+	gateAsNode(gateAsEntry* e,const char* user, const char* host):entry(e)
 	{
 		asc=NULL;
+		user_func=NULL;
 		if(e&&asAddClient(&asc,e->as,e->level,(char*)user,(char*)host)==0)
-			asPutClientPvt(asc,e);
+			asPutClientPvt(asc,this);
+		asRegisterClientCallback(asc,client_callback);
 	}
 
 	~gateAsNode(void)
@@ -84,15 +86,23 @@ public:
 		{ return (asc&&asCheckPut(asc))?aitTrue:aitFalse; }
 
 	gateAsEntry* getEntry(void)
-		{ return asc?(gateAsEntry*)asGetClientPvt(asc):NULL; }
+		{ return entry; }
 	long changeInfo(const char* user, const char* host)
-		{ return asChangeClient(asc,getEntry()->level,(char*)user,(char*)host);}
+		{ return asChangeClient(asc,entry->level,(char*)user,(char*)host);}
 
 	const char* user(void) { return (const char*)asc->user; }
 	const char* host(void) { return (const char*)asc->host; }
 
+	void setUserFunction(void (*ufunc)(void*),void* uarg)
+		{ user_arg=uarg; user_func=ufunc; }
+
 private:
+	static void client_callback(ASCLIENTPVT,asClientStatus);
+
 	ASCLIENTPVT asc;
+	gateAsEntry* entry;
+	void* user_arg;
+	void (*user_func)(void*);
 };
 
 class gateAsLines
@@ -135,10 +145,12 @@ private:
 
 	gateAsDeny* head_deny;
 	gateAsAlias* head_alias;
-	gateAsEntry* head_pat;
+	gateAsEntry* head_pat; // anything that starts with special char
 	gateAsEntry* head_pv;
 	gateAsEntry* default_entry;
 	gateAsLines* head_lines;
+
+	gateAsEntry** pat_table; // 127 entries, one for each character
 
 	// only one set of access security rules allowed in a program
 	static aitBool rules_installed;

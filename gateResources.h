@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.10  1996/12/11 13:04:05  jbk
+ * All the changes needed to implement access security.
+ * Bug fixes for createChannel and access security stuff
+ *
  * Revision 1.8  1996/11/27 04:55:35  jbk
  * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
  *
@@ -34,8 +38,6 @@
 #define GATE_SCRIPT_FILE    "GATEWAY.killer"
 #define GATE_PV_LIST_FILE   "GATEWAY.pvlist"
 #define GATE_PV_ACCESS_FILE "GATEWAY.access"
-#define GATE_LOG            "GATEWAY.log"
-#define GATE_HOME           "."
 
 #define GATE_CONNECT_TIMEOUT  0
 #define GATE_INACTIVE_TIMEOUT (60*60*2)
@@ -51,15 +53,13 @@ class gateAsNode;
 class gateResources
 {
 public:
-	gateResources(char* home = NULL);
+	gateResources(void);
 	~gateResources(void);
 
 	int setHome(char* dir);
 	int setListFile(char* file);
 	int setAccessFile(char* file);
-	int setUpLogging(void);
 	int setUpAccessSecurity(void);
-	int setLogFile(char* file);
 	int setDebugLevel(int level);
 
 	void setReadOnly(void)		{ ro=1; }
@@ -73,11 +73,9 @@ public:
 	time_t connectTimeout(void) const	{ return connect_timeout; }
 	time_t inactiveTimeout(void) const	{ return inactive_timeout; }
 	time_t deadTimeout(void) const		{ return dead_timeout; }
-	char* homeDirectory(void) const		{ return home_dir; }
 
 	char* listFile(void) const	{ return pvlist_file?pvlist_file:"NULL"; }
 	char* accessFile(void) const{ return access_file?access_file:"NULL"; }
-	char* logFile(void) const	{ return log_file?log_file:"NULL"; }
 
 	gateAs* getAs(void);
 
@@ -91,10 +89,8 @@ public:
 	static int appAttributes;
 
 private:
-	char* home_dir,*log_file;
 	char *access_file,*pvlist_file;
 	int debug_level,ro;
-	int log_on; // 0=off, 1=on
 	time_t connect_timeout,inactive_timeout,dead_timeout;
 	gateAs* as;
 };

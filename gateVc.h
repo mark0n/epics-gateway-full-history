@@ -88,6 +88,8 @@ public:
 	const char* getUser(void);
 	const char* getHost(void);
 	void report(void);
+
+	static void post_rights(void*);
 private:
 	gateAsNode* node; // I must delete this when done using it
 	gateVcData& vc;
@@ -136,6 +138,7 @@ public:
 	void addChan(gateChan*);
 	void removeChan(gateChan*);
 
+	void postAccessRights(void);
 	void setReadAccess(aitBool b);
 	void setWriteAccess(aitBool b);
 	aitBool readAccess(void) const  { return read_access; }
@@ -175,6 +178,8 @@ public:
 	void markInterested(void);
 	void markNotInterested(void);
 	int getStatus(void) { return status; }
+
+	casEventMask select_mask;
 protected:
 	void setState(gateVcState s)	{ pv_state=s; }
 	gatePvData* pv;
@@ -196,8 +201,6 @@ private:
 	gdd* data;
 	gdd* event_data;
 };
-
-inline void gateVcData::setReadAccess(aitBool b) { read_access=b; }
 
 inline int gateVcData::pending(void) { return (pv_state==gateVcConnect)?1:0; }
 
