@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.9  1996/12/07 16:42:23  jbk
+ * many bug fixes, array support added
+ *
  * Revision 1.8  1996/11/27 04:55:45  jbk
  * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
  *
@@ -65,24 +68,23 @@ class gateVcData;
 class gateChan : public casChannel
 {
 public:
-	gateChan(const casCtx& ctx,const char* user,const char* host);
+	gateChan(const casCtx& ctx,const char* user,const char* host,gateVcData*);
 	~gateChan(void);
 
 	virtual aitBool readAccess(void) const;
 	virtual aitBool writeAccess(void) const;
     virtual void setOwner(const char* const user,const char* const host);
 
-	void setServerReadAccess(aitBool b);
-	void setServerWriteAccess(aitBool b);
-	void setUserReadAccess(aitBool b);
-	void setUserWriteAccess(aitBool b);
+	void setReadAccess(aitBool b);
+	void setWriteAccess(aitBool b);
 
 	const char* getUser(void) { return user; }
 	const char* getHost(void) { return host; }
 private:
-	aitBool user_read_access, server_read_access;
-	aitBool user_write_access,server_write_access;
+	aitBool read_access;
+	aitBool write_access;
 	const char *user,*host;
+	gateVcData* vc;
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -117,7 +119,6 @@ public:
 	const char* name(void) const { return pv_name; }
 	aitString& nameString(void)	{ return pv_string; }
 	void* PV(void)				{ return pv; }
-	gateChan* getChannel(void) const	{ return gch; }
 	void setPV(gatePvData* t)	{ pv=t; }
 	gateVcState getState(void)	{ return pv_state; }
 	gdd* attributes(void)		{ return data; }
@@ -127,8 +128,11 @@ public:
 	aitIndex maximumElements(void) const;
 	const char* getUser(void) const;
 	const char* getHost(void) const;
+
 	void setReadAccess(aitBool b);
 	void setWriteAccess(aitBool b);
+	aitBool readAccess(void) const { return read_access; }
+	aitBool writeAccess(void) const { return write_access; }
 
 	// Pv notification interface
 	virtual void vcNew(void);
@@ -165,10 +169,10 @@ protected:
 	void setState(gateVcState s)	{ pv_state=s; }
 	gatePvData* pv;
 private:
+	aitBool read_access,write_access;
 	int status;
 	gateVcState pv_state;
 	gateServer* mrg;
-	gateChan* gch;
 	char* pv_name;
 	aitString pv_string;
 	int in_list_flag;
@@ -180,17 +184,12 @@ private:
 	gdd* event_data;
 };
 
-inline const char* gateVcData::getUser(void) const
-	{ return getChannel()?getChannel()->getUser():"NoUser"; }
-inline const char* gateVcData::getHost(void) const
-	{ return getChannel()?getChannel()->getHost():"NoHost"; }
-inline void gateVcData::setReadAccess(aitBool b)
-	{ if(getChannel()) getChannel()->setServerReadAccess(b); }
-inline void gateVcData::setWriteAccess(aitBool b)
-	{ if(getChannel()) getChannel()->setServerWriteAccess(b); }
+inline const char* gateVcData::getUser(void) const { return "UnknownUser"; }
+inline const char* gateVcData::getHost(void) const { return "UnknownHost"; }
+inline void gateVcData::setReadAccess(aitBool b) { read_access=b; }
+inline void gateVcData::setWriteAccess(aitBool b) { write_access=b; }
 
-inline int gateVcData::pending(void)
-	{ return (pv_state==gateVcConnect)?1:0; }
+inline int gateVcData::pending(void) { return (pv_state==gateVcConnect)?1:0; }
 
 inline int gateVcData::needPosting(void)
 	{ return (post_value_changes)?1:0; }

@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.15  1996/12/07 16:42:21  jbk
+// many bug fixes, array support added
+//
 // Revision 1.14  1996/11/27 04:55:37  jbk
 // lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
 //
@@ -59,6 +62,7 @@
 
 #include "gateResources.h"
 #include "gateServer.h"
+#include "gateAs.h"
 #include "gateVc.h"
 #include "gatePv.h"
 
@@ -98,6 +102,8 @@ void gateServer::mainLoop(void)
 	osiTime delay(0u,500000000u);
 	SigFunc old;
 	unsigned char cnt=0;
+
+	as_rules=global_resources->getAs();
 
 	save_usr1=signal(SIGUSR1,sig_usr1);
 	// this is horrible, CA server has sigpipe problem for now
@@ -336,95 +342,78 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%8.8x,pv=%s)\n",(int)&c,pvname);
 	gatePvData* pv;
 	caStatus rc;
-	char* r_name;
-	// gateExistData* ed;
+	const char* real_name;
+	gateAsEntry* node;
 
-	// convert alias to real name first
-	if((r_name=global_resources->findAlias(pvname))==NULL)
-		r_name=(char*)pvname;
+	if((real_name=as_rules->getAlias(pvname))==NULL)
+		real_name=pvname;
 	else
 	{
-		gateDebug2(1,"gateServer::pvExistTest() alias found %s->%s\n",
-			pvname,r_name);
+		gateDebug2(5,"gateServer::pvExistTest() PV %s has real name %s\n",
+			pvname,real_name);
 	}
 
-	if(pvFind(r_name,pv)==0)
+	// see if we are connected already to real PV
+	if(pvFind(real_name,pv)==0)
 	{
 		// know about the PV already
 		switch(pv->getState())
 		{
 		case gatePvInactive:
 		case gatePvActive:
-		  {
-			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",pv->name());
-			// the pc name is pv->name()
+	  	{
+			// return as pv->name()
+			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",real_name);
 			rc=S_casApp_success;
 			break;
-		  }
+	  	}
 		case gatePvDead:
-			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",pv->name());
 			// no pv name returned
+			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",real_name);
 			rc=S_casApp_pvNotFound;
 			break;
 		default:
-			gateDebug1(5,"gateServer::pvExistTest() %s unknown?\n",pv->name());
+			gateDebug1(5,"gateServer::pvExistTest() %s Unknown?\n",real_name);
 			// don't know yet - wait till connect complete
 			rc=S_casApp_pvNotFound;
 			break;
 		}
 	}
+	else if(conFind(real_name,pv)==0)
+	{
+		gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",real_name);
+		rc=S_casApp_pvNotFound;
+	}
+	else if((as_rules->noAccess(pvname))==aitTrue)
+	{
+		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",real_name);
+		pv=NULL;
+		rc=S_casApp_pvNotFound;
+	}
 	else
 	{
-		if(conFind(r_name,pv)==0)
-		{
-			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
-			// ed=new gateExistData(*this,pv,c);
-			// rc=S_casApp_asyncCompletion;
-			rc=S_casApp_pvNotFound;
-		}
-		else
-		{
-			// verify the PV name
-			if(!global_resources->ignoreMatchName(r_name) &&
-				global_resources->matchName(r_name))
-			{
-				// don't know - need to check
-				gateDebug1(5,"gateServer::pvExistTest() %s new\n",r_name);
-				pv=new gatePvData(this,r_name);
+		// don't know - need to check
+		gateDebug1(5,"gateServer::pvExistTest() %s new\n",real_name);
+		pv=new gatePvData(this,real_name);
 
-				switch(pv->getState())
-				{
-				case gatePvInactive:
-				case gatePvActive:
-				 {
-					gateDebug1(5,"gateServer::pvExistTest() %s OK\n",r_name);
-					rc=S_casApp_success;
-					break;
-				 }
-				case gatePvDead:
-					gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",r_name);
-					rc=S_casApp_pvNotFound;
-					break;
-				case gatePvConnect:
-					// Should use gateExistData here:
-					// ed=new gateExistData(*this,r_name,c);
-					// rc=S_casApp_asyncCompletion;
-					gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",
-						r_name);
-					rc=S_casApp_pvNotFound;
-					break;
-				default:
-					rc=S_casApp_pvNotFound;
-					break;
-				}
-			}
-			else
-			{
-				gateDebug1(1,"gateServer::pvExistTest() name %s not allowed\n",
-					r_name);
-				pv=NULL;
-				rc=S_casApp_pvNotFound;
-			}
+		switch(pv->getState())
+		{
+		case gatePvInactive:
+		case gatePvActive:
+			gateDebug1(5,"gateServer::pvExistTest() %s OK\n",real_name);
+			rc=S_casApp_success;
+			break;
+		case gatePvDead:
+			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",real_name);
+			rc=S_casApp_pvNotFound;
+			break;
+		case gatePvConnect:
+			gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",real_name);
+			rc=S_casApp_pvNotFound;
+			break;
+		default:
+			rc=S_casApp_pvNotFound;
+			break;
 		}
 	}
 

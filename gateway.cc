@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.9  1996/11/27 04:55:47  jbk
+// lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+//
 // Revision 1.8  1996/11/21 19:29:17  jbk
 // Suddle bug fixes and changes - including syslog calls and SIGPIPE fix
 //
@@ -65,7 +68,7 @@ void operator delete(void* x)
 
 // The parameters past in from the user are:
 //	-debug ? = set debug level, ? is the integer level to set
-//	-pv file_name = process variable list file
+//	-pvlist file_name = process variable list file
 //	-log file_name = log file name
 //	-access file_name = access security file
 //	-home directory = the program's home directory
@@ -100,11 +103,10 @@ void operator delete(void* x)
 //	(3) defaults
 
 #define PARM_DEBUG			0
-#define PARM_PV				1
 #define PARM_LOG			2
+#define PARM_PVLIST			1
 #define PARM_ACCESS			3
 #define PARM_HOME			4
-#define PARM_ALIAS			5
 #define PARM_CONNECT		6
 #define PARM_INACTIVE		7
 #define PARM_DEAD			8
@@ -117,7 +119,6 @@ void operator delete(void* x)
 #define PARM_NS				15
 #define PARM_RO				16
 #define PARM_UID			17
-#define PARM_DISALLOW		18
 
 static char gate_ca_auto_list[] = "EPICS_CA_AUTO_ADDR_LIST=NO";
 static char* server_ip_addr=NULL;
@@ -137,11 +138,9 @@ typedef struct parm_stuff PARM_STUFF;
 
 static PARM_STUFF ptable[] = {
 	{ "-debug",				6,	PARM_DEBUG,			"value" },
-	{ "-pv",				3,	PARM_PV,			"file_name" },
-	{ "-alias",				6,	PARM_ALIAS,			"file_name" },
 	{ "-log",				4,	PARM_LOG,			"file_name" },
+	{ "-pvlist",			7,	PARM_PVLIST,		"file_name" },
 	{ "-access",			7,	PARM_ACCESS,		"file_name" },
-	{ "-disallow",			9,	PARM_DISALLOW,		"file_name" },
 	{ "-home",				5,	PARM_HOME,			"directory" },
 	{ "-sip",				4,	PARM_SERVER_IP,		"IP_address" },
 	{ "-cip",				4,	PARM_CLIENT_IP,		"IP_address_list" },
@@ -261,9 +260,7 @@ static int startEverything(void)
 	fprintf(fd,"# options:\n");
 	fprintf(fd,"# home=<%s>\n",global_resources->homeDirectory());
 	fprintf(fd,"# access file=<%s>\n",global_resources->accessFile());
-	fprintf(fd,"# no access file=<%s>\n",global_resources->disallowFile());
-	fprintf(fd,"# list file=<%s>\n",global_resources->listFile());
-	fprintf(fd,"# alias file=<%s>\n",global_resources->aliasFile());
+	fprintf(fd,"# pvlist file=<%s>\n",global_resources->listFile());
 	fprintf(fd,"# log file=<%s>\n",global_resources->logFile());
 	fprintf(fd,"# debug level=%d\n",global_resources->debugLevel());
 	fprintf(fd,"# dead timeout=%d\n",global_resources->deadTimeout());
@@ -333,10 +330,8 @@ int main(int argc, char** argv)
 	int inactive_tout=-1;
 	int dead_tout=-1;
 	char* home_dir=NULL;
-	char* pv_file=NULL;
+	char* pvlist_file=NULL;
 	char* access_file=NULL;
-	char* disallow_file=NULL;
-	char* alias_file=NULL;
 	char* log_file=NULL;
 
 	home_dir=getenv("GATEWAY_HOME");
@@ -387,38 +382,14 @@ int main(int argc, char** argv)
 						}
 					}
 					break;
-				case PARM_PV:
+				case PARM_PVLIST:
 					if(++i>=argc) no_error=0;
 					else
 					{
 						if(argv[i][0]=='-') no_error=0;
 						else
 						{
-							pv_file=argv[i];
-							not_done=0;
-						}
-					}
-					break;
-				case PARM_DISALLOW:
-					if(++i>=argc) no_error=0;
-					else
-					{
-						if(argv[i][0]=='-') no_error=0;
-						else
-						{
-							disallow_file=argv[i];
-							not_done=0;
-						}
-					}
-					break;
-				case PARM_ALIAS:
-					if(++i>=argc) no_error=0;
-					else
-					{
-						if(argv[i][0]=='-') no_error=0;
-						else
-						{
-							alias_file=argv[i];
+							pvlist_file=argv[i];
 							not_done=0;
 						}
 					}
@@ -582,9 +553,7 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\tdebug=%d\n",gr->debugLevel());
 		fprintf(stderr,"\thome=%s\n",gr->homeDirectory());
 		fprintf(stderr,"\taccess=%s\n",gr->accessFile());
-		fprintf(stderr,"\tdisallow=%s\n",gr->disallowFile());
-		fprintf(stderr,"\talias=%s\n",gr->aliasFile());
-		fprintf(stderr,"\tpv=%s\n",gr->listFile());
+		fprintf(stderr,"\tpvlist=%s\n",gr->listFile());
 		fprintf(stderr,"\tlog=%s\n",gr->logFile());
 		fprintf(stderr,"\tdead=%d\n",gr->deadTimeout());
 		fprintf(stderr,"\tconnect=%d\n",gr->connectTimeout());
@@ -601,21 +570,19 @@ int main(int argc, char** argv)
 	if(connect_tout>=0)		gr->setConnectTimeout(connect_tout);
 	if(inactive_tout>=0)	gr->setInactiveTimeout(inactive_tout);
 	if(dead_tout>=0)		gr->setDeadTimeout(dead_tout);
-	if(access_file)			gr->setAccessFile(access_file);
 	if(log_file)			gr->setLogFile(log_file);
-	if(pv_file)				gr->setListFile(pv_file);
-	if(disallow_file)		gr->setDisallowFile(disallow_file);
-	if(alias_file)			gr->setAliasFile(alias_file);
+	if(access_file)			gr->setAccessFile(access_file);
+	if(pvlist_file)			gr->setListFile(pvlist_file);
+
+	gr->setUpAccessSecurity();
 
 	if(gr->debugLevel()>10)
 	{
 		fprintf(stderr,"\noption dump:\n");
 		fprintf(stderr," home=<%s>\n",gr->homeDirectory());
 		fprintf(stderr," access file=<%s>\n",gr->accessFile());
-		fprintf(stderr," disallow file=<%s>\n",gr->disallowFile());
 		fprintf(stderr," list file=<%s>\n",gr->listFile());
 		fprintf(stderr," log file=<%s>\n",gr->logFile());
-		fprintf(stderr," alias file=<%s>\n",gr->aliasFile());
 		fprintf(stderr," debug level=%d\n",gr->debugLevel());
 		fprintf(stderr," connect timeout =%d\n",gr->connectTimeout());
 		fprintf(stderr," inactive timeout =%d\n",gr->inactiveTimeout());

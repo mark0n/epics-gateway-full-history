@@ -5,6 +5,10 @@
 # $Id$
 #
 # $Log$
+# Revision 1.6  1996/11/07 14:11:01  jbk
+# Set up to use the latest CA server library.
+# Push the ulimit for FDs up to maximum before starting CA server
+#
 # Revision 1.5  1996/07/26 02:34:42  jbk
 # Interum step.
 #
@@ -24,15 +28,16 @@ OPTIM_YES=-g
 # CC=purify cc
 
 DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
-DEPLIBS = $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
-USR_LDLIBS = -lgate -lca -lcas -lCom -lgdd
+DEPLIBS = $(EPICS_BASE_LIB)/libAs.a $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
+USR_LDLIBS = -lgate -lca -lcas -lAs -lCom -lgdd
 # USR_CCFLAGS = -DDEBUG_MODE
 # CMPLR =
 
-SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc \
+SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc ../gateAs.cc \
 	      ../gateVc.cc ../gateway.cc ../gateExist.cc ../strmatch.cc
 
-LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o strmatch.o
+LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o \
+		  strmatch.o gateAs.o
 
 LIBNAME = libgate.a
 

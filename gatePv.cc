@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.9  1996/12/09 20:51:07  jbk
+// bug in array support
+//
 // Revision 1.8  1996/12/07 16:42:18  jbk
 // many bug fixes, array support added
 //
@@ -857,7 +860,7 @@ gdd* gatePvData::eventStringCB(void* dbr)
 {
 	gateDebug0(10,"gatePvData::eventStringCB\n");
 	dbr_time_string* ts = (dbr_time_string*)dbr;
-	gddScalar* value=new gddScalar(GR->appValue, aitEnumFixedString);
+	gddScalar* value=new gddScalar(GR->appValue, aitEnumString);
 
 	aitString* str = (aitString*)value->dataAddress();
 

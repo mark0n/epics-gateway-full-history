@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.8  1996/11/27 04:55:40  jbk
+ * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
+ *
  * Revision 1.7  1996/11/07 14:11:06  jbk
  * Set up to use the latest CA server library.
  * Push the ulimit for FDs up to maximum before starting CA server
@@ -44,6 +47,7 @@
 class gateServer;
 class gatePvData;
 class gateVcData;
+class gateAs;
 class gdd;
 
 typedef struct exception_handler_args       EXCEPT_ARGS;
@@ -138,6 +142,7 @@ private:
 	time_t last_connect_cleanup;	// cleared out connect pending list here
 
 	gateFd* fd_table[255]; // pukey, sucky, disgusting, horrid, vomituous
+	gateAs* as_rules;
 
 	static void exCB(EXCEPT_ARGS args);
 	static void fdCB(void* ua, int fd, int opened);

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.10  1996/12/07 16:42:22  jbk
+// many bug fixes, array support added
+//
 // Revision 1.9  1996/11/27 04:55:42  jbk
 // lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
 //
@@ -51,21 +54,25 @@
 
 // ------------------------gateChan
 
-gateChan::gateChan(const casCtx& ctx,const char* u,const char* h)
+gateChan::gateChan(const casCtx& ctx,const char* u,const char* h,gateVcData* v)
 	:casChannel(ctx)
 {
-	user_read_access=aitTrue;
-	user_write_access=aitTrue;
-	server_read_access=aitTrue;
-	server_write_access=aitTrue;
 	user=u;
 	host=h;
+	vc=v;
+	read_access=aitTrue;
+
+	if(global_resources->isReadOnly())
+		write_access=aitFalse;
+	else
+		write_access=aitTrue;
 }
 
 gateChan::~gateChan(void)
 {
 	user="ErrorNoUser";
 	host="ErrorNoHost";
+	vc=NULL;
 }
 
 void gateChan::setOwner(const char* const u, const char* const h)
@@ -75,27 +82,21 @@ void gateChan::setOwner(const char* const u, const char* const h)
 }
 
 aitBool gateChan::readAccess(void) const
-	{ return (server_read_access&&user_read_access)?aitTrue:aitFalse; }
+	{ return (read_access && vc->readAccess())?aitTrue:aitFalse; }
 
 aitBool gateChan::writeAccess(void) const
-	{ return (server_write_access&&user_write_access)?aitTrue:aitFalse; }
+	{ return (write_access && vc->writeAccess())?aitTrue:aitFalse; }
 
-void gateChan::setServerReadAccess(aitBool b)
-	{ server_read_access=b; }
+void gateChan::setReadAccess(aitBool b)
+	{ read_access=b; }
 
-void gateChan::setServerWriteAccess(aitBool b)
+void gateChan::setWriteAccess(aitBool b)
 {
 	if(global_resources->isReadOnly())
-		server_write_access=aitFalse;
+		write_access=aitFalse;
 	else
-		server_write_access=b;
+		write_access=b;
 }
-
-void gateChan::setUserReadAccess(aitBool b)
-	{ user_read_access=b; }
-
-void gateChan::setUserWriteAccess(aitBool b)
-	{ user_read_access=b; }
 
 // ------------------------gateVcData
 
@@ -104,11 +105,16 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 {
 	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 
+	if(global_resources->isReadOnly())
+		write_access=aitFalse;
+	else
+		write_access=aitTrue;
+
+	read_access=aitTrue;
 	mrg=m;
 	data=NULL;
 	event_data=NULL;
 	pv=NULL;
-	gch=NULL;
 	pv_name=strDup(name);
 	pv_string=(const char*)pv_name;
 	setState(gateVcClear);
@@ -152,7 +158,6 @@ gateVcData::~gateVcData(void)
 	if(event_data) event_data->unreference();
 	delete [] pv_name;
 	pv_name="Error";
-	gch=NULL;
 	pv->setVC(NULL);
 }
 
@@ -167,10 +172,7 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const pUserName, const char * const pHostName)
 {
 	gateDebug0(5,"~gateVcData::createChannel()\n");
-	// I hope this only gets called once per casPv instance
-	if(gch==NULL)
-		gch=new gateChan(ctx,pUserName,pHostName);
-	return gch;
+	return new gateChan(ctx,pUserName,pHostName,this);
 }
 
 unsigned gateVcData::maxSimultAsyncOps(void) const

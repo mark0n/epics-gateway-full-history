@@ -37,41 +37,36 @@
 #include <time.h>
 
 #include "gateResources.h"
+#include "gateAs.h"
 #include "gddAppTable.h"
 
 gateResources* global_resources;
 
-extern int patmatch(char *pattern, char *string);
-
 gateResources::gateResources(char* home)
 {
-	pv_access_file=NULL;
-	pv_list_file=NULL;
-	pv_dis_file=NULL;
-	pv_alias_file=NULL;
-	log_file=NULL;
-	alias_table=NULL;
-	alias_buffer=NULL;
-	list_buffer=NULL;
-	pattern_list=NULL;
-	dis_buffer=NULL;
-	pattern_dis=NULL;
-
 	home_dir=strDup(GATE_HOME);
-	suffix=strDup(GATE_SUFFIX);
-	prefix=strDup(GATE_LOG);
+	log_file=strDup(GATE_LOG);
+
+	if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
+		access_file=strDup(GATE_PV_ACCESS_FILE);
+	else
+		access_file=NULL;
+
+	if(access(GATE_PV_LIST_FILE,F_OK)==0)
+		pvlist_file=strDup(GATE_PV_LIST_FILE);
+	else
+		pvlist_file=NULL;
 
 	debug_level=0;
 	log_on=0;
 	ro=0;
 
-	if(home) setHome(home);
-
-	genLogFile();
 	setConnectTimeout(GATE_CONNECT_TIMEOUT);
 	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
 	setDeadTimeout(GATE_DEAD_TIMEOUT);
 
+	if(home) setHome(home);
+	
 	gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
 
 	appValue=tt.getApplicationType("value");
@@ -81,30 +76,14 @@ gateResources::gateResources(char* home)
 	appFixed=tt.getApplicationType("fixed");
 	appAttributes=tt.getApplicationType("attributes");
 	appMenuitem=tt.getApplicationType("menuitem");
-
-	if(access(GATE_PV_ACCESS_FILE,F_OK)==0)
-		setAccessFile(GATE_PV_ACCESS_FILE);
-	if(access(GATE_PV_LIST_FILE,F_OK)==0)
-		setListFile(GATE_PV_LIST_FILE);
-	if(access(GATE_PV_ALIAS_FILE,F_OK)==0)
-		setAliasFile(GATE_PV_ALIAS_FILE);
-	if(access(GATE_PV_DISALLOW_FILE,F_OK)==0)
-		setDisallowFile(GATE_PV_DISALLOW_FILE);
 }
 
 gateResources::~gateResources(void)
 {
-	if(list_buffer)		delete [] list_buffer;
-	if(pattern_list)	delete [] pattern_list;
-	if(pv_access_file)	delete [] pv_access_file;
-	if(pv_list_file)	delete [] pv_list_file;
-	if(pv_alias_file)	delete [] pv_alias_file;
-	if(pv_dis_file)		delete [] pv_dis_file;
-
-	delete [] home_dir;
-	delete [] log_file;
-	delete [] suffix;
-	delete [] prefix;
+	if(access_file)	delete [] access_file;
+	if(pvlist_file)	delete [] pvlist_file;
+	if(home_dir)	delete [] home_dir;
+	if(log_file)	delete [] log_file;
 }
 
 int gateResources::appValue=0;
@@ -136,188 +115,29 @@ int gateResources::setHome(char* dir)
 
 int gateResources::setListFile(char* file)
 {
-	FILE* pv_fd;
-	struct stat stat_buf;
-	int i,j;
-	unsigned long pv_len;
-	char* pc;
-
-	if(list_buffer)  delete [] list_buffer;
-	if(pattern_list) delete [] pattern_list;
-	if(pv_list_file) delete [] pv_list_file;
-
-	pv_list_file=strDup(file);
-
-	if( (pv_fd=fopen(pv_list_file,"r"))==NULL ||
-		fstat(fileno(pv_fd),&stat_buf)<0 )
-	{
-		fprintf(stderr,"Cannot open %s, all PV requests will be accepted\n",
-			pv_list_file);
-		fflush(stderr);
-		pattern_list=new char*[2];
-		pattern_list[0]="*";
-		pattern_list[1]=(char*)NULL;
-		list_buffer=(char*)NULL;
-	}
-	else
-	{
-		pv_len=(unsigned long)stat_buf.st_size;
-		list_buffer=new char[pv_len+2];
-
-		for(i=0;fgets(&list_buffer[i],pv_len-i+2,pv_fd);)
-			i+=strlen(&list_buffer[i]);
-
-		for(i=0,j=0;i<pv_len;i++) if(list_buffer[i]=='\n') j++;
-		pattern_list=new char*[j+1];
-
-		for(i=0,pc=strtok(list_buffer," \n");pc;pc=strtok(NULL," \n"))
-			pattern_list[i++]=pc;
-
-		pattern_list[i]=NULL;
-	}
-
-	// for(i=0;pattern_list[i];i++) fprintf(stderr,"<%s>\n",pattern_list[i]);
-
-	fclose(pv_fd);
-	return 0;
-}
-
-int gateResources::setDisallowFile(char* file)
-{
-	FILE* pv_fd;
-	struct stat stat_buf;
-	int i,j;
-	unsigned long pv_len;
-	char* pc;
-
-	if(dis_buffer)  delete [] dis_buffer;
-	if(pattern_dis) delete [] pattern_dis;
-	if(pv_dis_file) delete [] pv_dis_file;
-
-	pv_dis_file=strDup(file);
-
-	if((pv_fd=fopen(pv_dis_file,"r"))==NULL ||
-		fstat(fileno(pv_fd),&stat_buf)<0 )
-	{
-		fprintf(stderr,"Cannot open %s, no PVs will be forced to be ignored\n",
-			pv_dis_file);
-		fflush(stderr);
-		pattern_dis=new char*[1];
-		pattern_dis[0]=NULL;
-		dis_buffer=NULL;
-	}
-	else
-	{
-		pv_len=(unsigned long)stat_buf.st_size;
-		dis_buffer=new char[pv_len+2];
-
-		for(i=0;fgets(&dis_buffer[i],pv_len-i+2,pv_fd);)
-			i+=strlen(&dis_buffer[i]);
-
-		for(i=0,j=0;i<pv_len;i++) if(dis_buffer[i]=='\n') j++;
-		pattern_dis=new char*[j+1];
-
-		for(i=0,pc=strtok(dis_buffer," \n");pc;pc=strtok(NULL," \n"))
-			pattern_dis[i++]=pc;
-
-		pattern_dis[i]=NULL;
-	}
-
-	// for(i=0;pattern_dis[i];i++) fprintf(stderr,"<%s>\n",pattern_dis[i]);
-
-	fclose(pv_fd);
-	return 0;
-}
-
-int gateResources::setAliasFile(char* file)
-{
-	FILE* pv_fd;
-	struct stat stat_buf;
-	int i,j;
-	unsigned long pv_len;
-	char* pc;
-	char* real;
-
-	if(alias_buffer)  delete [] alias_buffer;
-	if(alias_table)   delete [] alias_table;
-	if(pv_alias_file) delete [] pv_alias_file;
-
-	pv_alias_file=strDup(file);
-
-	if( (pv_fd=fopen(pv_alias_file,"r"))==NULL ||
-		fstat(fileno(pv_fd),&stat_buf)<0 )
-	{
-		fprintf(stderr,"Cannot open %s, no PV aliases installed\n",
-			pv_alias_file);
-		fflush(stderr);
-		alias_buffer=NULL;
-		alias_table=new gateAliasTable[1];
-		alias_table->alias=NULL;
-		alias_table->actual=NULL;
-	}
-	else
-	{
-		pv_len=(unsigned long)stat_buf.st_size;
-		alias_buffer=new char[pv_len+2];
-
-		for(i=0;fgets(&alias_buffer[i],pv_len-i+2,pv_fd);)
-			i+=strlen(&alias_buffer[i]);
-
-		for(i=0,j=0;i<pv_len;i++) if(alias_buffer[i]=='\n') j++;
-		alias_table=new gateAliasTable[j+1];
-
-		for(i=0,pc=strtok(alias_buffer,"\n");pc;pc=strtok(NULL,"\n"))
-		{
-			real=strchr(pc,' ');
-			if(real)
-			{
-				*real='\0';
-				alias_table[i].alias=pc;
-				alias_table[i].actual=real+1;
-				i++;
-			}
-		}
-
-		alias_table[i].alias=NULL;
-		alias_table[i].actual=NULL;
-	}
-
-	// for(i=0;alias_table && alias_table[i].actual;i++)
-	//	fprintf(stderr,"<%s,%s>\n",alias_table[i].alias,alias_table[i].actual);
-
-	fclose(pv_fd);
-	return 0;
-}
-
-char* gateResources::findAlias(const char* const name) const
-{
-	int i;
-	char* rc=NULL;
-
-	if(alias_table)
-	{
-		for(i=0;alias_table[i].actual;i++)
-		{
-			if(strcmp(name,alias_table[i].alias)==0)
-			{
-				rc=alias_table[i].actual;
-				break;
-			}
-		}
-	}
-	return rc;
-}
-
-int gateResources::setDebugLevel(int level)
-{
-	debug_level=level;
+	if(pvlist_file) delete [] pvlist_file;
+	pvlist_file=strDup(file);
 	return 0;
 }
 
 int gateResources::setAccessFile(char* file)
 {
-	if(pv_access_file) delete [] pv_access_file;
-	pv_access_file=strDup(file);
+	if(access_file) delete [] access_file;
+	access_file=strDup(file);
+	return 0;
+}
+
+int gateResources::setLogFile(char* file)
+{
+	if(log_file) delete [] log_file;
+	log_file=strDup(file);
+	if(log_on) setUpLogging();
+	return 0;
+}
+
+int gateResources::setDebugLevel(int level)
+{
+	debug_level=level;
 	return 0;
 }
 
@@ -366,59 +186,14 @@ int gateResources::setUpLogging(void)
 #endif
 }
 
-int gateResources::setSuffix(char* s)
+int gateResources::setUpAccessSecurity(void)
 {
-	delete [] suffix;
-	suffix=strDup(s);
-	genLogFile();
+	as=new gateAs(pvlist_file,access_file);
 	return 0;
 }
 
-int gateResources::setLogFile(char* file)
+gateAs* gateResources::getAs(void)
 {
-	delete [] prefix;
-	prefix=strDup(file);
-	genLogFile();
-	return 0;
+	if(as==NULL) setUpAccessSecurity();
+	return as;
 }
-
-int gateResources::genLogFile(void)
-{
-	if(log_file) delete [] log_file;
-	log_file=new char[strlen(prefix)+strlen(suffix)+2];
-	strcpy(log_file,prefix);
-	strcat(log_file,".");
-	strcat(log_file,suffix);
-	if(log_on) setUpLogging();
-	return 0;
-}
-
-int gateResources::matchName(char* item)
-{
-	int rc,i;
-
-	if(!pattern_list) return 1; // accept all request if no table
-
-	for(rc=0,i=0;pattern_list[i] && rc==0;i++)
-		rc=matchOne(pattern_list[i],item);
-
-	return rc;
-}
-
-int gateResources::matchOne(char* pattern, char* item)
-{
-	return patmatch(pattern,item);
-}
-
-int gateResources::ignoreMatchName(char* item)
-{
-	int rc,i;
-
-	if(!pattern_dis) return 0; // don't match if no table
-
-	for(rc=0,i=0;pattern_dis[i] && rc==0;i++)
-		rc=matchOne(pattern_dis[i],item);
-
-	return rc;
-}
-

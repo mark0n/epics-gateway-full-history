@@ -31,28 +31,21 @@
  *
  */
 
-#define GATE_PIPE_FILE "GATEWAY.pipe"
-#define GATE_SCRIPT_FILE "GATEWAY.killer"
-#define GATE_PV_LIST_FILE "GATEWAY.pvlist"
+#define GATE_SCRIPT_FILE    "GATEWAY.killer"
+#define GATE_PV_LIST_FILE   "GATEWAY.pvlist"
 #define GATE_PV_ACCESS_FILE "GATEWAY.access"
-#define GATE_PV_DISALLOW_FILE "GATEWAY.disallow"
-#define GATE_PV_ALIAS_FILE "GATEWAY.alias"
-#define GATE_LOG "GATEWAY"
-#define GATE_HOME "."
-#define GATE_SUFFIX "log"
-#define GATE_CONNECT_TIMEOUT 0
-#define GATE_INACTIVE_TIMEOUT (60*60*2)
-#define GATE_DEAD_TIMEOUT (60*2)
+#define GATE_LOG            "GATEWAY.log"
+#define GATE_HOME           "."
 
-#define GATE_REALLY_SMALL 0.0000001
+#define GATE_CONNECT_TIMEOUT  0
+#define GATE_INACTIVE_TIMEOUT (60*60*2)
+#define GATE_DEAD_TIMEOUT     (60*2)
+
+#define GATE_REALLY_SMALL    0.0000001
 #define GATE_CONNECT_SECONDS 1
 
-struct gateAliasTable
-{
-	char* alias;
-	char* actual;
-};
-typedef struct gateAliasTable gateAliasTable;
+class gateAs;
+class gateAsNode;
 
 // parameters to both client and server sides
 class gateResources
@@ -62,14 +55,12 @@ public:
 	~gateResources(void);
 
 	int setHome(char* dir);
-	int setDisallowFile(char* file);
 	int setListFile(char* file);
-	int setAliasFile(char* file);
-	int setDebugLevel(int level);
 	int setAccessFile(char* file);
-	int setSuffix(char* word);
 	int setUpLogging(void);
+	int setUpAccessSecurity(void);
 	int setLogFile(char* file);
+	int setDebugLevel(int level);
 
 	void setReadOnly(void)		{ ro=1; }
 	int isReadOnly(void)		{ return ro; }
@@ -84,17 +75,11 @@ public:
 	time_t deadTimeout(void) const		{ return dead_timeout; }
 	char* homeDirectory(void) const		{ return home_dir; }
 
-	char* listFile(void) const	{ return pv_list_file?pv_list_file:"NULL"; }
-	char* disallowFile(void) const { return pv_dis_file?pv_dis_file:"NULL"; }
-	char* aliasFile(void) const { return pv_alias_file?pv_alias_file:"NULL"; }
+	char* listFile(void) const	{ return pvlist_file?pvlist_file:"NULL"; }
+	char* accessFile(void) const{ return access_file?access_file:"NULL"; }
 	char* logFile(void) const	{ return log_file?log_file:"NULL"; }
-	char* accessFile(void) const{ return pv_access_file?pv_access_file:"NULL"; }
 
-	char* findAlias(const char* const name) const;
-
-	int matchName(char* pv_name);
-	int ignoreMatchName(char* pv_name);
-	int matchOne(char* pattern,char* pv_name);
+	gateAs* getAs(void);
 
 	// here for convenience
 	static int appValue;
@@ -106,24 +91,12 @@ public:
 	static int appAttributes;
 
 private:
-	int genLogFile(void);
-
 	char* home_dir,*log_file;
-	char *pv_access_file,*pv_list_file,*pv_dis_file,*pv_alias_file;
+	char *access_file,*pvlist_file;
 	int debug_level,ro;
 	int log_on; // 0=off, 1=on
 	time_t connect_timeout,inactive_timeout,dead_timeout;
-
-	char *prefix,*suffix;
-
-	char* dis_buffer;
-	char** pattern_dis;
-
-	char* list_buffer;
-	char** pattern_list;
-
-	char* alias_buffer;
-	gateAliasTable* alias_table;
+	gateAs* as;
 };
 
 #ifndef GATE_RESOURCE_FILE

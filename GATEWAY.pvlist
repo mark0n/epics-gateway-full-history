@@ -1,0 +1,71 @@
+
+# Valid forms of the lines in this file:
+#  1) pv_name_or_pattern DENY
+#  2) pv_alias_name      ALIAS   actual_pv_name
+#  3) pv_name            PV      access_security_group access_security_level
+#  4) pv_pattern         PATTERN access_security_group access_security_level
+#
+# pv_name_or_pattern:
+#  Standard EPICS PV name or a pattern which can be used to match a group of
+#  PVs.  Patterns use the standard shell type wildcard characters for matching.
+#
+# pv_alias_name:
+#  Specific PV name that user on the CA server side of the gateway will see.
+#
+# actual_pv_name:
+#  The name of the PV on the real control network that gateway is serving.
+#
+# pv_name:
+#  Standard EPICS PV name.
+#
+# pv_pattern:
+#  Group of PV names specified using shell-like wild characters.
+#
+# access_security_group:
+#  Standard EPICS access security group name.
+#
+# access_security_level:
+#  Standard EPICS access security level (0 or 1).
+#
+# DENY:
+#  The gateway will completely ignore requests for this PV name or
+#  any PV that matches the pattern.  Can be used to block the gateway
+#  from responsing to groups of PVs.
+#
+# ALIAS:
+#  Define a PV alias.  The gateway will transparently translate the PV
+#  alias name to a real name on the control network is serves.
+#
+# PV:
+#  Used to declare access security rules for specific PV names.  The 
+#  access_security_group option and access_security_level are optional.
+#  Defaults are DEFAULT and 1.
+#
+# PATTERN:
+#  Same as PV except identify an entire group of PVs that use a particular
+#  access_security_group and access_security_level.
+#
+# Notes:
+#  1) Pattern use shell-like wildcard characters (*, ?, [])
+#  2) Any PV not included in this file is allowed access according to 
+#     DEFAULT access security group.  If no access security file, then the
+#     PVs are allowed read access only.
+#  3) See EPICS access security documentation for creating an access security
+#     file for the PV gateway.
+#
+# Below:
+#  - anything starting with ID is not allowed
+#  - scummy translated to jbk_ai1 on real network and users are allowed
+#    access according to access security rules for group jims_group
+#  - requests for PVs starting with jbk_ will be allowed according to rules
+#    for access security group jims_group
+#  - PV food is allowed according to rules in group jims_group at access
+#    level 1
+#  - all other PVs will be allowed and given read permission to everyone
+
+ID*     DENY
+scummy  ALIAS   jbk_ai1
+scummy  PV      jims_group 0
+food    PV      jims_group
+jbk_*   PATTERN jims_group 0
+
