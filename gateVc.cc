@@ -107,16 +107,21 @@ void dumpdd(int step, const char *desc, const char * /*name*/, const gdd *dd)
 
 // ------------------------gateChan
 
-gateChan::gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n)
+// vc is set in the constructor to the incoming vc.  The constructor
+// adds it to the chan list.  The vc is set to NULL when the
+// gateVcData removes it from the chan list via
+// gateVcData::removeChan.  This prevents it from calling removeChan
+// when the gateVcData is gone.
+gateChan::gateChan(const casCtx &ctx,gateVcData *v, gateAsNode *n)
 	:casChannel(ctx),vc(v),node(n)
 {
-	vc.addChan(this);
+	if(vc) vc->addChan(this);
 	n->setUserFunction(post_rights,this);
 }
 
 gateChan::~gateChan(void)
 {
-	vc.removeChan(this);
+	if(vc) vc->removeChan(this);
 	delete node;
 }
 
@@ -124,10 +129,10 @@ void gateChan::setOwner(const char* const u, const char* const h)
 	{ node->changeInfo(u,h); }
 
 bool gateChan::readAccess(void) const
-	{ return (node->readAccess()&&vc.readAccess())?true:false; }
+	{ return (node->readAccess()&&vc&&vc->readAccess())?true:false; }
 
 bool gateChan::writeAccess(void) const
-	{ return (node->writeAccess()&&vc.writeAccess())?true:false; }
+	{ return (node->writeAccess()&&vc&&vc->writeAccess())?true:false; }
 
 const char* gateChan::getUser(void) { return node->user(); }
 const char* gateChan::getHost(void) { return node->host(); }
@@ -230,6 +235,8 @@ gateVcData::~gateVcData(void)
 	delete [] pv_name;
 	pv_name="Error";
 	if (pv) pv->setVC(NULL);
+	clearChanList();
+	
 #ifdef STAT_PVS
 	mrg->setStat(statVcTotal,--mrg->total_vc);
 #endif
@@ -256,7 +263,7 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 		const char * const u, const char * const h)
 {
 	gateDebug0(5,"gateVcData::createChannel()\n");
-	gateChan* c =  new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,u,h));
+	gateChan* c =  new gateChan(ctx,this,mrg->getAs()->getInfo(entry,u,h));
 	return c;
 }
 
@@ -574,6 +581,21 @@ void gateVcData::vcNew(void)
 			dumpdd(99,"event_data",name(),event_data);
 		}
 #endif
+}
+
+// This routine, called from ~gateVcdata, clears the chan list to
+// insure the gateChan's do not call the gateVcData to remove them
+// after the gateVcData is gone.
+void gateVcData::clearChanList(void)
+{
+	gateDebug1(10,"gateVcData::clearChanList() name=%s\n",name());
+	gateChan *pChan;
+
+	while((pChan=chan.first()))	{
+		// removeChan also sets the pChan->vc to NULL, the only really
+		// necessary thing to do in ~gateVcData
+		removeChan(pChan);
+	}
 }
 
 // The asynchronous io queues are filled when the vc is not ready.

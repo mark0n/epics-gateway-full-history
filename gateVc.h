@@ -63,21 +63,22 @@ class gateAsEntry;
 class gateChan : public casChannel, public tsDLNode<gateChan>
 {
 public:
-	gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n);
+	gateChan(const casCtx &ctx,gateVcData *v, gateAsNode *n);
 	~gateChan(void);
 
 	virtual bool readAccess(void) const;
 	virtual bool writeAccess(void) const;
-	virtual void setOwner(const char* const user,const char* const host);
+	virtual void setOwner(const char * const user,const char * const host);
 
-	const char* getUser(void);
-	const char* getHost(void);
+	const char *getUser(void);
+	const char *getHost(void);
+	void setVC(gateVcData *vcIn) { vc=vcIn; }
 	void report(void);
 
-	static void post_rights(void*);
+	static void post_rights(void *);
 private:
-	gateVcData& vc;
-	gateAsNode* node; // I must delete this when done using it
+	gateVcData *vc;
+	gateAsNode *node; // I must delete this when done using it
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -142,6 +143,7 @@ public:
 	unsigned long getVcID(void) const { return vcID; }
 	gatePendingWrite *pendingWrite() const { return pending_write; }
 	void cancelPendingWrite(void) { pending_write=NULL; }
+	void clearChanList(void);
 	void flushAsyncReadQueue(void);
 	void flushAsyncWriteQueue(int docallback);
 
@@ -208,7 +210,8 @@ inline time_t gateVcData::timeLastAlhTrans(void) const
 	{ return time(NULL)-time_last_alh_trans; }
 
 inline void gateVcData::addChan(gateChan* c) { chan.add(*c); }
-inline void gateVcData::removeChan(gateChan* c) { chan.remove(*c); }
+inline void gateVcData::removeChan(gateChan* c) {
+	chan.remove(*c); c->setVC(NULL); }
 
 #endif
 
