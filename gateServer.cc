@@ -19,6 +19,9 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.40  2002/07/19 06:28:23  lange
+ * Cosmetics.
+ *
  *********************************************************************-*/
 
 #define DEBUG_PV_CON_LIST 0
@@ -969,6 +972,12 @@ void gateServer::initStats(char *prefix)
 			stat_table[i].units="Hz";
 			stat_table[i].precision=2;
 			break;
+		case statCPUFract:
+			stat_table[i].name="cpuFract";
+			stat_table[i].init_value=&zero;
+			stat_table[i].units="";
+			stat_table[i].precision=3;
+			break;
 #endif
 #ifdef CAS_DIAGNOSTICS
 		case statServerEventRate:
@@ -1008,11 +1017,14 @@ void gateRateStatsTimer::expire()
 	double delTime;
 #ifdef RATE_STATS
 	static unsigned long cePrevCount,etPrevCount,mlPrevCount,pePrevCount ;
+	static unsigned long cpuPrevCount;
 	unsigned long ceCurCount=mrg->client_event_count;
 	unsigned long peCurCount=mrg->post_event_count;
 	unsigned long etCurCount=mrg->exist_count;
 	unsigned long mlCurCount=mrg->loop_count;
-	double ceRate,peRate,etRate,mlRate;
+	// clock is really clock_t, which should be long
+	unsigned long cpuCurCount=(unsigned long)clock();
+	double ceRate,peRate,etRate,mlRate,cpuFract;
 #endif
 #ifdef CAS_DIAGNOSTICS
 	static unsigned long sePrevCount,srPrevCount;
@@ -1059,6 +1071,15 @@ void gateRateStatsTimer::expire()
 	mlRate=(delTime > 0)?(double)(ULONG_DIFF(mlCurCount,mlPrevCount))/
 	  delTime:0.0;
 	mrg->setStat(statLoopRate,mlRate);
+
+	// Calculate the CPU Fract
+	// Note: clock() returns (long)-1 if it can't find the time;
+	// however, we can't distinguish that -1 from a -1 owing to
+	// wrapping.  So treat the return value as an unsigned long and
+	// don't check the return value.
+	cpuFract=(delTime > 0)?(double)(ULONG_DIFF(cpuCurCount,cpuPrevCount))/
+	  delTime/CLOCKS_PER_SEC:0.0;
+	mrg->setStat(statCPUFract,cpuFract);
 #endif
 
 #ifdef CAS_DIAGNOSTICS
@@ -1088,6 +1109,7 @@ void gateRateStatsTimer::expire()
 	pePrevCount=peCurCount;
 	etPrevCount=etCurCount;
 	mlPrevCount=mlCurCount;
+	cpuPrevCount=cpuCurCount;
 #endif
 #ifdef CAS_DIAGNOSTICS
 	sePrevCount=seCurCount;

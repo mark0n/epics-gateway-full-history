@@ -20,6 +20,9 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.26  2002/07/19 06:28:28  lange
+ * Cosmetics.
+ *
  *********************************************************************-*/
 
 #include <sys/types.h>
@@ -101,7 +104,8 @@ private:
 #define statPostEventRate   NEXT_STAT_PV+1
 #define statExistTestRate   NEXT_STAT_PV+2
 #define statLoopRate        NEXT_STAT_PV+3
-#define NEXT_RATE_STAT      NEXT_STAT_PV+4
+#define statCPUFract        NEXT_STAT_PV+4
+#define NEXT_RATE_STAT      NEXT_STAT_PV+5
 #else
 #define NEXT_RATE_STAT      NEXT_STAT_PV
 #endif

@@ -16,6 +16,7 @@
 #include <sys/time.h>
 #include <sys/resource.h>
 
+#include "epicsVersion.h"
 #include "gateResources.h"
 
 // Function Prototypes
@@ -358,8 +359,9 @@ static int startEverything(char *prefix)
 	time(&now);
 	tblock=localtime(&now);
 	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
-	printf("%s %s [%s %s] PID=%d\n",
-	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__,sid);	  
+	printf("%s %s [%s %s]\n",
+	  timeStampStr,GATEWAY_VERSION_STRING,__DATE__,__TIME__);	  
+	printf("%s PID=%d\n",BASE_VERSION_STRING,sid);
 
 	gatewayServer(prefix);
 	return 0;
