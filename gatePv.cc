@@ -95,7 +95,7 @@ const char* const gatePvData::pv_state_names[] =
 
 // Apart from the FixedString destructor, which is definitely needed,
 // these are probably not necessary.  The default gddDestructor does
-// delete [] (aitUint8 *)v.  (aitUint=char) Since delete calls free,
+// delete [] (aitUint8 *)v. (aitUint=char) Since delete calls free,
 // which casts the pointer to a char * anyway, our specific casts are
 // probably wasted.
 
@@ -105,6 +105,14 @@ class gateFixedStringDestruct : public gddDestructor
 public:
 	gateFixedStringDestruct(void) { }
 	void run(void *v) { delete [] (aitFixedString *)v; }
+};
+
+// Enum
+class gateEnumDestruct : public gddDestructor
+{
+public:
+	gateEnumDestruct(void) { }
+	void run(void *v) { delete [] (aitEnum16 *)v; }
 };
 
 // Int
@@ -297,7 +305,7 @@ void gatePvData::init(gateServer* m,gateAsEntry* pase, const char* name)
 	{
 		// Put PV into connecting list
 		status = mrg->conAdd(pv_name,*this);
-		if(status) printf("%s Put into connecting list failed for %s\n",
+		if(status) fprintf(stderr,"%s Put into connecting list failed for %s\n",
 		  timeStamp(),pv_name);
 
 #if DEBUG_PV_CON_LIST
@@ -1351,6 +1359,8 @@ gdd* gatePvData::dataEnumCB(void * dbr)
 	}
 
 	menu->putRef(items,new gateFixedStringDestruct());
+#if DEBUG_ENUM
+#endif
 	return menu;
 }
 
@@ -1473,12 +1483,31 @@ gdd* gatePvData::eventStringCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventStringCB\n");
 	dbr_time_string* ts = (dbr_time_string*)dbr;
-	gddScalar* value=new gddScalar(GR->appValue, aitEnumString);
+	aitIndex count = totalElements();
+	gdd* value;
 
-	aitString* str = (aitString*)value->dataAddress();
 
 	// DBR_TIME_STRING response
-	str->copy(ts->value);
+	if(count>1)
+	{
+		// KE: For arrays of strings.  This case was not originally
+		// included and was added 11-2004.  It uses aitFixedString
+		// whereas the count=1 case uses aitString, which is a class.
+		// It is not commonly used, so if this implementation is
+		// wrong, it may be awhile before it is discovered.
+		aitFixedString *d,*nd;
+		nd=new aitFixedString[count];
+		d=(aitFixedString*)&ts->value;
+		memcpy(nd,d,count*sizeof(aitFixedString));
+		value=new gddAtomic(GR->appValue,aitEnumFixedString,1,&count);
+		value->putRef(nd,new gateFixedStringDestruct());
+	}
+	else
+	{
+		value=new gddScalar(GR->appValue, aitEnumString);
+		aitString* str = (aitString*)value->dataAddress();
+		str->copy(ts->value);
+	}
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp(&ts->stamp);
 	return value;
@@ -1488,16 +1517,40 @@ gdd* gatePvData::eventEnumCB(void *dbr)
 {
 	gateDebug0(10,"gatePvData::eventEnumCB\n");
 	dbr_time_enum* ts = (dbr_time_enum*)dbr;
-	gddScalar* value = new gddScalar(GR->appValue,aitEnumEnum16);
+	aitIndex count = totalElements();
+	gdd* value;
 
 #if DEBUG_ENUM
 	printf("gatePvData::eventEnumCB\n");
 #endif
 
 	// DBR_TIME_ENUM response
-	value->putConvert(ts->value);
-	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp(&ts->stamp);
+	if(count>1)
+	{
+		// KE: For arrays of enums.  This case was not originally
+		// included and was added 11-2004.  It is not commonly, if
+		// ever, used, so if this implementation is wrong, it may be
+		// awhile before it is discovered.  The waveform can be an
+		// array of enums (FTVL="ENUM"), but there is no support for
+		// the menu strings, so this is an unwise thing to do.  Note
+		// that the menu strings (which don't exist for the waveform)
+		// are added in dataEnumCB.
+		aitEnum16 *d,*nd;
+		nd=new aitEnum16[count];
+		d=(aitEnum16*)&ts->value;
+		memcpy(nd,d,count*sizeof(aitEnum16));
+		value=new gddAtomic(GR->appValue,aitEnumInt16,1,&count);
+		value->putRef(nd,new gateEnumDestruct());
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumEnum16);
+		value->putConvert(ts->value);
+	}
+#if DEBUG_ENUM
+	printf("gatePvData::eventEnumCB\n");
+	value->dump();
+#endif
 	return value;
 }
 
@@ -1507,12 +1560,12 @@ gdd* gatePvData::eventLongCB(void *dbr)
 	dbr_time_long* ts = (dbr_time_long*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitInt32 *d,*nd;
 
 	// DBR_TIME_LONG response
 	// set up the value
 	if(count>1)
 	{
+		aitInt32 *d,*nd;
 		nd=new aitInt32[count];
 		d=(aitInt32*)&ts->value;
 		memcpy(nd,d,count*sizeof(aitInt32));
@@ -1535,12 +1588,12 @@ gdd* gatePvData::eventCharCB(void *dbr)
 	dbr_time_char* ts = (dbr_time_char*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitInt8 *d,*nd;
 
 	// DBR_TIME_CHAR response
 	// set up the value
 	if(count>1)
 	{
+		aitInt8 *d,*nd;
 		nd=new aitInt8[count];
 		d=(aitInt8*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitInt8));
@@ -1563,12 +1616,12 @@ gdd* gatePvData::eventFloatCB(void *dbr)
 	dbr_time_float* ts = (dbr_time_float*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitFloat32 *d,*nd;
 
 	// DBR_TIME_FLOAT response
 	// set up the value
 	if(count>1)
 	{
+		aitFloat32 *d,*nd;
 		nd=new aitFloat32[count];
 		d=(aitFloat32*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitFloat32));
@@ -1591,12 +1644,12 @@ gdd* gatePvData::eventDoubleCB(void *dbr)
 	dbr_time_double* ts = (dbr_time_double*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitFloat64 *d,*nd;
 
 	// DBR_TIME_FLOAT response
 	// set up the value
 	if(count>1)
 	{
+		aitFloat64 *d,*nd;
 		nd=new aitFloat64[count];
 		d=(aitFloat64*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitFloat64));
@@ -1619,12 +1672,12 @@ gdd* gatePvData::eventShortCB(void *dbr)
 	dbr_time_short* ts = (dbr_time_short*)dbr;
 	aitIndex count = totalElements();
 	gdd* value;
-	aitInt16 *d,*nd;
 
 	// DBR_TIME_FLOAT response
 	// set up the value
 	if(count>1)
 	{
+		aitInt16 *d,*nd;
 		nd=new aitInt16[count];
 		d=(aitInt16*)&(ts->value);
 		memcpy(nd,d,count*sizeof(aitInt16));
