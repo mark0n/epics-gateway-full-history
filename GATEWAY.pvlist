@@ -6,8 +6,8 @@
 #  4) <pv_name_pattern>   ALLOW   [<asg> [<asl>]]
 #
 # where:
-#        <eval_order>      = DENY, ALLOW      allow rules take precedence (default)
-#                            ALLOW, DENY      deny rules take precedence
+#        <eval_order>      = DENY, ALLOW      allow rules take precedence
+#                            ALLOW, DENY      deny rules take precedence (default)
 #        <pv_name_pattern> = regular expression that matches PV names
 #        <host>            = unqualified host name
 #        <actual_pv_name>  = substitution pattern that specifies the real PV name
@@ -19,7 +19,8 @@
 # ORDER:
 #  This will set the evaluation order that is used when a client requests
 #  a PV. Setting this to "DENY, ALLOW" will allow access to a PV name that matches
-#  both a DENY and an ALLOW pattern. (This is the default.)
+#  both a DENY and an ALLOW pattern. "ALLOW, DENY" will make a DENY override an ALLOW
+#  for the same variable. (This is the default.)
 #  NOTE: Matching DENY FROM patterns (with host names) will always override matching
 #        ALLOW patterns.
 #
@@ -33,7 +34,7 @@
 #  Define a PV alias. The gateway will transparently translate PV names to different
 #  actual PV names on the control network it serves.
 #  The actual name may contain the special escape sequences \0 ... \9 which will be
-#  replaced by the n-th sub-expression matched.
+#  replaced by the n-th sub-expression matched. (\0 is the complete matched expression.)
 #
 # ALLOW:
 #  Used to declare PV names which the Gateway should serve. Access security rules
@@ -44,7 +45,8 @@
 #  1) Commands are not case sensitive.
 #  2) Pattern use GNU-style regular expressions. (See the documentation included
 #     with the regex library for details on regular expressions.)
-#  3) Any PV not included in an ALLOW command is not allowed access. 
+#  3) Any PV not included in an ALLOW command is not allowed access. If no PV list
+#     file is specified on the command line, a default rule ".* ALLOW" will be created.
 #  4) See EPICS access security documentation for creating an access security
 #     file for the PV gateway.
 #

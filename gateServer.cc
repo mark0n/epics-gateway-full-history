@@ -267,11 +267,11 @@ void gateServer::report(void)
 	time_t t;
 	time(&t);
 
-	printf("-----------------------------------------------------------------\n"
+	printf("---------------------------------------------------------------------------\n"
 		   "Active Virtual Connection Report: %s",ctime(&t));
 	for(node=vc_list.first();node;node=node->getNext())
 		node->report();
-	printf("-----------------------------------------------------------------\n");
+	printf("---------------------------------------------------------------------------\n");
 	fflush(stdout);
 }
 
@@ -286,7 +286,7 @@ void gateServer::report2(void)
 	diff=t-start_time;
 	rate=diff?(double)exist_count/(double)diff:0;
 
-	printf("-----------------------------------------------------------------\n");
+	printf("---------------------------------------------------------------------------\n");
 	printf("PV Summary Report: %s\n",ctime(&t));
 	printf("Exist test rate = %f\n",rate);
 	printf("Total real PV count = %d\n",(int)pv_list.count());
@@ -326,7 +326,7 @@ void gateServer::report2(void)
 		    node->getData()->name())
 			printf(" %s\n",node->getData()->name());
 	}
-	printf("-----------------------------------------------------------------\n");
+	printf("---------------------------------------------------------------------------\n");
 	fflush(stdout);
 }
 

@@ -18,6 +18,10 @@ static char RcsId[] = "@(#)$Id$";
  * $Author$
  *
  * $Log$
+ * Revision 1.14  2000/05/02 13:49:39  lange
+ * Uses GNU regex library (0.12) for pattern matching;
+ * Fixed some CAS beacon problems (reconnecting IOCs)
+ *
  *********************************************************************-*/
 
 #include <stdio.h>
@@ -36,7 +40,7 @@ void gateAsCaClear(void);
 
 const char* gateAs::default_group = "DEFAULT";
 const char* gateAs::default_pattern = "*";
-unsigned char gateAs::eval_order = GATE_DENY_FIRST;
+unsigned char gateAs::eval_order = GATE_ALLOW_FIRST;
 
 aitBool gateAs::rules_installed = aitFalse;
 aitBool gateAs::use_default_rules = aitFalse;
@@ -98,7 +102,12 @@ int gateAs::readPvList(const char* lfile)
 		}
 	}
 	else
+	{	// Create a ".* allow" rule if no file is specified
+		pe = new gateAsEntry(".*",NULL,default_group,1);
+		if(pe->init(allow_list,line)==aitFalse) delete pe;
+
 		return 0;
+	}
 
 	// Read all PV file lines
 	while(fgets(inbuf,sizeof(inbuf),fd))
@@ -398,20 +407,20 @@ void gateAs::report(FILE* fd)
 	time_t t;
 	time(&t);
 
-	fprintf(fd,"-----------------------------------------------------------------\n"
+	fprintf(fd,"---------------------------------------------------------------------------\n"
 		   "Configuration Report: %s",ctime(&t));
-	fprintf(fd,"\n======================= Allowed PV Report =======================\n");
-	fprintf(fd," Pattern                        ASG       ASL Alias\n");
+	fprintf(fd,"\n============================ Allowed PV Report ============================\n");
+	fprintf(fd," Pattern                        ASG             ASL Alias\n");
 	pi = new tsSLIter<gateAsEntry>(allow_list);
 	while((pe=pi->next()))
 	{
-		fprintf(fd," %-30s %-10s %d ",pe->name,pe->group,pe->level);
+		fprintf(fd," %-30s %-16s %d ",pe->name,pe->group,pe->level);
 		if(pe->alias) fprintf(fd," %s\n",pe->alias);
 		else fprintf(fd,"\n");
 	}
 	delete pi;
 
-	fprintf(fd,"\n======================= Denied PV Report  =======================\n");
+	fprintf(fd,"\n============================ Denied PV Report  ============================\n");
 	pi = new tsSLIter<gateAsEntry>(deny_list);
 	if((pe=pi->next())) {
 		fprintf(fd,"\n==== Denied from ALL Hosts:\n");
@@ -442,7 +451,7 @@ void gateAs::report(FILE* fd)
 	if(rules_installed==aitTrue) fprintf(fd,"Access Rules are installed.\n");
 	if(use_default_rules==aitTrue) fprintf(fd,"Using default access rules.\n");
 
-	fprintf(fd,"-----------------------------------------------------------------\n");
+	fprintf(fd,"---------------------------------------------------------------------------\n");
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

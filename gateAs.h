@@ -19,6 +19,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.11  2000/05/02 13:49:39  lange
+ * Uses GNU regex library (0.12) for pattern matching;
+ * Fixed some CAS beacon problems (reconnecting IOCs)
+ *
  *********************************************************************-*/
 
 #include <stdio.h>
@@ -76,6 +80,7 @@ private:
 		const char *err;
 		pat_buff.translate=0; pat_buff.fastmap=0;
 		pat_buff.allocated=0; pat_buff.buffer=0;
+
 		if((err = re_compile_pattern(name, strlen(name), &pat_buff)))
 		{
 			fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, name, err);
@@ -92,7 +97,7 @@ public:
 	gateAsEntry(const char* pvname,			   //   PV name pattern (regex)
 				const char* rname,             //   Real name substitution pattern
 				const char* g, int l) :        //   ASG / ASL
-		name(pvname), alias(rname), group(g), level(l) { }
+		name(pvname), alias(rname), group(g), level(l), as(NULL) { }
 
 												// DENY / DENY FROM
 	gateAsEntry(const char* pvname) :			//   PV name pattern (regex)
@@ -189,7 +194,8 @@ public:
 	gateAsLine(const char* line, int len, tsSLList<gateAsLine>& n) :
 		buf(new char[len+1])
 	{
-		strncpy(buf,line,len);
+		strncpy(buf,line,len+1);
+		buf[len] = '\0';
 		n.add(*this);
 	}
 	~gateAsLine(void)
