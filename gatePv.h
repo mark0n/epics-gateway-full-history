@@ -109,6 +109,7 @@ public:
 	int pendingGet(void) const { return (get_state)?1:0; }
 	int monitored(void) const { return (mon_state)?1:0; }
 	int alhMonitored(void) const { return (alh_mon_state)?1:0; }
+	int alhGetPending(void) const { return (alh_get_state)?1:0; }
 	int needAddRemove(void) const { return (complete_flag)?1:0; }
 	int abort(void) const { return (abort_flag)?1:0; }
 	
@@ -139,7 +140,7 @@ public:
 	int alhMonitor(void);           // add alh info monitor
 	int alhUnmonitor(void);         // delete alh info monitor
 	int get(void);                  // get callback
-	int put(const gdd*, int docallback, gateAsClient *asc);  // put
+	int put(const gdd*, int docallback);  // put
 	
 	time_t timeInactive(void) const;
 	time_t timeActive(void) const;
@@ -152,6 +153,9 @@ public:
 	void setTransTime(void);
 	void addET(const casCtx&);
 	void flushAsyncETQueue(pvExistReturnEnum);
+
+	void markAlhGetPending(void) { alh_get_state=1; }
+	void markAlhNoGetPending(void) { alh_get_state=0; }
 	
 protected:
 	void init(gateServer*,gateAsEntry*,const char* name);
@@ -166,16 +170,14 @@ protected:
 
 private:
 	void markMonitored(void) { mon_state=1; }
-	void markGetPending(void) { get_state=1; }
-	void markAlhMonitored(void) { alh_mon_state=1; }
-	void markAlhGetPending(void) { alh_get_state=1; }
-	void markAddRemoveNeeded(void) { complete_flag=1; }
-	void markAbort(void) { abort_flag=1; }
 	void markNotMonitored(void) { mon_state=0; }
+	void markGetPending(void) { get_state=1; }
 	void markNoGetPending(void) { get_state=0; }
+	void markAlhMonitored(void) { alh_mon_state=1; }
 	void markAlhNotMonitored(void) { alh_mon_state=0; }
-	void markAlhNoGetPending(void) { alh_get_state=0; }
+	void markAddRemoveNeeded(void) { complete_flag=1; }
 	void markAddRemoveNotNeeded(void) { complete_flag=0; }
+	void markAbort(void) { abort_flag=1; }
 	void markNoAbort(void) { abort_flag=0; }
 	
 	void setState(gatePvState s) { pv_state=s; }

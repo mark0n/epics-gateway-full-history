@@ -72,6 +72,8 @@ public:
 	// KE: Unused
 	virtual void setOwner(const char * const user,const char * const host);
 #endif
+    virtual caStatus write(const casCtx &ctx, const gdd &value);
+	
 	const char *getUser(void);
 	const char *getHost(void);
 	void setVC(gateVcData *vcIn) { vc=vcIn; }
@@ -104,6 +106,8 @@ public:
 	virtual casChannel *createChannel (const casCtx &ctx,
 		const char* const pUserName, const char* const pHostName);
 	virtual const char *getName() const;
+
+	caStatus write(const casCtx &ctx, const gdd &value, gateChan &chan);
 
 	int pending(void);
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }
@@ -146,10 +150,9 @@ public:
 	unsigned long getVcID(void) const { return vcID; }
 	gatePendingWrite *pendingWrite() const { return pending_write; }
 	void cancelPendingWrite(void) { pending_write=NULL; }
-	void clearChanList(void);
-	void clearAsyncLists(void);
 	void flushAsyncReadQueue(void);
 	void flushAsyncWriteQueue(int docallback);
+	void flushAsyncAlhReadQueue(void);
 
 	void markNoList(void) { in_list_flag=0; }
 	void markInList(void) { in_list_flag=1; }
@@ -163,6 +166,7 @@ public:
 	int needInitialPosting(void);
 	void markInterested(void);
 	void markNotInterested(void);
+	void markAlhDataAvailable(void);
 	int getStatus(void) { return status; }
 
 	casEventMask select_mask;
@@ -187,8 +191,9 @@ private:
 	int prev_post_value_changes;
 	int post_value_changes;
 	tsDLList<gateChan> chan_list;
-	tsDLList<gateAsyncR> rio;	// Queue for read's received when not ready
-	tsDLList<gateAsyncW> wio;	// Queue for write's received when not ready
+	tsDLList<gateAsyncR> rio;	 // Queue for read's received when not ready
+	tsDLList<gateAsyncW> wio;	 // Queue for write's received when not ready
+	tsDLList<gateAsyncR> alhRio; // Queue for alh read's received when not ready
 	gatePendingWrite *pending_write;  // NULL unless a write (put) is in progress
 	// The state of the process variable is kept in these two gdd's
 	gdd* pv_data;     // Filled in by gatePvData::getCB on activation

@@ -43,7 +43,6 @@
 
 #include "gateAs.h"
 #include "gateResources.h"
-#include "gateVc.h"
 
 void gateAsCa(void);
 void gateAsCaClear(void);
@@ -63,9 +62,6 @@ extern "C" {
 	}
 	static int readFunc(char* buf, int max_size) {
 		return gateAs::readFunc(buf, max_size);
-	}
-	static void trapWriteCB(asTrapWriteMessage *pMsg, int after) {
-		gateAsClient::trapWriteCB(pMsg, after);
 	}
 }
 
@@ -120,7 +116,6 @@ gateAsClient::gateAsClient(gateVcData *vcd) :
 	asentry(NULL),
 	user_arg(NULL),
 	user_func(NULL),
-	twID(0),
 	vc(vcd)
 {
 }
@@ -131,7 +126,6 @@ gateAsClient::gateAsClient(gateVcData *vcd, gateAsEntry* e, const char* user,
 	asentry(e),
 	user_arg(NULL),
 	user_func(NULL),
-	twID(0),
 	vc(vcd)
 {
 	if(e&&asAddClient(&asclientpvt,e->asmemberpvt,e->level,(char*)user,(char*)host)==0)
@@ -149,8 +143,6 @@ gateAsClient::gateAsClient(gateVcData *vcd, gateAsEntry* e, const char* user,
 #endif
 	// Register the client callback
 	asRegisterClientCallback(asclientpvt,::clientCallback);
-	// Register the trapWrite callback
-	twID = asTrapWriteRegisterListener(::trapWriteCB);
 #if DEBUG_DELAY
 	printf("%s gateAsClient::gateAsClient finished\n",
 	  timeStamp());
@@ -162,9 +154,6 @@ gateAsClient::~gateAsClient(void)
 	// client callback
 	if(asclientpvt) asRemoveClient(&asclientpvt);
 	asclientpvt=NULL;
-
-	// trapWrite callback
-	if(twID) asTrapWriteUnregisterListener(twID);
 }
 
 void gateAsClient::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
@@ -178,18 +167,6 @@ void gateAsClient::clientCallback(ASCLIENTPVT p, asClientStatus /*s*/)
 	  asc->user_func);
 #endif
 	if(asc->user_func) asc->user_func(asc->user_arg);
-}
-
-void gateAsClient::trapWriteCB(asTrapWriteMessage *pMsg, int after) {
-	gateAsClient *asc = (gateAsClient *)pMsg->serverSpecific;
-	if(asc && !after) {
-		printf("%s %s@%s writing %s\n",
-		  timeStamp(),
-		  asc->user()?asc->user():"Unknown",
-		  asc->host()?asc->host():"Unknown",
-		  asc->getVC() && asc->getVC()->getName()?
-		    asc->getVC()->getName():"Unknown");
-	}
 }
 
 gateAs::gateAs(const char* lfile, const char* afile)

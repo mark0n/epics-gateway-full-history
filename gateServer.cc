@@ -30,7 +30,7 @@
 #define DEBUG_PV_LIST 0
 #define DEBUG_PV_CONNNECT_CLEANUP 0
 #define DEBUG_EXIST 0
-#define DEBUG_DELAY 1
+#define DEBUG_DELAY 0
 
 // KE: Leave this in permanently for now.  DEBUG_TIMES prints a
 // message every minute, that helps determine when things happen.

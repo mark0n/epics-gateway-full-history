@@ -33,7 +33,7 @@
 #define DEBUG_PUT 0
 #define DEBUG_BEAM 0
 #define DEBUG_ENUM 0
-#define DEBUG_DELAY 1
+#define DEBUG_DELAY 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -729,7 +729,7 @@ int gatePvData::get(void)
 // not do so otherwise.  Returns S_casApp_success for a successful put
 // and as good an error code as we can generate otherwise.  There is
 // unfortunately no S_casApp return code defined for failure.
-int gatePvData::put(const gdd* dd, int docallback, gateAsClient *asc)
+int gatePvData::put(const gdd* dd, int docallback)
 {
 	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",dd,name());
 	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
@@ -809,13 +809,6 @@ int gatePvData::put(const gdd* dd, int docallback, gateAsClient *asc)
 				pValue=dd->dataPointer();
 			}
 			break;
-		}
-
-		// Trap writes
-		if(asc) {
-			void *pvt = asTrapWriteBefore(asc->clientPvt(), asc->user(),
-			  asc->host(), asc);
-			asTrapWriteAfter(pvt);
 		}
 
 		if(docallback) {
@@ -1107,7 +1100,6 @@ void gatePvData::eventCB(EVENT_ARGS args)
 		}
 		++(pv->event_count);
 	}
-	// hopefully more monitors will come in that are successful
 }
 
 // This is the callback registered with ca_add_event in the
@@ -1143,12 +1135,19 @@ void gatePvData::alhCB(EVENT_ARGS args)
 					   dd,
 					   pv->needAddRemove());
 #endif
+				// Flush flushAsyncAlhReadQueue and vcPostEvent are
+				// handled in setAlhData, unlike in the eventCB
 				pv->vc->setAlhData(dd);
+
+				if(pv->alhGetPending())
+				{
+					pv->markAlhNoGetPending();
+					pv->vc->markAlhDataAvailable();
+				}
 			}
 		}
 		++(pv->event_count);
 	}
-	// hopefully more monitors will come in that are successful
 }
 
 void gatePvData::getCB(EVENT_ARGS args)

@@ -207,12 +207,10 @@ private:
 	gateAsEntry* asentry;
 	void* user_arg;
 	void (*user_func)(void*);
-	asTrapWriteId twID;
 	gateVcData *vc;
 	
 public:
 	static void clientCallback(ASCLIENTPVT p, asClientStatus s);
-	static void trapWriteCB(asTrapWriteMessage *pMsg, int after);
 };
 
 class gateAsLine : public tsSLNode<gateAsLine>

@@ -32,7 +32,7 @@
 #define DEBUG_ENUM 0
 #define DEBUG_TIMESTAMP 0
 #define DEBUG_RTYP 0
-#define DEBUG_DELAY 1
+#define DEBUG_DELAY 0
 
 #include <stdio.h>
 #include <string.h>
@@ -110,6 +110,23 @@ gateChan::~gateChan(void)
 {
 	if(vc) vc->removeChan(this);
 	delete asclient;
+}
+
+caStatus gateChan::write(const casCtx &ctx, const gdd &value)
+{
+	// Trap writes
+	if(asclient && asclient->clientPvt()->trapMask) {
+		printf("%s %s@%s is writing %s\n",
+		  timeStamp(),
+		  asclient->user()?asclient->user():"Unknown",
+		  asclient->host()?asclient->host():"Unknown",
+		  asclient->getVC() && asclient->getVC()->getName()?
+		    asclient->getVC()->getName():"Unknown");
+	}
+	
+	// Call the non-virtual-function write in the gateVcData
+	if(vc) return vc->write(ctx,value,*this);
+	else return S_casApp_noSupport;
 }
 
 #if 0
@@ -226,9 +243,33 @@ gateVcData::~gateVcData(void)
 	delete [] pv_name;
 	pv_name="Error";
 	if (pv) pv->setVC(NULL);
-	clearChanList();
-	clearAsyncLists();
-	
+
+	// Clear the chan_list to insure the gateChan's do not call the
+	// gateVcData to remove them after the gateVcData is
+	// gone. removeChan also sets the pChan->vc to NULL, the only
+	// really necessary thing to do.
+	gateChan *pChan;
+	while((pChan=chan_list.first()))	{
+		
+		removeChan(pChan);
+	}
+
+	// Clear the async io lists to insure the gateAsyncX's do not try
+	// to remove themselves from the lists after the gateVcData and
+	// the lists are gone. removeFromQueue sets the pointer to the
+	// list in the gateAsyncX to NULL.
+	gateAsyncW* asyncw;
+	while((asyncw=wio.first()))	{
+		asyncw->removeFromQueue();
+	}
+	gateAsyncR* asyncr;
+	while((asyncr=rio.first()))	{
+		asyncr->removeFromQueue();
+	}
+	while((asyncr=alhRio.first()))	{
+		asyncr->removeFromQueue();
+	}
+
 #ifdef STAT_PVS
 	mrg->setStat(statVcTotal,--mrg->total_vc);
 #endif
@@ -376,7 +417,9 @@ void gateVcData::setEventData(gdd* dd)
 	}
 	// No event_data present: just set it to the incoming gdd
 	else
+	{
 		event_data = dd;
+	}
 
 #if DEBUG_GDD
 	dumpdd(4,"event_data(after)",name(),event_data);
@@ -471,13 +514,15 @@ void gateVcData::setAlhData(gdd* dd)
 	}
 	// No event_data present: just set it to the incoming gdd
 	else
+	{
 		event_data = dd;
+	}
 	
 #if DEBUG_GDD
 	dumpdd(4,"event_data(after)",name(),event_data);
 #endif
 
-	// Post the extra alarm data event if necessary
+	// Post the extra alarm data event if there is a change
 	if(ackt_acks_changed) vcPostEvent();
 
 #if DEBUG_STATE
@@ -587,6 +632,9 @@ void gateVcData::vcNew(void)
 	// Flush any accumulated reads and writes
 	if(wio.count()) flushAsyncWriteQueue(GATE_NOCALLBACK);
 	if(rio.count()) flushAsyncReadQueue();
+	if(!pv->alhGetPending()) {
+		if(alhRio.count()) flushAsyncAlhReadQueue();
+	}
 
 #if DEBUG_EVENT_DATA
 		if(pv->fieldType() == DBF_ENUM) {
@@ -596,37 +644,13 @@ void gateVcData::vcNew(void)
 #endif
 }
 
-// This routine, called from ~gateVcdata, clears the chan_list to
-// insure the gateChan's do not call the gateVcData to remove them
-// after the gateVcData is gone.
-void gateVcData::clearChanList(void)
+void gateVcData::markAlhDataAvailable(void)
 {
-	gateDebug1(10,"gateVcData::clearChanList() name=%s\n",name());
-	gateChan *pChan;
+	gateDebug1(10,"gateVcData::markAlhDataAvailable() name=%s\n",name());
 
-	while((pChan=chan_list.first()))	{
-		// removeChan also sets the pChan->vc to NULL, the only really
-		// necessary thing to do in ~gateVcData
-		removeChan(pChan);
-	}
-}
-
-// This routine, called from ~gateVcdata, clears the async io lists to
-// insure the gateAsyncX's do not try to remove themselves from the
-// lists after the gateVcData and the lists are gone. removeFromQueue
-// sets the pointer to the list in the gateAsyncX to NULL.
-void gateVcData::clearAsyncLists(void)
-{
-	gateDebug1(10,"gateVcData::clearAsyncLists() name=%s\n",name());
-
-	gateAsyncW* asyncw;
-	while((asyncw=wio.first()))	{
-		asyncw->removeFromQueue();
-	}
-
-	gateAsyncR* asyncr;
-	while((asyncr=rio.first()))	{
-		asyncr->removeFromQueue();
+	// Flush any accumulated reads
+	if(ready()) {
+		if(alhRio.count()) flushAsyncAlhReadQueue();
 	}
 }
 
@@ -639,11 +663,7 @@ void gateVcData::flushAsyncWriteQueue(int docallback)
 
 	while((asyncw=wio.first()))	{
 		asyncw->removeFromQueue();
-#ifndef TEMP
-		pv->put(&asyncw->DD(),docallback,NULL);
-#else
-		pv->put(&asyncw->DD(),docallback,asc6);
-#endif
+		pv->put(&asyncw->DD(),docallback);
 		asyncw->postIOCompletion(S_casApp_success);
 	}
 }
@@ -669,6 +689,36 @@ void gateVcData::flushAsyncReadQueue(void)
 #if DEBUG_DELAY
 		if(!strncmp("Xorbit",name(),6)) {
 			printf("%s gateVcData::flushAsyncReadQueue: %s state=%d\n",
+			  timeStamp(),name(),getState());
+			printf("  S_casApp_success\n");
+		}
+#endif
+		asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
+	}
+}
+
+// The alh asynchronous read queue is filled when the alh data is not
+// ready.  This routine, called from vcNew, flushes the alh read
+// queue.  There is no separate alh write queue.
+void gateVcData::flushAsyncAlhReadQueue(void)
+{
+	gateDebug1(10,"gateVcData::flushAsyncAlhAlhReadQueue() name=%s\n",name());
+	gateAsyncR* asyncr;
+
+	while((asyncr=alhRio.first()))	{
+		gateDebug2(5,"gateVcData::flushAsyncAlhReadQueue() posting asyncr %p (DD at %p)\n",
+				   asyncr,&asyncr->DD());
+		asyncr->removeFromQueue();
+		
+#if DEBUG_GDD
+		heading("gateVcData::flushAsyncAlhReadQueue",name());
+		dumpdd(1,"asyncr->DD()(before)",name(),&asyncr->DD());
+#endif
+		// Copy the current state into the asyncr->DD()
+		copyState(asyncr->DD());
+#if DEBUG_DELAY
+		if(!strncmp("Xorbit",name(),6)) {
+			printf("%s gateVcData::flushAsyncAlhReadQueue: %s state=%d\n",
 			  timeStamp(),name(),getState());
 			printf("  S_casApp_success\n");
 		}
@@ -772,7 +822,6 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 {
 	gateDebug1(10,"gateVcData::read() name=%s\n",name());
 	static const aitString str = "Not Supported by Gateway";
-	unsigned wait_for_alarm_info=0;
 
 #if DEBUG_GDD || DEBUG_ENUM
 	heading("gateVcData::read",name());
@@ -799,10 +848,12 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	switch(at) {
 	case gddAppType_ackt:
 	case gddAppType_acks:
+#if 0
 		fprintf(stderr,"%s gateVcData::read(): "
 		  "Got unsupported app type %d for %s\n",
 		  timeStamp(),at,name());
 		fflush(stderr);
+#endif
 #if DEBUG_DELAY
 		if(!strncmp("Xorbit",name(),6)) {
 			printf("  S_casApp_noSupport\n");
@@ -832,12 +883,26 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 		  !(event_data->applicationType()==gddAppType_dbr_stsack_string))
 		  || !pv->alhMonitored())
 		{
+			// Only start monitoring alh data if it is requested
+			pv->markAlhGetPending();
 			pv->alhMonitor();
-			wait_for_alarm_info = 1;
 		}
-		// Fall through
+		if(!ready() || pv->alhGetPending()) {
+			// Specify async return if alh data not ready
+			gateDebug0(10,"gateVcData::read() alh data not ready\n");
+			// the read will complete when the data is available
+			alhRio.add(*(new gateAsyncR(ctx,dd,&alhRio)));
+			return S_casApp_asyncCompletion;
+		} else if(pending_write) {
+			// Pending write in progress, don't read now
+			return S_casApp_postponeAsyncIO;
+		} else {
+			// Copy the current state into the dd
+			copyState(dd);
+		}
+		return S_casApp_success;
 	default:
-		if(!ready() || wait_for_alarm_info) {
+		if(!ready()) {
 			// Specify async return if PV not ready
 			gateDebug0(10,"gateVcData::read() pv not ready\n");
 			// the read will complete when the connection is complete
@@ -851,7 +916,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			if(!strncmp("Xorbit",name(),6)) {
 				printf("  S_casApp_asyncCompletion (%s %s)\n",
 				  ready()?"Ready":"Not Ready",
-				  wait_for_alarm_info?"WaitForAlarmInfo":"NotWaitForAlarmInfo");
+				  pv->alhGetPending()?"alhGetPending":"No alhGetPending");
 			}
 #endif
 			return S_casApp_asyncCompletion;
@@ -897,7 +962,18 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	}
 }
 
+// This is the virtual write function defined in casPV.  It should no
+// longer be called if casChannel::write is implemented.
 caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
+{
+	fprintf(stderr,"Virtual gateVcData::write called for %s.\n"
+	  "  This is an error!\n",name());
+	return S_casApp_noSupport;
+}
+
+// This is a non-virtual-function write that allows passing a pointer
+// to the gateChannel.  Currently chan is not used.
+caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 {
 	int docallback=GATE_DOCALLBACK;
 
@@ -913,10 +989,12 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 	switch(at) {
 	case gddAppType_class:
 	case gddAppType_dbr_stsack_string:
+#if 0
 		fprintf(stderr,"%s gateVcData::write: "
 		  "Got unsupported app type %d for %s\n",
 		  timeStamp(),at,name());
 		fflush(stderr);
+#endif
 		return S_casApp_noSupport;
 	case gddAppType_ackt:
 	case gddAppType_acks:
@@ -943,20 +1021,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 #endif
 			return S_casApp_postponeAsyncIO;
 		} else {
-			// Initiate a put
-#ifndef TEMP
-			tsDLIter<gateChan> iter=chan_list.firstIter();
-			gateAsClient *asc;
-			if(iter.valid()) {
-				asc = iter->getAsClient();
-			} else {
-				asc = NULL;
-			}
-			caStatus stat = pv->put(&dd, docallback, asc);
-#else
-			// Implement this
-			caStatus stat = pv->put(&dd, docallback, asc);
-#endif
+			caStatus stat = pv->put(&dd, docallback);
 			if(stat != S_casApp_success) return stat;
 
 			if(docallback) {
