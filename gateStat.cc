@@ -61,7 +61,7 @@ static struct timespec *timeSpec(void)
 #if statCount
 
 gateStat::gateStat(gateServer* s,const char* n,int t) :
-	casPV(*s),type(t),serv(s),post_data(0),name(strDup(n))
+	casPV(*s),post_data(0),type(t),serv(s),name(strDup(n))
 {
 
 // Define the value gdd;

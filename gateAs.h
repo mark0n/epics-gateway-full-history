@@ -140,8 +140,8 @@ public:
 
 	static long reInitialize(const char* as_file_name);
 
-	static char* const default_group;
-	static char* const default_pattern;
+	static const char* default_group;
+	static const char* default_pattern;
 private:
 	int initPvList(const char* pvlist_file);
 

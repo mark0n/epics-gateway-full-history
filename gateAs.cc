@@ -13,8 +13,8 @@ void gateAsCaClear(void);
 
 extern int patmatch(char *pattern, char *string);
 
-char* const gateAs::default_group = "DEFAULT";
-char* const gateAs::default_pattern = "*";
+const char* gateAs::default_group = "DEFAULT";
+const char* gateAs::default_pattern = "*";
 
 void gateAsNode::client_callback(ASCLIENTPVT p,asClientStatus /*s*/)
 {

@@ -99,11 +99,11 @@ private:
 
 struct gateServerStats
 {
-	char* name;
+	const char* name;
 	char* pvname;
 	gateStat* pv;
 	unsigned long* init_value;
-	char *units;
+	const char *units;
 	short precision;
 };
 typedef struct gateServerStats;
@@ -114,15 +114,15 @@ class gateRateStatsTimer : public osiTimer
 {
 public:
 	gateRateStatsTimer(const osiTime &delay, gateServer *m) : 
-	  startTime(osiTime::getCurrent()), osiTimer(delay), interval(delay), 
+	  osiTimer(delay), startTime(osiTime::getCurrent()), interval(delay), 
 	  mrg(m) {}
 	virtual void expire();
 	virtual const osiTime delay() const { return interval; }
 	virtual osiBool again() const { return osiTrue; }
 	virtual const char *name() const { return "gateRateStatsTimer"; }
 private:
-	osiTime interval;
 	osiTime startTime;
+	osiTime interval;
 	gateServer* mrg;
 };
 #endif
