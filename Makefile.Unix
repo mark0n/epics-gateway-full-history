@@ -5,6 +5,9 @@
 # $Id$
 #
 # $Log$
+# Revision 1.1  1996/05/22 03:21:48  jbk
+# new stuff
+#
 #
 
 # EPICS = ../../../..
@@ -15,11 +18,9 @@ include $(EPICS)/config/CONFIG_EXTENSIONS
 
 DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
 
-DEPLIBS = $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a \
-          gateBase.o gateCA.o gateClient.o gateIpc.o gateList.o \
-          gateResources.o gateServer.o gateway.o
+DEPLIBS = $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
 
-USR_LDLIBS = *.o -lgdd -lca -lCom
+USR_LDLIBS = -lgate -lgdd -lca -lCom
 USR_LDFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
 USR_INCLUDES = -I$(EPICS_EXTENSIONS_INCLUDE) -I$(HOME)/src/data
 USR_CFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
@@ -29,7 +30,12 @@ USR_CFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(HOME)/src/data/$(HOST_ARCH)
 SRCS.cc = ../gateBase.cc ../gateCA.cc ../gateClient.cc ../gateIpc.cc \
           ../gateList.cc ../gateResources.cc ../gateServer.cc ../gateway.cc
 
-PROD = gateway
+LIBOBJS = gateBase.o gateClient.o gateIpc.o gateList.o \
+          gateResources.o gateServer.o gateway.o
+
+LIBNAME = libgate.a
+
+PROD = gateCA
 
 include $(EPICS)/config/RULES.Unix
 
