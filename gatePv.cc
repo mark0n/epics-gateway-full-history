@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.16  1997/06/12 21:32:07  jba
+// pv_name update.
+//
 // Revision 1.15  1997/03/17 16:00:59  jbk
 // bug fixes and additions
 //
@@ -60,6 +63,8 @@
 #include <time.h>
 #include <sys/types.h>
 #include <sys/time.h>
+
+#include "tsDLList.h"
 
 #include "gdd.h"
 #include "gddApps.h"
@@ -673,7 +678,7 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 		default:
 			pv->event_type=(chtype)-1;
 			pv->data_type=(chtype)-1;
-			pv->event_func=NULL;
+			pv->event_func=(gateCallback)NULL;
 			break;
 		}
 
