@@ -10,7 +10,7 @@ class gateServer;
 class gateStat : public casPV
 {
 public:
-	gateStat(const casCtx& c,gateServer* serv,const char* n, int t);
+	gateStat(gateServer* serv,const char* n, int t);
 	virtual ~gateStat(void);
 
 	// CA server interface functions
@@ -20,6 +20,7 @@ public:
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
 	virtual caStatus write(const casCtx &ctx, gdd &value);
 	virtual unsigned maxSimultAsyncOps(void) const;
+	virtual const char *getName() const;
 
 	void postData(long val);
 	void postData(double val);
@@ -29,6 +30,7 @@ private:
 	int post_data;
 	int type;
 	gateServer* serv;
+	char* name;
 };
 
 #endif

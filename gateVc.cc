@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.16  1997/03/17 16:01:05  jbk
+// bug fixes and additions
+//
 // Revision 1.15  1997/02/21 17:31:20  jbk
 // many many bug fixes and improvements
 //
@@ -102,23 +105,12 @@ void gateChan::report(void)
 void gateChan::post_rights(void* v)
 {
 	gateChan* p = (gateChan*)v;
-	gdd* val = p->vc.value();
-
-	if(val==NULL)
-	{
-		val=new gddScalar(0,aitEnumFloat64);
-		p->postEvent(p->vc.select_mask,*val);
-		val->unreference();
-	}
-	else
-		p->postEvent(p->vc.select_mask,*val);
-
+	p->postAccessRightsEvent();
 }
 
 // ------------------------gateVcData
 
-gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
-	casPV(c,name)
+gateVcData::gateVcData(gateServer* m,const char* name):casPV(*m)
 {
 	gateDebug2(5,"gateVcData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 
@@ -187,6 +179,11 @@ gateVcData::~gateVcData(void)
 
 long gateVcData::total_vc=0 ;
 
+const char* gateVcData::getName() const
+{
+	return name();
+}
+
 void gateVcData::destroy(void)
 {
 	gateDebug0(1,"gateVcData::destroy()\n");
@@ -200,11 +197,6 @@ casChannel* gateVcData::createChannel(const casCtx &ctx,
 	gateDebug0(5,"~gateVcData::createChannel()\n");
 	gateChan* c =  new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,u,h));
 	return c;
-}
-
-unsigned gateVcData::maxSimultAsyncOps(void) const
-{
-	return 5000u;
 }
 
 void gateVcData::dumpValue(void)
@@ -674,13 +666,10 @@ void gateVcData::postAccessRights(void)
 	tsDLFwdIter<gateChan> iter(chan);
 	gateChan* p;
 
-	if(event_data)
-	{
-		gateDebug0(5,"gateVcData::vcEvent() posting access rights\n");
+	gateDebug0(5,"gateVcData::vcEvent() posting access rights\n");
 
-		for(p=iter.first();p;p=iter.next())
-			p->postEvent(select_mask,*event_data);
-	}
+	for(p=iter.first();p;p=iter.next())
+		p->postAccessRightsEvent();
 }
 
 // ------------------------------- aync read/write pending methods ----------

@@ -31,17 +31,17 @@ gateExistData::~gateExistData(void)
 void gateExistData::nak(void)
 {
 	gateDebug0(10,"gateExistData::nak()\n");
-	postIOCompletion(pvExistReturn(S_casApp_pvNotFound));
+	postIOCompletion(pverDoesNotExistHere);
 }
 
 void gateExistData::ack(void)
 {
 	gateDebug1(10,"gateExistData::ack() dd=%8.8x, name=%s\n",pv->name());
-	postIOCompletion(pvExistReturn(S_casApp_success,pv->name()));
+	postIOCompletion(pverExistsHere);
 }
 
 void gateExistData::cancel(void)
 {
-	postIOCompletion(S_casApp_canceledAsyncIO);
+	postIOCompletion(pverDoesNotExistHere);
 }
 

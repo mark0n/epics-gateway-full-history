@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.20  1997/03/17 16:01:01  jbk
+// bug fixes and additions
+//
 // Revision 1.19  1997/02/21 17:31:18  jbk
 // many many bug fixes and improvements
 //
@@ -116,7 +119,7 @@ void gatewayServer(void)
 {
 	gateDebug0(5,"gateServer::gatewayServer()\n");
 
-	gateServer* server = new gateServer(32u,5000u,5000u);
+	gateServer* server = new gateServer(5000u);
 	server->mainLoop();
 	delete server;
 }
@@ -216,8 +219,7 @@ void gateFd::callBack(void)
 
 // ----------------------- server methods --------------------
 
-gateServer::gateServer(unsigned namelen,unsigned pvcount,unsigned simio):
-	caServer(namelen, pvcount, simio)
+gateServer::gateServer(unsigned pvcount):caServer(pvcount)
 {
 	unsigned i;
 	struct utsname ubuf;
@@ -431,7 +433,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 {
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%8.8x,pv=%s)\n",(int)&c,pvname);
 	gatePvData* pv;
-	caStatus rc;
+	pvExistReturn rc;
 	const char* real_name;
 	gateAsEntry* node;
 	char* stat_name=NULL;
@@ -444,7 +446,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	{
 		if(strcmp(pvname,stat_table[i].pvname)==0)
 		{
-			return pvExistReturn(S_casApp_success,stat_table[i].pvname);
+			return pverExistsHere;
 		}
 	}
 
@@ -467,25 +469,25 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	  	{
 			// return as pv->name()
 			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",real_name);
-			rc=S_casApp_success;
+			rc=pverExistsHere;
 			break;
 	  	}
 		case gatePvDead:
 			// no pv name returned
 			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",real_name);
-			rc=S_casApp_pvNotFound;
+			rc=pverDoesNotExistHere;
 			break;
 		default:
 			gateDebug1(5,"gateServer::pvExistTest() %s Unknown?\n",real_name);
 			// don't know yet - wait till connect complete
-			rc=S_casApp_pvNotFound;
+			rc=pverDoesNotExistHere;
 			break;
 		}
 	}
 	else if(conFind(real_name,pv)==0)
 	{
 		gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",real_name);
-		rc=S_casApp_pvNotFound;
+		rc=pverDoesNotExistHere;
 	}
 	else if((node=getAs()->findEntry(pvname)))
 	{
@@ -498,18 +500,18 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 		case gatePvInactive:
 		case gatePvActive:
 			gateDebug1(5,"gateServer::pvExistTest() %s OK\n",pvname);
-			rc=S_casApp_success;
+			rc=pverExistsHere;
 			break;
 		case gatePvDead:
 			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",pvname);
-			rc=S_casApp_pvNotFound;
+			rc=pverDoesNotExistHere;
 			break;
 		case gatePvConnect:
 			gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",pvname);
-			rc=S_casApp_pvNotFound;
+			rc=pverDoesNotExistHere;
 			break;
 		default:
-			rc=S_casApp_pvNotFound;
+			rc=pverDoesNotExistHere;
 			break;
 		}
 	}
@@ -517,38 +519,51 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 	{
 		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",pvname);
 		pv=NULL;
-		rc=S_casApp_pvNotFound;
+		rc=pverDoesNotExistHere;
 	}
 
-	return (rc==S_casApp_success)?pvExistReturn(rc,pv->name()):
-		pvExistReturn(rc);
+	return rc;
 }
 
-casPV* gateServer::createPV(const casCtx& c,const char* pvname)
+pvCreateReturn gateServer::createPV(const casCtx& c,const char* pvname)
 {
 	gateDebug1(5,"gateServer::createPV() PV %s\n",pvname);
 	gateVcData* rc;
+	const char* real_name;
 	int i;
 
 	for(i=0;i<statCount;i++)
 	{
 		if(strcmp(pvname,stat_table[i].pvname)==0)
 		{
-			stat_table[i].pv=new gateStat(c,this,pvname,i);
-			return stat_table[i].pv;
+			if(stat_table[i].pv==NULL)
+				stat_table[i].pv=new gateStat(this,pvname,i);
+
+			return pvCreateReturn(*stat_table[i].pv);
 		}
 	}
 
-	rc=new gateVcData(c,this,pvname);
-
-	if(rc->getStatus())
+	if((real_name=as_rules->getAlias(pvname))==NULL)
+		real_name=pvname;
+	else
 	{
-		gateDebug1(5,"gateServer::createPV() create failed PV %s\n",pvname);
-		delete rc;
-		rc=NULL;
+		gateDebug2(5,"gateServer::pvExistTest() PV %s has real name %s\n",
+			pvname,real_name);
 	}
 
-	return rc;
+	if(vcFind(real_name,rc)<0)
+	{
+		rc=new gateVcData(this,real_name);
+
+		if(rc->getStatus())
+		{
+			gateDebug1(5,"gateServer::createPV() bad PV %s\n",pvname);
+			delete rc;
+			rc=NULL;
+		}
+	}
+
+	return rc?pvCreateReturn(*rc):pvCreateReturn(S_casApp_pvNotFound);
 }
 
 void gateServer::setStat(int type,double x)

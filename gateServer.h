@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.13  1997/03/17 16:01:02  jbk
+ * bug fixes and additions
+ *
  * Revision 1.12  1997/02/21 17:31:19  jbk
  * many many bug fixes and improvements
  *
@@ -117,12 +120,12 @@ typedef struct gateServerStats;
 class gateServer : public caServer
 {
 public:
-	gateServer(unsigned max_name_len,unsigned pv_count_est,unsigned max_sim_io);
+	gateServer(unsigned pv_count_est);
 	virtual ~gateServer(void);
 
 	// CAS virtual overloads
 	virtual pvExistReturn pvExistTest(const casCtx& c,const char* pvname);
-	virtual casPV* createPV(const casCtx& c,const char* pvname);
+	virtual pvCreateReturn createPV(const casCtx& c,const char* pvname);
 
 	void mainLoop(void);
 	void report(void);

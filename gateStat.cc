@@ -12,9 +12,10 @@
 #include "gateServer.h"
 #include "gateStat.h"
 
-gateStat::gateStat(const casCtx& c,gateServer* s,const char* n,int t):
-	casPV(c,n),type(t),serv(s),post_data(0)
+gateStat::gateStat(gateServer* s,const char* n,int t):
+	casPV(*s),type(t),serv(s),post_data(0)
 {
+	name=strDup(n);
 	value=new gdd(global_resources->appValue,aitEnumInt32);
 	value->put((aitInt32)serv->initStatValue(type));
 	value->reference();
@@ -24,6 +25,12 @@ gateStat::~gateStat(void)
 {
 	serv->clearStat(type);
 	value->unreference();
+	delete [] name;
+}
+
+const char* gateStat::getName() const
+{
+	return name; 
 }
 
 caStatus gateStat::interestRegister(void)

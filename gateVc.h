@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.14  1997/03/17 16:01:06  jbk
+ * bug fixes and additions
+ *
  * Revision 1.13  1997/02/21 17:31:21  jbk
  * many many bug fixes and improvements
  *
@@ -103,7 +106,7 @@ private:
 class gateVcData : public casPV, public tsDLHashNode<gateVcData>
 {
 public:
-	gateVcData(const casCtx&,gateServer*,const char* pv_name);
+	gateVcData(gateServer*,const char* pv_name);
 	virtual ~gateVcData(void);
 
 	// CA server interface functions
@@ -113,11 +116,11 @@ public:
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
 	virtual caStatus write(const casCtx &ctx, gdd &value);
 	virtual void destroy(void);
-	virtual unsigned maxSimultAsyncOps(void) const;
 	virtual unsigned maxDimension(void) const;
 	virtual aitIndex maxBound(unsigned dim) const;
 	virtual casChannel *createChannel (const casCtx &ctx,
 		const char* const pUserName, const char* const pHostName);
+	virtual const char *getName() const;
 
 	int pending(void);
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }
