@@ -27,7 +27,7 @@ endif
 
 SHARED_LIBRARIES=NO
 
-# STATIC_BUILD=YES
+STATIC_BUILD=YES
 
 # Patches for HPUX / aCC
 # NORMAL to suppress "future errors", needs immediate binding as using shared libs produces core dumps
