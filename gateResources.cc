@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.2  1996/07/23 16:32:37  jbk
+// new gateway that actually runs
+//
 //
 
 #define GATE_RESOURCE_FILE 1
@@ -17,6 +20,8 @@
 #include "gddAppTable.h"
 
 gateResources* global_resources;
+
+extern int patmatch(char *pattern, char *string);
 
 gateResources::gateResources(void)
 {
@@ -113,9 +118,11 @@ int gateResources::setListFile(char* file)
 	else
 	{
 		pv_len=(unsigned long)stat_buf.st_size;
-		list_buffer=new char[pv_len+1];
-		i=0;
-		while(fgets(&list_buffer[i],pv_len-i,pv_fd)) i+=strlen(&list_buffer[i]);
+		list_buffer=new char[pv_len+2];
+
+		for(i=0;fgets(&list_buffer[i],pv_len-i+2,pv_fd);)
+			i+=strlen(&list_buffer[i]);
+
 		for(i=0,j=0;i<pv_len;i++) if(list_buffer[i]=='\n') j++;
 		pattern_list=new char*[j+1];
 
@@ -124,8 +131,89 @@ int gateResources::setListFile(char* file)
 
 		pattern_list[i]=NULL;
 	}
+
+	// for(i=0;pattern_list[i];i++) fprintf(stderr,"<%s>\n",pattern_list[i]);
+
 	fclose(pv_fd);
 	return 0;
+}
+
+int gateResources::setAliasFile(char* file)
+{
+	FILE* pv_fd;
+	struct stat stat_buf;
+	int i,j;
+	unsigned long pv_len;
+	char* pc;
+	char* real;
+
+	if(alias_buffer) delete [] alias_buffer;
+	if(alias_table) delete [] alias_table;
+	delete [] pv_alias_file;
+	pv_alias_file=strdup(file);
+
+	if( (pv_fd=fopen(pv_alias_file,"r"))==NULL ||
+		fstat(fileno(pv_fd),&stat_buf)<0 )
+	{
+		fprintf(stderr,"Cannot open %s, no PV aliases installed\n",
+			pv_alias_file);
+		fflush(stderr);
+		alias_buffer=NULL;
+		alias_table=new gateAliasTable[1];
+		alias_table->alias=NULL;
+		alias_table->actual=NULL;
+	}
+	else
+	{
+		pv_len=(unsigned long)stat_buf.st_size;
+		alias_buffer=new char[pv_len+2];
+
+		for(i=0;fgets(&alias_buffer[i],pv_len-i+2,pv_fd);)
+			i+=strlen(&alias_buffer[i]);
+
+		for(i=0,j=0;i<pv_len;i++) if(alias_buffer[i]=='\n') j++;
+		alias_table=new gateAliasTable[j+1];
+
+		for(i=0,pc=strtok(alias_buffer,"\n");pc;pc=strtok(NULL,"\n"))
+		{
+			real=strchr(pc,' ');
+			if(real)
+			{
+				*real='\0';
+				alias_table[i].alias=pc;
+				alias_table[i].actual=real+1;
+				i++;
+			}
+		}
+
+		alias_table[i].alias=NULL;
+		alias_table[i].actual=NULL;
+	}
+
+	// for(i=0;alias_table && alias_table[i].actual;i++)
+	//	fprintf(stderr,"<%s,%s>\n",alias_table[i].alias,alias_table[i].actual);
+
+	fclose(pv_fd);
+	return 0;
+}
+
+char* gateResources::findAlias(const char* const name) const
+{
+	int i;
+	char* rc=NULL;
+
+	if(alias_table)
+	{
+		for(i=0;alias_table[i].actual;i++)
+		{
+			if(strcmp(name,alias_table[i].alias)==0)
+			{
+				rc=alias_table[i].actual;
+				break;
+			}
+		}
+	}
+	return rc;
 }
 
 int gateResources::setDebugLevel(int level)
@@ -198,44 +286,16 @@ int gateResources::matchName(char* item)
 {
 	int rc,i;
 
-	if(!pattern_list) return 0;
+	if(!pattern_list) return 1; // accept all request if no table
 
 	for(rc=0,i=0;pattern_list[i] && rc==0;i++)
-		if(matchOne(pattern_list[i],item)) rc=1;
+		rc=matchOne(pattern_list[i],item);
 
 	return rc;
 }
 
 int gateResources::matchOne(char* pattern, char* item)
 {
-	int i_len=strlen(item);
-	int p_len=strlen(pattern);
-	int i,p,rc;
-
-	i=0; p=0; rc=0;
-
-	while(rc==0)
-	{
-		switch(pattern[p])
-		{
-		default:
-			if(pattern[p++]!=item[i++]) rc=-1;
-			break;
-		case '*':
-			if(pattern[p+1]==item[i++]) { p++; i--; }
-			if(p+1>=p_len) p++;
-			break;
-		case '?': p++; i++; break;
-		case 0: i++; break;
-		}
-
-		if(rc==0 && i>=i_len)
-		{
-			if(p<p_len) rc=-1;
-			else if(pattern[p]=='*') rc=1;
-			else if(p>=p_len) rc=1;
-		}
-	}
-	return (rc>0)?1:0;
+	return patmatch(pattern,item);
 }
 

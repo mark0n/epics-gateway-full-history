@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.2  1996/07/23 16:32:38  jbk
+ * new gateway that actually runs
+ *
  */
 
 #define GATE_PIPE_FILE "GATEWAY.pipe"
@@ -24,6 +27,13 @@
 #define GATE_REALLY_SMALL 0.0000001
 #define GATE_CONNECT_SECONDS 1
 
+struct gateAliasTable
+{
+	char* alias;
+	char* actual;
+};
+typedef struct gateAliasTable gateAliasTable;
+
 // parameters to both client and server sides
 class gateResources
 {
@@ -33,6 +43,7 @@ public:
 
 	int setHome(char* dir);
 	int setListFile(char* file);
+	int setAliasFile(char* file);
 	int setDebugLevel(int level);
 	int setAccessFile(char* file);
 	int setSuffix(char* word);
@@ -49,8 +60,11 @@ public:
 	time_t deadTimeout(void) const		{ return dead_timeout; }
 	char* homeDirectory(void) const		{ return home_dir; }
 	char* listFile(void) const			{ return pv_list_file; }
+	char* aliasFile(void) const			{ return pv_alias_file; }
 	char* logFile(void) const			{ return log_file; }
 	char* accessFile(void) const		{ return pv_access_file; }
+
+	char* findAlias(const char* const name) const;
 
 	int matchName(char* pv_name);
 	int matchOne(char* pattern,char* pv_name);
@@ -70,6 +84,7 @@ private:
 	char* home_dir;
 	char* pv_access_file;
 	char* pv_list_file;
+	char* pv_alias_file;
 	char* log_file;
 	int debug_level;
 	int log_on; // 0=off, 1=on
@@ -77,9 +92,11 @@ private:
 	time_t inactive_timeout;
 	time_t dead_timeout;
 	char* list_buffer;
+	char* alias_buffer;
 	char* prefix;
 	char* suffix;
 	char** pattern_list;
+	gateAliasTable* alias_table;
 };
 
 #ifndef GATE_RESOURCE_FILE

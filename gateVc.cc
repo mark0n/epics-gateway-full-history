@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.1  1996/07/23 16:32:42  jbk
+// new gateway that actually runs
+//
 //
 
 #include <stdio.h>
@@ -237,8 +240,7 @@ int gateVcData::put(gdd* dd)
 	// is this appropriate if put fails?  Be sure to indicate that put
 	// failed by modifing the stat/sevr fields of the value
 	gateDebug2(10,"gateVcData::put(gdd=%8.8x) name=%s\n",(int)dd,name());
-
-	value()->put(dd);
+	// value()->put(dd);
 	pv->put(dd);
 	return 0;
 }
@@ -246,8 +248,8 @@ int gateVcData::put(gdd* dd)
 int gateVcData::putDumb(gdd* dd)
 {
 	gateDebug2(10,"gateVcData::putDumb(gdd=%8.8x) name=%s\n",(int)dd,name());
-	value()->put(dd);
-	pv->putDumb(dd);
+	// if(value()) value()->put(dd);
+	if(pv) pv->putDumb(dd);
 	return 0;
 }
 
@@ -267,8 +269,7 @@ void gateVcData::vcNew(void)
 	if(wio) // write pending
 	{
 		gateDebug0(1,"gateVcData::vcNew() write pending\n");
-		if(value())			table.smartCopy(value(),wio->DD());
-		if(attributes())	table.smartCopy(attributes(),wio->DD());
+		putDumb(wio->DD());
 		wio->postIOCompletion(S_casApp_success);
 		wio=NULL;
 	}
@@ -361,10 +362,7 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 		rc=S_casApp_asyncCompletion;
 	}
 	else
-	{
-		table.smartCopy(value(),&dd);
-		table.smartCopy(attributes(),&dd);
-	}
+		putDumb(&dd);
 
 	return rc;
 }

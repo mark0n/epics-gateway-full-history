@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.2  1996/07/23 16:32:40  jbk
+ * new gateway that actually runs
+ *
  */
 
 #include <sys/types.h>
@@ -68,6 +71,7 @@ public:
 	// CAS virtual overloads
 	virtual caStatus pvExistTest(const casCtx& c,const char* pvname,gdd& cname);
 	virtual casPV* createPV(const casCtx& c,const char* pvname);
+	virtual unsigned maxSimultAsyncOps(void) const;
 
 	void mainLoop(void);
 

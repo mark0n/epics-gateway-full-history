@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.2  1996/07/23 16:32:39  jbk
+// new gateway that actually runs
+//
 
 #include <stdio.h>
 #include <string.h>
@@ -27,7 +30,7 @@ void gatewayServer(void)
 {
 	gateDebug0(5,"gateServer::gatewayServer()\n");
 
-	gateServer* server = new gateServer(32u,5u,500u);
+	gateServer* server = new gateServer(32u,5u,2000u);
 	server->mainLoop();
 	delete server;
 }
@@ -109,6 +112,8 @@ gateServer::~gateServer(void)
 	SEVCHK(ca_flush_io(),"CA flush io");
 	SEVCHK(ca_task_exit(),"CA task exit");
 }
+
+unsigned gateServer::maxSimultAsyncOps(void) const { return 2000u; }
 
 void gateServer::checkEvent(void)
 {
@@ -251,8 +256,18 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 	gateExistData* ed;
 	caStatus rc;
 	aitString x;
+	char* r_name;
 
-	if(pvFind(pvname,pv)==0)
+	// convert alias to real name first
+	if((r_name=global_resources->findAlias(pvname))==NULL)
+		r_name=pvname;
+	else
+	{
+		gateDebug2(1,"gateServer::pvExistTest() alias found %s->%s\n",
+			pvname,r_name);
+	}
+
+	if(pvFind(r_name,pv)==0)
 	{
 		// know about the PV already
 		switch(pv->getState())
@@ -267,29 +282,39 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 			rc=S_casApp_success;
 			break;
 		case gatePvDead:
-			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n", pvname);
+			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n", r_name);
 			rc=S_casApp_pvNotFound;
 			break;
 		default: // don't know yet - wait till connect complete
-			gateDebug1(5,"gateServer::pvExistTest() %s unknown?\n", pvname);
+			gateDebug1(5,"gateServer::pvExistTest() %s unknown?\n", r_name);
 			rc=S_casApp_pvNotFound;
 			break;
 		}
 	}
 	else
 	{
-		if(conFind(pvname,pv)==0)
+		if(conFind(r_name,pv)==0)
 		{
-			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",pvname);
+			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
 			ed=new gateExistData(*this,pv,c,&cname);
 		}
 		else
 		{
-			// don't know - need to check
-			gateDebug1(5,"gateServer::pvExistTest() %s new\n",pvname);
-			ed=new gateExistData(*this,pvname,c,&cname);
+			// verify the PV name
+			if(global_resources->matchName(r_name))
+			{
+				// don't know - need to check
+				gateDebug1(5,"gateServer::pvExistTest() %s new\n",r_name);
+				ed=new gateExistData(*this,r_name,c,&cname);
+				rc=S_casApp_asyncCompletion;
+			}
+			else
+			{
+				gateDebug1(1,"gateServer::pvExistTest() name %s not allowed\n",
+					r_name);
+				rc=S_casApp_pvNotFound;
+			}
 		}
-		rc=S_casApp_asyncCompletion;
 	}
 
 	return rc;

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.1  1996/07/23 16:32:35  jbk
+// new gateway that actually runs
+//
 //
 
 #include <stdio.h>
@@ -393,7 +396,7 @@ int gatePvData::put(gdd* dd)
 	long sz;
 
 	gateDebug1(6,"gatePvData::put() - Field type=%d\n",(int)fieldType());
-	dd->dump();
+	// dd->dump();
 
 	switch(getState())
 	{
@@ -401,7 +404,7 @@ int gatePvData::put(gdd* dd)
 		gateDebug0(2,"gatePvData::put() active PV\n");
 		setTransTime();
 
-		if(dd->isScaler())
+		if(dd->isScalar())
 		{
 			gateDebug0(6,"gatePvData::put() ca put before\n");
 			rc=ca_array_put_callback(fieldType(),
@@ -444,18 +447,41 @@ int gatePvData::put(gdd* dd)
 int gatePvData::putDumb(gdd* dd)
 {
 	gateDebug2(5,"gatePvData::putDumb(gdd=%8.8x) name=%s\n",(int)dd,name());
+	chtype cht=gddAitToDbr[dd->primitiveType()];
 	int rc=ECA_NORMAL;
+	aitString* str;
+	aitFixedString* fstr;
 
 	switch(getState())
 	{
 	case gatePvActive:
 		gateDebug0(2,"gatePvData::putDumb() active PV\n");
 		setTransTime();
-		if(dd->isScaler())
-			rc=ca_array_put(fieldType(),1,chan,dd->dataAddress());
-		else
-			rc=ca_array_put(fieldType(),dd->getDataSizeElements(),chan,
-				dd->dataPointer());
+		switch(dd->primitiveType())
+		{
+		case aitEnumString:
+			if(dd->isScalar())
+				str=(aitString*)dd->dataAddress();
+			else
+				str=(aitString*)dd->dataPointer();
+
+			// can only put one of these - arrays not valid to CA client
+			gateDebug1(5," putting String <%s>\n",str->string());
+			rc=ca_array_put(cht,1,chan,(void*)str->string());
+			break;
+		case aitEnumFixedString:
+			fstr=(aitFixedString*)dd->dataPointer();
+			gateDebug1(5," putting FString <%s>\n",fstr->fixed_string);
+			rc=ca_array_put(cht,dd->getDataSizeElements(),chan,(void*)fstr);
+			break;
+		default:
+			if(dd->isScalar())
+				rc=ca_array_put(cht,1,chan,dd->dataAddress());
+			else
+				rc=ca_array_put(cht,dd->getDataSizeElements(),
+					chan, dd->dataPointer());
+			break;
+		}
 		SEVCHK(rc,"put dumb bad");
 		checkEvent();
 		break;
@@ -784,7 +810,7 @@ gdd* gatePvData::eventStringCB(void* dbr)
 {
 	gateDebug0(10,"gatePvData::eventStringCB\n");
 	dbr_time_string* ts = (dbr_time_string*)dbr;
-	gddScaler* value=new gddScaler(GR->appValue, aitEnumFixedString);
+	gddScalar* value=new gddScalar(GR->appValue, aitEnumFixedString);
 
 	aitString* str = (aitString*)value->dataAddress();
 
@@ -799,12 +825,13 @@ gdd* gatePvData::eventEnumCB(void* dbr)
 {
 	gateDebug0(10,"gatePvData::eventEnumCB\n");
 	dbr_time_enum* ts = (dbr_time_enum*)dbr;
-	gddScaler* value = new gddScaler(GR->appValue,aitEnumEnum16);
+	gddScalar* value = new gddScalar(GR->appValue,aitEnumEnum16);
 
 	// DBR_TIME_ENUM response
 	*value=ts->value;
 	value->setStatSevr(ts->status,ts->severity);
 	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+
 	return value;
 }
 
@@ -826,7 +853,7 @@ gdd* gatePvData::eventLongCB(void* dbr)
 	}
 	else
 	{
-		value = new gddScaler(GR->appValue,aitEnumInt32);
+		value = new gddScalar(GR->appValue,aitEnumInt32);
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
@@ -852,7 +879,7 @@ gdd* gatePvData::eventCharCB(void* dbr)
 	}
 	else
 	{
-		value = new gddScaler(GR->appValue,aitEnumInt8);
+		value = new gddScalar(GR->appValue,aitEnumInt8);
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
@@ -878,7 +905,7 @@ gdd* gatePvData::eventFloatCB(void* dbr)
 	}
 	else
 	{
-		value = new gddScaler(GR->appValue,aitEnumFloat32);
+		value = new gddScalar(GR->appValue,aitEnumFloat32);
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
@@ -904,7 +931,7 @@ gdd* gatePvData::eventDoubleCB(void* dbr)
 	}
 	else
 	{
-		value = new gddScaler(GR->appValue,aitEnumFloat64);
+		value = new gddScalar(GR->appValue,aitEnumFloat64);
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
@@ -930,7 +957,7 @@ gdd* gatePvData::eventShortCB(void* dbr)
 	}
 	else
 	{
-		value = new gddScaler(GR->appValue,aitEnumInt16);
+		value = new gddScalar(GR->appValue,aitEnumInt16);
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);

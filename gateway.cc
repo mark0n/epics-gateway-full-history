@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.2  1996/07/23 16:32:44  jbk
+// new gateway that actually runs
+//
 
 #include <stdio.h>
 #include <string.h>
@@ -70,6 +73,7 @@ void operator delete(void* x)
 #define PARM_LOG			2
 #define PARM_ACCESS			3
 #define PARM_HOME			4
+#define PARM_ALIAS_FILE		5
 #define PARM_CONNECT_TOUT	6
 #define PARM_INACTIVE_TOUT	7
 #define PARM_DEAD_TOUT		8
@@ -93,6 +97,7 @@ typedef struct parm_stuff PARM_STUFF;
 static PARM_STUFF ptable[] = {
 	{ "-debug",				6,	PARM_DEBUG },
 	{ "-pv",				3,	PARM_PV },
+	{ "-alias",				6,	PARM_ALIAS_FILE },
 	{ "-log",				4,	PARM_LOG },
 	{ "-access",			7,	PARM_ACCESS },
 	{ "-home",				5,	PARM_HOME },
@@ -192,6 +197,18 @@ main(int argc, char** argv)
 						else
 						{
 							global_resources->setListFile(argv[i]);
+							not_done=0;
+						}
+					}
+					break;
+				case PARM_ALIAS_FILE:
+					if(++i>=argc) no_error=0;
+					else
+					{
+						if(argv[i][0]=='-') no_error=0;
+						else
+						{
+							global_resources->setAliasFile(argv[i]);
 							not_done=0;
 						}
 					}

@@ -5,6 +5,9 @@
 # $Id$
 #
 # $Log$
+# Revision 1.4  1996/07/23 16:32:32  jbk
+# new gateway that actually runs
+#
 #
 
 EPICS = ../../../..
@@ -27,9 +30,9 @@ USR_CCFLAGS = -DDEBUG_MODE # -L$(EPICS_EXTENSIONS_LIB) -L$(EPICS_BASE_LIB)
 # CMPLR =
 
 SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc \
-	      ../gateVc.cc ../gateway.cc ../gateExist.cc
+	      ../gateVc.cc ../gateway.cc ../gateExist.cc ../strmatch.cc
 
-LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o
+LIBOBJS = gatePv.o gateResources.o gateServer.o gateVc.o gateExist.o strmatch.o
 
 LIBNAME = libgate.a
 
