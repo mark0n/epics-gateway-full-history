@@ -6,12 +6,8 @@ include $(TOP)/config/CONFIG_EXTENSIONS
 # Use of GNU regex library (version 0.12) for patterns and aliasing
 GNU_REGEX_LOCATION = ../../../../regex-0.12
 
+# The base ppointer should be defined in $(TOP)/config/RELEASE
 
-#EPICS_BASE = /home/phoebus/JBA/epics/beta10AsFix
-#EPICS_BASE = /usr/local/epics/baseR3.13.0.beta12
-#EPICS_BASE = /home/phoebus/JBA/epics/base_07_23_98
-#EPICS_BASE = /home/phoebus/JBA/epics/base
-#EPICS_BASE = /home/phoebus/JBA/epics/baseGateway
 #EPICS_BASE = /home/phoebus/EVANS/epics/baseLatest
 #EPICS_BASE = /home/phoebus/EVANS/epics/baseGatewayOpt
 #EPICS_BASE = /home/phoebus/EVANS/epics/baseGateway
@@ -29,7 +25,12 @@ endif
 
 SHARED_LIBRARIES=NO
 
-CXXCMPLR=STRICT
+# Patches for HPUX / aCC
+# NORMAL to suppress "future errors", STATIC as using shared libs produces core dumps
+ifeq ($(HOST_ARCH),hp700)
+  CXXCMPLR=NORMAL
+  STATIC_BUILD=YES
+endif
 
 # Purify
 # CXX = purify -first-only -chain-length=25 -collector='/opt/gcc/lib/gcc-lib/hppa2.0-hp-hpux10.20/2.95.2/collect2' $($(CPLUSPLUS)_$(CXXCMPLR))
