@@ -29,6 +29,10 @@
  * $Author$
  *
  * $Log$
+ * Revision 1.38  2003/02/24 19:04:15  evans
+ * Fixed typo in if statement in gateVcData::write.  Fixed it to return
+ * without doing anything if pending_write is NULL.
+ *
  * Revision 1.37  2002/12/18 23:46:48  evans
  * Fixed ~gatePendingWrite to set pending_write in the gateVcData to
  * NULL.  Put fd management back in with #if USE_FDS, but with ca_poll
@@ -1562,7 +1566,7 @@ gdd* gatePvData::eventDoubleCB(void *dbr)
 		*value=ts->value;
 	}
 	value->setStatSevr(ts->status,ts->severity);
-	value->setTimeStamp((aitTimeStamp*)&ts->stamp);
+	value->setTimeStamp(&ts->stamp);
 #if DEBUG_TIMESTAMP
 	fprintf(stderr,"eventDoubleCB: %s %u %u\n",name(),ts->stamp.secPastEpoch,
 	  ts->stamp.nsec);
