@@ -48,9 +48,7 @@
 #
 # Notes:
 #  1) Pattern use shell-like wildcard characters (*, ?, [])
-#  2) Any PV not included in this file is allowed access according to 
-#     DEFAULT access security group.  If no access security file, then the
-#     PVs are allowed read access only.
+#  2) Any PV not included in this file is not allowed access. 
 #  3) See EPICS access security documentation for creating an access security
 #     file for the PV gateway.
 #

@@ -4,6 +4,11 @@
 // $Id$
 //
 // $Log$
+// Revision 1.19  1998/09/24 20:58:37  jba
+// Real name is now used for access security pattern matching.
+// Fixed PV Pattern Report
+// New gdd api changes
+//
 // Revision 1.18  1998/03/09 14:42:04  jba
 // Upon USR1 signal gateway now executes commands specified in a
 // gateway.command file.
@@ -63,6 +68,9 @@
 // new gateway that actually runs
 //
 //
+
+#define DEBUG_PV_CON_LIST 0
+#define DEBUG_PV_LIST 0
 
 #include <stdio.h>
 #include <string.h>
@@ -190,7 +198,12 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 		SEVCHK(status,"gatePvData::init() - search and connect");
 	}
 
+#if 0
+      // KE: Only want to check for ECA_NORMAL here, status=0 is otherwise meaningless
 	if(status==0 || status==ECA_NORMAL)
+#else
+	if(status==ECA_NORMAL)
+#endif
 	{
 		status=ca_replace_access_rights_event(chan,accessCB);
 		if(status==ECA_NORMAL)
@@ -209,10 +222,24 @@ void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 	{
 		// what do I do here? Nothing for now, let creator fix trouble
 	}
-	else
-		mrg->conAdd(pv_name,*this); // put into connecting PV list
+	else {
+		status = mrg->conAdd(pv_name,*this); // put into connecting PV list
+		if(status) printf("Put into connecting list failed for %s\n",pv_name);
+#if DEBUG_PV_CON_LIST
+		long now;
+		time(&now);
+		struct tm *tblock=localtime(&now);
+		char timeStampStr[20];  // 16 should be enough
+		strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+		
+		printf("%s gatePvData::init: [%ld,%ld,%ld]: name=%s\n",
+		  timeStampStr,
+		  mrg->pvConList()->count(),mrg->pvList()->count(),
+		  mrg->vcList()->count(),pv_name);
+#endif
+	}
 
-	checkEvent(); // only check the ca pend event thing here
+	checkEvent(); // do ca_pend_event
 }
 
 aitEnum gatePvData::nativeType(void)
@@ -345,6 +372,34 @@ int gatePvData::life(void)
 			markAckNakNotNeeded();
 		}
 		mrg->setStat(statAlive,++total_alive);
+#if DEBUG_PV_LIST
+		{
+		    long now;
+		    time(&now);
+		    struct tm *tblock=localtime(&now);
+		    char timeStampStr[20];  // 16 should be enough
+		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+		    
+		    printf("%s gatePvData::life: [%ld,%ld,%ld]: name=%s",
+		      timeStampStr,
+		      mrg->pvConList()->count(),mrg->pvList()->count(),
+		      mrg->vcList()->count(),pv_name);
+		    switch(getState()) {
+		    case gatePvConnect:
+			printf(" state=%s\n","gatePvConnect->gatePvConnect");
+			break;
+		    case gatePvActive:
+			printf(" state=%s\n","gatePvConnect->gatePvActive");
+			break;
+		    case gatePvInactive:
+			printf(" state=%s\n","gatePvConnect->gatePvInactive");
+			break;
+		    case gatePvDead:
+			printf(" state=%s\n","gatePvConnect->gatePvDead");
+			break;
+		    }
+		}
+#endif
 		break;
 	case gatePvDead:
 		gateDebug0(3,"gatePvData::life() dead PV\n");
@@ -399,6 +454,34 @@ int gatePvData::death(void)
 		}
 		if(needAddRemove() && vc) delete vc; // should never be the case
 		mrg->pvAdd(pv_name,*this);
+#if DEBUG_PV_LIST
+		{
+		    long now;
+		    time(&now);
+		    struct tm *tblock=localtime(&now);
+		    char timeStampStr[20];  // 16 should be enough
+		    strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+		    
+		    printf("%s gatePvData::death: [%ld,%ld,%ld]: name=%s",
+		      timeStampStr,
+		      mrg->pvConList()->count(),mrg->pvList()->count(),
+		      mrg->vcList()->count(),pv_name);
+		}
+		switch(getState()) {
+		case gatePvConnect:
+		    printf(" state=%s\n","gatePvConnect->gatePvDead");
+		    break;
+		case gatePvActive:
+		    printf(" state=%s\n","gatePvActive->gatePvDead");
+		    break;
+		case gatePvInactive:
+		    printf(" state=%s\n","gatePvInactive->gatePvDead");
+		    break;
+		case gatePvDead:
+		    printf(" state=%s\n","gatePvDead->gatePvDead");
+		    break;
+		}
+#endif
 		break;
 	case gatePvDead:
 		gateDebug0(3,"gatePvData::death() dead PV\n");
@@ -811,11 +894,12 @@ gdd* gatePvData::dataEnumCB(void* dbr)
 	gddAtomic* menu=new gddAtomic(GR->appEnum,aitEnumFixedString,1,ts->no_str);
 
 	// DBR_CTRL_ENUM response
-	for(i=0;i<ts->no_str;i++)
-	{
-		strcpy(items[i].fixed_string,&(ts->strs[i][0]));
-		gateDebug2(5," enum %d=%s \n",i,&(ts->strs[i][0]));
-	}
+    for (i=0;i<ts->no_str;i++) {
+        strncpy(items[i].fixed_string,&(ts->strs[i][0]),
+            sizeof(aitFixedString));
+        items[i].fixed_string[sizeof(aitFixedString)-1u] = '\0';
+    }
+
 
 	menu->putRef(items,new gateStringDestruct);
 	return menu;

@@ -4,6 +4,11 @@
 // $Id$
 //
 // $Log$
+// Revision 1.17  1998/03/09 14:42:06  jba
+// Upon USR1 signal gateway now executes commands specified in a
+// gateway.command file.
+// Incorporated latest changes to access security in gateAsCa.cc
+//
 // Revision 1.16  1997/06/09 14:18:52  jba
 // Environment variable GATEWAY_CORE_SIZE now sets size limit of core file.
 //
@@ -52,6 +57,8 @@
 // new gateway that actually runs
 //
 
+#define DEBUG_GATEWAY 1
+
 #include <stdio.h>
 #include <string.h>
 #include <fcntl.h>
@@ -90,7 +97,7 @@ void operator delete(void* x)
 }
 #endif
 
-// The parameters past in from the user are:
+// The parameters passed in from the user are:
 //	-debug ? = set debug level, ? is the integer level to set
 //	-pvlist file_name = process variable list file
 //	-log file_name = log file name
@@ -366,9 +373,11 @@ static int startEverything(void)
 		if (core_size)
 			if( sscanf(core_size,"%ld",&core_len) !=1) core_len=20000000;
 		lim.rlim_cur=core_len;
+#if DEBUG_GATEWAY == 0
 		if(setrlimit(RLIMIT_CORE,&lim)<0)
 			fprintf(stderr,"Failed to set core limit to %d\n",
 				(int)lim.rlim_cur);
+#endif
 	}
 
 	save_hup=signal(SIGHUP,sig_end);
@@ -814,7 +823,7 @@ void print_instructions(void)
 static pid_t gate_pid;
 static int death_flag=0;
 
-static void sig_chld(int sig)
+static void sig_chld(int /*sig*/)
 {
 #ifdef SOLARIS
 	while(waitpid(-1,NULL,WNOHANG)>0);
@@ -824,7 +833,7 @@ static void sig_chld(int sig)
 	signal(SIGCHLD,sig_chld);
 }
 
-static void sig_stop(int sig)
+static void sig_stop(int /*sig*/)
 {
 	if(gate_pid)
 		kill(gate_pid,SIGTERM);

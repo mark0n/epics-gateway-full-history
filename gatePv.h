@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.5  1997/03/17 16:01:00  jbk
+ * bug fixes and additions
+ *
  * Revision 1.4  1997/02/21 17:31:16  jbk
  * many many bug fixes and improvements
  *
@@ -123,7 +126,6 @@ public:
 	static long total_pv;
 
 protected:
-	gatePvData(void) { }
 	void init(gateServer*,gateAsEntry*,const char* name);
 	void initClear(void);
 
@@ -225,7 +227,7 @@ inline time_t gatePvData::timeDead(void) const
 inline time_t gatePvData::timeAlive(void) const
 	{ return (!dead())?(time(NULL)-dead_alive_time):0; }
 inline time_t gatePvData::timeConnecting(void) const
-	{ return pendingConnect()?(time(NULL)-dead_alive_time):0; }
+	{ return (time(NULL)-dead_alive_time); }
 
 inline void gatePvData::setInactiveTime(void)	{ time(&no_connect_time); }
 inline void gatePvData::setActiveTime(void)		{ time(&no_connect_time); }

@@ -7,21 +7,24 @@ include $(TOP)/config/CONFIG_EXTENSIONS
 
 #EPICS_BASE = /home/phoebus/JBA/epics/beta10AsFix
 #EPICS_BASE = /usr/local/epics/baseR3.13.0.beta12
+#EPICS_BASE = /home/phoebus/JBA/epics/base_07_23_98
 #EPICS_BASE = /home/phoebus/JBA/epics/base
-EPICS_BASE = /home/phoebus/JBA/epics/base_07_23_98
+#EPICS_BASE = /home/phoebus/JBA/epics/baseGateway
+EPICS_BASE = /home/phoebus/EVANS/epics/baseLatest
 
-#SHARED_LIBRARIES=NO
+SHARED_LIBRARIES=NO
 
 CXXCMPLR=STRICT
 
-CCC = purify -chain-length=20 CC
+#CCC = purify -chain-length=20 CC 
 HOST_OPT=NO
 
 # USR_CXXFLAGS += -DDEBUG_MODE
 
-PROD_LIBS += gate ca cas As Com gdd
+#PROD_LIBS += gate ca cas As Com gdd
+PROD_LIBS += ca cas As Com gdd
 #gate_DIR = .
-gate_DIR = $(INSTALL_LIB)
+#gate_DIR = $(INSTALL_LIB)
 
 LIBSRCS += gatePv.cc
 LIBSRCS += gateResources.cc
@@ -36,9 +39,11 @@ LIBSRCS += gateStat.cc
 SRCS += gateway.cc
 SRCS += $(LIBSRCS)
 
-LIBRARY = gate
+#LIBRARY = gate
 
 PROD = gateway
 
 include $(TOP)/config/RULES.Host
 
+xxxx:
+	$(EPICS_BASE)

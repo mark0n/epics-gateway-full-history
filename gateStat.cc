@@ -47,12 +47,12 @@ aitEnum gateStat::bestExternalType(void) const
 	return value->primitiveType();
 }
 
-caStatus gateStat::write(const casCtx &ctx, gdd &dd)
+caStatus gateStat::write(const casCtx &, gdd &)
 {
 	return S_casApp_success;
 }
 
-caStatus gateStat::read(const casCtx &ctx, gdd &dd)
+caStatus gateStat::read(const casCtx &, gdd &dd)
 {
 	caStatus rc=S_casApp_success;
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();

@@ -8,6 +8,11 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.14  1998/03/09 14:42:04  jba
+ * Upon USR1 signal gateway now executes commands specified in a
+ * gateway.command file.
+ * Incorporated latest changes to access security in gateAsCa.cc
+ *
  * Revision 1.13  1997/05/15 14:35:49  jba
  * Added gateway restart script report.
  *
@@ -50,7 +55,7 @@
 #define GATE_PV_ACCESS_FILE "gateway.access"
 #define GATE_COMMAND_FILE   "gateway.command"
 
-#define GATE_CONNECT_TIMEOUT  0
+#define GATE_CONNECT_TIMEOUT  1
 #define GATE_INACTIVE_TIMEOUT (60*60*2)
 #define GATE_DEAD_TIMEOUT     (60*2)
 

@@ -9,3 +9,11 @@ Tue Apr 21 22:38:59 CDT 1998
 	Real name is now used for access security pattern matching.
 	Fixed PV Pattern Report 
 	New gdd api changes
+
+Tue Dec 22 12:53:15 CST 1998
+        Tagged current CVS version as Gateway0_1 before commit.
+        Current version has ENUM hack changes.
+        Fixed bug with removing items from pv_con_list.
+        Core dumps, but infrequently.
+        Has been in production use for several weeks.
+        Will be tagged Gateway0_2 after commit.

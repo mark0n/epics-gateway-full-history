@@ -8,6 +8,11 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.15  1998/03/09 14:42:05  jba
+ * Upon USR1 signal gateway now executes commands specified in a
+ * gateway.command file.
+ * Incorporated latest changes to access security in gateAsCa.cc
+ *
  * Revision 1.14  1997/05/20 15:48:27  jbk
  * changes for the latest CAS library in EPICS 3.13.beta9
  *
@@ -195,10 +200,13 @@ private:
 	char* host_name;
 	int host_len;
 
-	gateStat* pv_alive;		// <host>.alive
-	gateStat* pv_active;	// <host>.active
+#if 0
+      // KE: Not used
+	gateStat* pv_alive;	        // <host>.alive
+	gateStat* pv_active;	        // <host>.active
 	gateStat* pv_total;		// <host>.total
 	gateStat* pv_fd;		// <host>.total
+#endif
 	char* name_alive;
 	char* name_active;
 	char* name_total;

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.20  1997/10/28 19:14:00  jba
+// pv_name change.
+//
 // Revision 1.19  1997/06/12 21:32:09  jba
 // pv_name update.
 //
@@ -182,7 +185,7 @@ gateVcData::~gateVcData(void)
 	if(event_data) event_data->unreference();
 	delete [] pv_name;
 	pv_name="Error";
-	pv->setVC(NULL);
+	if (pv) pv->setVC(NULL);
 	mrg->setStat(statVcTotal,--total_vc);
 }
 
@@ -303,6 +306,11 @@ void gateVcData::add(gdd* dd)
 
 	if(event_data) event_data->unreference();
 	event_data=dd;
+
+#if ENUM_HACK
+	// related dd needed for enums to string conversion
+	if(data) event_data->setRelated(data);
+#endif
 
 	switch(getState())
 	{
