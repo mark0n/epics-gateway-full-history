@@ -4,6 +4,34 @@
 // $Id$
 //
 // $Log$
+// Revision 1.23  1998/12/22 20:10:20  evans
+// This version has much debugging printout (inside #if's).
+// Changed gateVc::remove-> vcRemove and add -> vcAdd.
+//   Eliminates warnings about hiding private ancestor functions on Unix.
+//   (Warning is invalid.)
+// Now compiles with no warnings for COMPLR=STRICT on Solaris.
+// Made changes to speed it up:
+//   Put #if around ca_add_fd_registration.
+//     Also eliminates calls to ca_pend in fdCB.
+//   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
+//   Changed mainLoop to call fdManager::process with delay=0.
+//   Put explicit ca_poll in the mainLoop.
+//   All these changes eliminate calls to poll() which was the predominant
+//     time user.  Speed up under load is as much as a factor of 5. Under
+//     no load it runs continuously, however, rather than sleeping in
+//     poll().
+// Added #if NODEBUG around calls to Gateway debug routines (for speed).
+// Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
+// Added timeStamp routine to gateServer.cc.
+// Added line with PID and time stamp to log file on startup.
+// Changed freopen for stderr to use "a" so it doesn't overwrite the log.
+// Incorporated Ralph Lange changes by hand.
+//   Changed clock_gettime to osiTime to avoid unresolved reference.
+//   Fixed his gateAs::readPvList to eliminate core dump.
+// Made other minor fixes.
+// Did minor cleanup as noticed problems.
+// This version appears to work but has debugging (mostly turned off).
+//
 // Revision 1.20  1997/10/28 19:14:00  jba
 // pv_name change.
 //
@@ -64,6 +92,8 @@
 // new gateway that actually runs
 //
 //
+
+#define DEBUG_VC_DELETE 0
 
 #include <stdio.h>
 #include <string.h>
@@ -178,6 +208,9 @@ gateVcData::gateVcData(gateServer* m,const char* name):casPV(*m)
 
 gateVcData::~gateVcData(void)
 {
+#if DEBUG_VC_DELETE
+    printf("gateVcData::~gateVcData %s\n",pv?pv->name():"NULL");
+#endif
 	gateDebug0(5,"~gateVcData()\n");
 	gateVcData* x;
 	if(in_list_flag) mrg->vcDelete(pv_name,x);
@@ -190,6 +223,9 @@ gateVcData::~gateVcData(void)
 }
 
 long gateVcData::total_vc=0 ;
+#ifdef RATE_STATS
+unsigned long gateVcData::post_event_count=0;
+#endif
 
 const char* gateVcData::getName() const
 {
@@ -199,6 +235,9 @@ const char* gateVcData::getName() const
 void gateVcData::destroy(void)
 {
 	gateDebug0(1,"gateVcData::destroy()\n");
+#if DEBUG_VC_DELETE
+	printf("gateVcData::destroy %s\n",pv?pv->name():"NULL");
+#endif
 	vcRemove();
 	casPV::destroy();
 }
@@ -245,6 +284,9 @@ void gateVcData::vcRemove(void)
 	case gateVcReady:
 		gateDebug0(1,"gateVcData::vcRemove() connect/ready -> clear\n");
 		setState(gateVcClear);
+#if DEBUG_VC_DELETE
+		printf("gateVcData::vcRemove %s\n",pv?pv->name():"NULL");
+#endif
 		pv->deactivate();
 		break;
 	default:
@@ -485,7 +527,10 @@ void gateVcData::vcNew(void)
 	}
 
 	if(needInitialPosting())
-		postEvent(select_mask,*event_data); // event data need to be posted
+	{
+		postEvent(select_mask,*event_data); // event data needs to be posted
+		post_event_count++;
+	}
 }
 
 void gateVcData::vcEvent(void)
@@ -503,6 +548,7 @@ void gateVcData::vcEvent(void)
 			if(t>=1)
 			{
 				postEvent(select_mask,*event_data);
+				post_event_count++;
 				setTransTime();
 			}
 		}
@@ -511,6 +557,7 @@ void gateVcData::vcEvent(void)
 			// no more than 4 events per second
 			// if(++event_count<4)
 				postEvent(select_mask,*event_data);
+				post_event_count++;
 			// if(t>=1)
 			// 	event_count=0;
 			// setTransTime();
@@ -721,3 +768,9 @@ gateAsyncW::~gateAsyncW(void)
 	dd.unreference();
 }
 
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* c-basic-offset: 8 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

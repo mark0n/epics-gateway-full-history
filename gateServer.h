@@ -10,6 +10,34 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.17  1998/12/22 20:10:20  evans
+ * This version has much debugging printout (inside #if's).
+ * Changed gateVc::remove-> vcRemove and add -> vcAdd.
+ *   Eliminates warnings about hiding private ancestor functions on Unix.
+ *   (Warning is invalid.)
+ * Now compiles with no warnings for COMPLR=STRICT on Solaris.
+ * Made changes to speed it up:
+ *   Put #if around ca_add_fd_registration.
+ *     Also eliminates calls to ca_pend in fdCB.
+ *   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
+ *   Changed mainLoop to call fdManager::process with delay=0.
+ *   Put explicit ca_poll in the mainLoop.
+ *   All these changes eliminate calls to poll() which was the predominant
+ *     time user.  Speed up under load is as much as a factor of 5. Under
+ *     no load it runs continuously, however, rather than sleeping in
+ *     poll().
+ * Added #if NODEBUG around calls to Gateway debug routines (for speed).
+ * Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
+ * Added timeStamp routine to gateServer.cc.
+ * Added line with PID and time stamp to log file on startup.
+ * Changed freopen for stderr to use "a" so it doesn't overwrite the log.
+ * Incorporated Ralph Lange changes by hand.
+ *   Changed clock_gettime to osiTime to avoid unresolved reference.
+ *   Fixed his gateAs::readPvList to eliminate core dump.
+ * Made other minor fixes.
+ * Did minor cleanup as noticed problems.
+ * This version appears to work but has debugging (mostly turned off).
+ *
  * Revision 1.15  1998/03/09 14:42:05  jba
  * Upon USR1 signal gateway now executes commands specified in a
  * gateway.command file.
@@ -121,12 +149,22 @@ private:
 
 
 // server stats definitions
-#define statActive	0
-#define statAlive	1
-#define statVcTotal	2
-#define statFd		3
-#define statPvTotal	4
-#define statCount	5
+#define statActive          0
+#define statAlive           1
+#define statVcTotal         2
+#define statFd              3
+#define statPvTotal         4
+#ifdef RATE_STATS
+#define statClientEventRate 5
+#define statPostEventRate   6
+#define statExistTestRate   7
+#define statLoopRate        8
+// Number of server stats definitions
+#define statCount           9
+#else
+// Number of server stats definitions
+#define statCount           5
+#endif
 
 struct gateServerStats
 {
@@ -136,6 +174,25 @@ struct gateServerStats
 	long* init_value;
 };
 typedef struct gateServerStats;
+
+#ifdef RATE_STATS
+#include "osiTimer.h"
+class gateRateStatsTimer : public osiTimer
+{
+public:
+	gateRateStatsTimer(const osiTime &delay, gateServer *m) : 
+	  startTime(osiTime::getCurrent()), osiTimer(delay), interval(delay), 
+	  mrg(m) {}
+	virtual void expire();
+	virtual const osiTime delay() const { return interval; }
+	virtual osiBool again() const { return osiTrue; }
+	virtual const char *name() const { return "gateRateStatsTimer"; }
+private:
+	osiTime interval;
+	osiTime startTime;
+	gateServer* mrg;
+};
+#endif
 
 class gateServer : public caServer
 {
@@ -155,8 +212,8 @@ public:
 	gateAs* getAs(void) { return as_rules; }
 	casEventMask select_mask;
 	gateStat* getStat(int type);
-	void setStat(int type,double);
-	void setStat(int type,long);
+	void setStat(int type,double val);
+	void setStat(int type,long val);
 	void clearStat(int type);
 	long initStatValue(int type);
 	void initStats(void);
@@ -189,6 +246,10 @@ public:
 	time_t timeInactiveCheck(void) const;
 	time_t timeConnectCleanup(void) const;
 
+#ifdef RATE_STATS
+	unsigned long getExistCount(void) const { return exist_count; }
+	unsigned long getLoopCount(void) const { return loop_count; }
+#endif	
 	tsDLHashList<gateVcData>* vcList(void)		{ return &vc_list; }
 	tsDLHashList<gatePvNode>* pvList(void)		{ return &pv_list; }
 	tsDLHashList<gatePvNode>* pvConList(void)	{ return &pv_con_list; }
@@ -210,7 +271,12 @@ private:
 	unsigned long exist_count;
 	time_t start_time;
 	char* host_name;
-	int host_len;
+	int host_len;	
+#ifdef RATE_STATS
+	gateRateStatsTimer *statTimer;
+	unsigned long loop_count;
+	static long fake_zero;     // KE: Kludge to use init_value
+#endif	
 
 #if 0
       // KE: Not used
@@ -218,12 +284,12 @@ private:
 	gateStat* pv_active;	        // <host>.active
 	gateStat* pv_total;		// <host>.total
 	gateStat* pv_fd;		// <host>.total
-#endif
+
 	char* name_alive;
 	char* name_active;
 	char* name_total;
 	char* name_fd;
-
+#endif
 	static void exCB(EXCEPT_ARGS args);
 	static void fdCB(void* ua, int fd, int opened);
 
@@ -314,3 +380,10 @@ inline int gateServer::vcDelete(const char* name, gateVcData*& vc)
 	{ return vc_list.remove(name,vc); }
 
 #endif
+
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* c-basic-offset: 8 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

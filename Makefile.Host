@@ -28,6 +28,8 @@ HOST_OPT=NO
 # USR_CXXFLAGS += -DDEBUG_MODE
 # Turn off Gateway debug calls:
 USR_CXXFLAGS += -DNODEBUG
+# Use rate statistics
+USR_CXXFLAGS += -DRATE_STATS
 # Fix GDD ENUM problem (Requires hacks to base as well):
 USR_CXXFLAGS += -DENUM_HACK
 

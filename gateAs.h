@@ -168,4 +168,5 @@ private:
 /* Local Variables: */
 /* c-basic-offset: 8 */
 /* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */

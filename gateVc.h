@@ -8,6 +8,34 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.17  1998/12/22 20:10:20  evans
+ * This version has much debugging printout (inside #if's).
+ * Changed gateVc::remove-> vcRemove and add -> vcAdd.
+ *   Eliminates warnings about hiding private ancestor functions on Unix.
+ *   (Warning is invalid.)
+ * Now compiles with no warnings for COMPLR=STRICT on Solaris.
+ * Made changes to speed it up:
+ *   Put #if around ca_add_fd_registration.
+ *     Also eliminates calls to ca_pend in fdCB.
+ *   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
+ *   Changed mainLoop to call fdManager::process with delay=0.
+ *   Put explicit ca_poll in the mainLoop.
+ *   All these changes eliminate calls to poll() which was the predominant
+ *     time user.  Speed up under load is as much as a factor of 5. Under
+ *     no load it runs continuously, however, rather than sleeping in
+ *     poll().
+ * Added #if NODEBUG around calls to Gateway debug routines (for speed).
+ * Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
+ * Added timeStamp routine to gateServer.cc.
+ * Added line with PID and time stamp to log file on startup.
+ * Changed freopen for stderr to use "a" so it doesn't overwrite the log.
+ * Incorporated Ralph Lange changes by hand.
+ *   Changed clock_gettime to osiTime to avoid unresolved reference.
+ *   Fixed his gateAs::readPvList to eliminate core dump.
+ * Made other minor fixes.
+ * Did minor cleanup as noticed problems.
+ * This version appears to work but has debugging (mostly turned off).
+ *
  * Revision 1.16  1997/09/25 18:19:56  jba
  * Moved location of gateAsyncR and gateAsyncW.
  *
@@ -221,6 +249,10 @@ public:
 
 	casEventMask select_mask;
 	static long total_vc;
+#ifdef RATE_STATS
+	static unsigned long post_event_count;
+#endif
+	
 protected:
 	void setState(gateVcState s)	{ pv_state=s; }
 	gatePvData* pv;
@@ -264,3 +296,9 @@ inline void gateVcData::removeChan(gateChan* c) { chan.remove(*c); }
 
 #endif
 
+/* **************************** Emacs Editing Sequences ***************** */
+/* Local Variables: */
+/* c-basic-offset: 8 */
+/* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
+/* End: */

@@ -1,10 +1,37 @@
-
 // Author: Jim Kowalkowski
 // Date: 7/96
 //
 // $Id$
 //
 // $Log$
+// Revision 1.28  1998/12/22 20:10:20  evans
+// This version has much debugging printout (inside #if's).
+// Changed gateVc::remove-> vcRemove and add -> vcAdd.
+//   Eliminates warnings about hiding private ancestor functions on Unix.
+//   (Warning is invalid.)
+// Now compiles with no warnings for COMPLR=STRICT on Solaris.
+// Made changes to speed it up:
+//   Put #if around ca_add_fd_registration.
+//     Also eliminates calls to ca_pend in fdCB.
+//   Put #if DEBUG_PEND around calls to checkEvent, which calls ca_pend.
+//   Changed mainLoop to call fdManager::process with delay=0.
+//   Put explicit ca_poll in the mainLoop.
+//   All these changes eliminate calls to poll() which was the predominant
+//     time user.  Speed up under load is as much as a factor of 5. Under
+//     no load it runs continuously, however, rather than sleeping in
+//     poll().
+// Added #if NODEBUG around calls to Gateway debug routines (for speed).
+// Changed ca_pend(GATE_REALLY_SMALL) to ca_poll for aesthetic reasons.
+// Added timeStamp routine to gateServer.cc.
+// Added line with PID and time stamp to log file on startup.
+// Changed freopen for stderr to use "a" so it doesn't overwrite the log.
+// Incorporated Ralph Lange changes by hand.
+//   Changed clock_gettime to osiTime to avoid unresolved reference.
+//   Fixed his gateAs::readPvList to eliminate core dump.
+// Made other minor fixes.
+// Did minor cleanup as noticed problems.
+// This version appears to work but has debugging (mostly turned off).
+//
 // Revision 1.26  1998/09/24 20:58:37  jba
 // Real name is now used for access security pattern matching.
 // Fixed PV Pattern Report
@@ -204,6 +231,11 @@ void gateServer::mainLoop(void)
 	sigignore(SIGPIPE);
 	time(&start_time);
 	exist_count=0;
+	loop_count=0;
+#if RATE_STATS
+	osiTime rateStatsDelay(10u,0u);
+	statTimer = new gateRateStatsTimer(rateStatsDelay, this);
+#endif
 
 #if DEBUG_TIMES
 	lastPrintTime=osiTime::getCurrent();
@@ -212,12 +244,13 @@ void gateServer::mainLoop(void)
 	cleanTime=zero;
 #endif
 	while(not_done)
-	    {
+	{
+		loop_count++;
 #if DEBUG_TIMES
 		nLoops++;
 		begin=osiTime::getCurrent();
 #endif
-	      // Process
+		// Process
 		fileDescriptorManager.process(delay);
 #if DEBUG_TIMES
 		end=osiTime::getCurrent();
@@ -232,7 +265,7 @@ void gateServer::mainLoop(void)
 		pendTime+=(end-begin);
 		begin=end;
 #endif
-	      // Cleanup
+		// Cleanup
 		connectCleanup();
 		inactiveDeadCleanup();
 #if DEBUG_TIMES
@@ -256,14 +289,14 @@ void gateServer::mainLoop(void)
 		
 		// make sure messages get out
 #if 0
-	        // KE: ++cnt==0 is always false -- stdout is not getting flushed
+		// KE: ++cnt==0 is always false -- stdout is not getting flushed
 		if(++cnt==0) { fflush(stderr); fflush(stdout); }
 #else
 		fflush(stderr); fflush(stdout);
 #endif
 		if(report_flag2) { report2(); report_flag2=0; }
 		if(command_flag) { gateCommands(global_resources->commandFile()); command_flag=0; }
-	    }
+	}
 }
 
 void gateServer::gateCommands(const char* cfile)
@@ -445,10 +478,13 @@ gateServer::~gateServer(void)
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
 
+#if 0
+// KE: Not used
 	delete [] name_alive;
 	delete [] name_active;
 	delete [] name_total;
 	delete [] name_fd;
+#endif
 	delete [] host_name;
 
 	while((pv_node=pv_list.first()))
@@ -511,6 +547,9 @@ void gateServer::fdCB(void* ua, int fd, int opened)
 }
 
 long gateServer::total_fd=0;
+#ifdef RATE_STATS
+long gateServer::fake_zero=0;
+#endif
 
 osiTime gateServer::delay_quick(0u,100000u);
 osiTime gateServer::delay_normal(1u,0u);
@@ -906,14 +945,14 @@ pvCreateReturn gateServer::createPV(const casCtx& /*c*/,const char* pvname)
 	return rc?pvCreateReturn(*rc):pvCreateReturn(S_casApp_pvNotFound);
 }
 
-void gateServer::setStat(int type,double x)
+void gateServer::setStat(int type, double val)
 {
-	if(stat_table[type].pv) stat_table[type].pv->postData(x);
+	if(stat_table[type].pv) stat_table[type].pv->postData(val);
 }
 
-void gateServer::setStat(int type,long x)
+void gateServer::setStat(int type, long val)
 {
-	if(stat_table[type].pv) stat_table[type].pv->postData(x);
+	if(stat_table[type].pv) stat_table[type].pv->postData(val);
 }
 
 void gateServer::initStats(void)
@@ -952,19 +991,78 @@ gateServerStats gateServer::stat_table[] = {
 	{ "vctotal",NULL,NULL,&gateVcData::total_vc },
 	{ "fd",NULL,NULL,&gateServer::total_fd },
 	{ "pvtotal",NULL,NULL,&gatePvData::total_pv },
+#ifdef RATE_STATS
+	{ "clientEventRate",NULL,NULL,&gateServer::fake_zero },
+	{ "postEventRate",NULL,NULL,&gateServer::fake_zero },
+	{ "existTestRate",NULL,NULL,&gateServer::fake_zero },
+	{ "loopRate",NULL,NULL,&gateServer::fake_zero },
+#endif
 };
+
+#ifdef RATE_STATS
+// Rate statistics
+
+void gateRateStatsTimer::expire()
+{
+	static int first=1;
+	static osiTime prevTime;
+	osiTime curTime=osiTime::getCurrent();
+	static unsigned long cePrevCount,etPrevCount,mlPrevCount,pePrevCount ;
+	unsigned long ceCurCount=gatePvData::client_event_count;
+	unsigned long peCurCount=gateVcData::post_event_count;
+	unsigned long etCurCount=mrg->getExistCount();
+	unsigned long mlCurCount=mrg->getLoopCount();
+	double delTime,ceRate,peRate,etRate,mlRate;
+
+	// Initialize the first time
+	if(first)
+	{
+		prevTime=curTime;
+		cePrevCount=ceCurCount;
+		pePrevCount=peCurCount;
+		etPrevCount=etCurCount;
+		mlPrevCount=mlCurCount;
+		first=0;
+		return;
+	}
+	delTime=(double)(curTime-prevTime);
+
+	// Calculate the client event rate
+	ceRate=(delTime > 0)?(double)(ceCurCount-cePrevCount)/delTime:0.0;
+	mrg->setStat(statClientEventRate,ceRate);
+
+	// Calculate the post event rate
+	peRate=(delTime > 0)?(double)(peCurCount-pePrevCount)/delTime:0.0;
+	mrg->setStat(statPostEventRate,peRate);
+
+	// Calculate the exist test rate
+	etRate=(delTime > 0)?(double)(etCurCount-etPrevCount)/delTime:0.0;
+	mrg->setStat(statExistTestRate,etRate);
+
+	// Calculate the main loop rate
+	mlRate=(delTime > 0)?(double)(mlCurCount-mlPrevCount)/delTime:0.0;
+	mrg->setStat(statLoopRate,mlRate);
+
+#if 0
+	printf("gateRateStatsTimer::expire(): ceCurCount=%ld cePrevCount=%ld ceRate=%g\n",
+	  ceCurCount,cePrevCount,ceRate);
+	printf("  deltime=%g etCurCount=%ld etPrevCount=%ld etRate=%g\n",
+	  delTime,etCurCount,etPrevCount,etRate);
+	fflush(stdout);
+#endif
+
+	// Reset the previous values
+	prevTime=curTime;
+	cePrevCount=ceCurCount;
+	pePrevCount=peCurCount;
+	etPrevCount=etCurCount;
+	mlPrevCount=mlCurCount;
+}
+#endif
 
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
 /* c-basic-offset: 8 */
 /* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */
-
-
-
-
-
-
-
-
-

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.5  1998/12/22 21:43:38  evans
+// Fixed time stamp in gateStat.cc.
+//
 // Revision 1.4  1998/12/22 20:10:20  evans
 // This version has much debugging printout (inside #if's).
 // Changed gateVc::remove-> vcRemove and add -> vcAdd.
@@ -44,6 +47,7 @@
 // post_data  is a flag that switches posting updates on/off
 
 #define USE_OSI_TIME 1
+#define STAT_DOUBLE
 
 #if !USE_OSI_TIME
 #include <time.h>
@@ -58,8 +62,13 @@ gateStat::gateStat(gateServer* s,const char* n,int t):
 	casPV(*s),type(t),serv(s),post_data(0)
 {
 	name=strDup(n);
+#ifdef STAT_DOUBLE
+	value=new gdd(global_resources->appValue,aitEnumFloat64);
+	value->put((aitFloat64)serv->initStatValue(type));
+#else
 	value=new gdd(global_resources->appValue,aitEnumInt32);
 	value->put((aitInt32)serv->initStatValue(type));
+#endif
 	value->reference();
 }
 
@@ -107,16 +116,20 @@ void gateStat::postData(long val)
 #if USE_OSI_TIME
 	struct timespec ts;
         osiTime osit(osiTime::getCurrent());
-	ts.tv_sec=osit.getSec();
-	ts.tv_nsec=osit.getNSec();
-	ts.tv_sec-=631152000ul;	// EPICS ts start 20 years later ...
+	// EPICS is 20 years ahead of its time
+	ts.tv_sec=(time_t)osit.getSecTruncToLong()-631152000ul;
+	ts.tv_nsec=osit.getNSecTruncToLong();
 #else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 	ts.tv_sec-=631152000ul;	// EPICS ts start 20 years later ...
 #endif
 
+#ifdef STAT_DOUBLE
+	value->put((aitFloat64)val);
+#else
 	value->put((aitInt32)val);
+#endif
 	value->setTimeStamp(&ts);
 	if(post_data) postEvent(serv->select_mask,*value);
 }
@@ -127,16 +140,20 @@ void gateStat::postData(double val)
 #if USE_OSI_TIME
 	struct timespec ts;
         osiTime osit(osiTime::getCurrent());
-	ts.tv_sec=osit.getSec();
-	ts.tv_nsec=osit.getNSec();
-	ts.tv_sec-=631152000ul;	// EPICS ts start 20 years later ...
+	// EPICS is 20 years ahead of its time
+	ts.tv_sec=(time_t)osit.getSecTruncToLong()-631152000ul;
+	ts.tv_nsec=osit.getNSecTruncToLong();
 #else
 	struct timespec ts;
 	clock_gettime(CLOCK_REALTIME, &ts);
 	ts.tv_sec-=631152000ul;	// EPICS ts start 20 years later ...
 #endif
 
+#ifdef STAT_DOUBLE
 	value->put(val);
+#else
+	value->put(val);
+#endif
 	value->setTimeStamp(&ts);
 	if(post_data) postEvent(serv->select_mask,*value);
 }
@@ -145,4 +162,5 @@ void gateStat::postData(double val)
 /* Local Variables: */
 /* c-basic-offset: 8 */
 /* c-comment-only-line-offset: 0 */
+/* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */
