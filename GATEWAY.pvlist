@@ -53,7 +53,7 @@
 #     file for the PV gateway.
 #
 # Below:
-#  - make ALLOW rules override DENY rules
+#  - make DENY rules override ALLOW rules
 #  - requests for PVs starting with Beam: will be allowed according to rules for access
 #    security group Beam, similarly for PS using PowerSupply and hydra flags using
 #    GatewayAdmin
@@ -67,8 +67,8 @@ EVALUATION ORDER ALLOW, DENY
 [a-z].*          ALLOW
 [A-Z].*          ALLOW
 
-Beam:*           ALLOW Beam 1
-PS*              ALLOW PowerSupply 1
+Beam:.*          ALLOW Beam 1
+PS.*             ALLOW PowerSupply 1
 gateway.*Flag    Allow GatewayAdmin
 test.*           DENY
 ps\([0-9]\)      ALIAS PSCurrent\1.ai PowerSupply 1

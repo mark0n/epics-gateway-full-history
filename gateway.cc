@@ -228,14 +228,14 @@ static void sig_end(int sig)
 	fflush(stdout);
 	fflush(stderr);
 	
-	switch(sig)
-	{
+	switch(sig)	{
 #ifndef WIN32
 	case SIGHUP:
 #ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGHUP)");
 #endif
-		fprintf(stderr,"PV Gateway Ending (SIGHUP)\n");
+		fprintf(stderr,"%s PV Gateway Ending (SIGHUP)\n",
+		  timeStamp());
 		if(save_hup) save_hup(sig);
 		break;
 #endif //#ifndef WIN32
@@ -243,14 +243,16 @@ static void sig_end(int sig)
 #ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGTERM)");
 #endif
-		fprintf(stderr,"PV Gateway Ending (SIGTERM)\n");
+		fprintf(stderr,"%s PV Gateway Ending (SIGTERM)\n",
+		  timeStamp());
 		if(save_term) save_term(sig);
 		break;
 	case SIGINT:
 #ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Ending (SIGINT)");
 #endif
-		fprintf(stderr,"PV Gateway Ending (SIGINT)\n");
+		fprintf(stderr,"%s PV Gateway Ending (SIGINT)\n",
+		  timeStamp());
 		if(save_int) save_int(sig);
 		break;
 	case SIGILL:
@@ -265,7 +267,8 @@ static void sig_end(int sig)
 #ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGBUS)");
 #endif
-		fprintf(stderr,"PV Gateway Aborting (SIGBUS)\n");
+		fprintf(stderr,"%s PV Gateway Aborting (SIGBUS)\n",
+		  timeStamp());
 		if(save_bus) save_bus(sig);
 		abort();
 #endif //#ifndef WIN32
@@ -273,14 +276,16 @@ static void sig_end(int sig)
 #ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Aborting (SIGSEGV)");
 #endif
-		fprintf(stderr,"PV Gateway Aborting (SIGSEGV)\n");
+		fprintf(stderr,"%s PV Gateway Aborting (SIGSEGV)\n",
+		  timeStamp());
 		if(save_segv) save_segv(sig);
 		abort();
 	default:
 #ifdef USE_SYSLOG
 		syslog(LOG_NOTICE|LOG_DAEMON,"PV Gateway Exiting (Unknown Signal)");
 #endif
-		fprintf(stderr,"PV Gateway Exiting (Unknown Signal)\n");
+		fprintf(stderr,"%s PV Gateway Exiting (Unknown Signal)\n",
+		  timeStamp());
 		break;
 	}
 	

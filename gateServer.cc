@@ -32,15 +32,19 @@
 #define DEBUG_EXIST 0
 #define DEBUG_DELAY 0
 
-// KE: Leave this in permanently for now.  DEBUG_TIMES prints a
-// message every minute, that helps determine when things happen.
-#define DEBUG_TIMES 1
+// DEBUG_TIMES prints a message every minute, which helps determine
+// when things happen.
+#define DEBUG_TIMES 0
 // This is the interval used with DEBUG_TIMES
 #define GATE_TIME_STAT_INTERVAL 60 /* sec */
 
 // This causes traces to be printed when exceptions occur.  It
 // requires Base 3.15.
 #define DEBUG_EXCEPTION 0
+// Print only MAX_EXCEPTIONS exceptions unless EXCEPTION_RESET_TIME
+// has passed since the last one printed
+#define MAX_EXCEPTIONS 100
+#define EXCEPTION_RESET_TIME 3600  /* sec */
 
 // Interval for rate statistics in seconds
 #define RATE_STATS_INTERVAL 10u
@@ -777,14 +781,26 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 	gateDebug1(9,"exCB: status=%d\n",args.stat);
 	*/
 
-	// this is the exception callback
-	// problem - log a message about the PV
+	// This is the exception callback - log a message about the PV
 #if HANDLE_EXCEPTIONS
-#define MAX_EXCEPTIONS 100
-	static int nexceptions=0;
+	static epicsTime last=epicsTime::getCurrent();
+	static int nExceptions=0;
 	static int ended=0;
+
+	// Reset counter if EXCEPTION_RESET_TIME has passed since last print
+	epicsTime cur=epicsTime::getCurrent();
+	double delta=cur-last;
+	if(delta > EXCEPTION_RESET_TIME) {
+		nExceptions=0;
+		ended=0;
+	}
+
+	// Handle these cases with less output and no limits since they
+	// are common
 	
-	if (args.stat == ECA_DISCONN) {
+	// Virtual circuit disconnect
+	// Virtual circuit unresponsive
+	if (args.stat == ECA_DISCONN || args.stat == ECA_UNRESPTMO) {
 		fprintf (stderr, "%s Warning: %s %s \n",
 				 timeStamp(),
 				 ca_message(args.stat)?ca_message(args.stat):"<no message>",
@@ -792,17 +808,19 @@ void gateServer::exCB(EXCEPT_ARGS /*args*/)
 		return;
 	}
 
+	// Check if we have exceeded the limits
 	if(ended) return;
-	if(nexceptions++ > MAX_EXCEPTIONS) {
+	if(nExceptions++ > MAX_EXCEPTIONS) {
 	    ended=1;
 	    fprintf(stderr,"gateServer::exCB: Channel Access Exception:\n"
 	      "Too many exceptions [%d]\n"
-	      "No more will be handled\n",
-	      MAX_EXCEPTIONS);
+	      "No more will be printed for %d seconds\n",
+	      MAX_EXCEPTIONS,EXCEPTION_RESET_TIME);
 	    ca_add_exception_event(NULL, NULL);
 	    return;
 	}
 
+	last=cur;
 	fprintf(stderr,"%s gateServer::exCB: Channel Access Exception:\n"
 	  "  Channel Name: %s\n"
 	  "  Native Type: %s\n"
