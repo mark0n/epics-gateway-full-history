@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.10  1996/12/11 13:04:02  jbk
+// All the changes needed to implement access security.
+// Bug fixes for createChannel and access security stuff
+//
 // Revision 1.8  1996/11/27 04:55:33  jbk
 // lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
 //
@@ -44,6 +48,8 @@ gateResources* global_resources;
 
 gateResources::gateResources(char* home)
 {
+	if(home) setHome(home);
+	
 	home_dir=strDup(GATE_HOME);
 	log_file=strDup(GATE_LOG);
 
@@ -65,8 +71,6 @@ gateResources::gateResources(char* home)
 	setInactiveTimeout(GATE_INACTIVE_TIMEOUT);
 	setDeadTimeout(GATE_DEAD_TIMEOUT);
 
-	if(home) setHome(home);
-	
 	gddApplicationTypeTable& tt = gddApplicationTypeTable::AppTable();
 
 	appValue=tt.getApplicationType("value");

@@ -87,6 +87,9 @@ public:
 	long changeInfo(int asl,const char* user, const char* host)
 		{ return asChangeClient(asc,asl,(char*)user,(char*)host); }
 
+	const char* user(void) { return (const char*)asc->user; }
+	const char* host(void) { return (const char*)asc->host; }
+
 private:
 	ASCLIENTPVT asc;
 };

@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.11  1996/12/11 13:04:08  jbk
+// All the changes needed to implement access security.
+// Bug fixes for createChannel and access security stuff
+//
 // Revision 1.10  1996/12/07 16:42:22  jbk
 // many bug fixes, array support added
 //
@@ -51,52 +55,24 @@
 #include "gateServer.h"
 #include "gateVc.h"
 #include "gatePv.h"
+#include "gateAs.h"
 
 // ------------------------gateChan
 
-gateChan::gateChan(const casCtx& ctx,const char* u,const char* h,gateVcData* v)
-	:casChannel(ctx)
-{
-	user=u;
-	host=h;
-	vc=v;
-	read_access=aitTrue;
-
-	if(global_resources->isReadOnly())
-		write_access=aitFalse;
-	else
-		write_access=aitTrue;
-}
-
-gateChan::~gateChan(void)
-{
-	user="ErrorNoUser";
-	host="ErrorNoHost";
-	vc=NULL;
-}
+gateChan::~gateChan(void) { delete node; }
 
 void gateChan::setOwner(const char* const u, const char* const h)
-{
-	user=u;
-	host=h;
-}
+	{ node->changeInfo(1,u,h); }
 
 aitBool gateChan::readAccess(void) const
-	{ return (read_access && vc->readAccess())?aitTrue:aitFalse; }
+	{ return (node->readAccess()&&vc.readAccess())?aitTrue:aitFalse; }
 
 aitBool gateChan::writeAccess(void) const
-	{ return (write_access && vc->writeAccess())?aitTrue:aitFalse; }
+	{ return (node->writeAccess()&&vc.writeAccess())?aitTrue:aitFalse; }
 
-void gateChan::setReadAccess(aitBool b)
-	{ read_access=b; }
+const char* gateChan::getUser(void) { return node->user(); }
+const char* gateChan::getHost(void) { return node->host(); }
 
-void gateChan::setWriteAccess(aitBool b)
-{
-	if(global_resources->isReadOnly())
-		write_access=aitFalse;
-	else
-		write_access=b;
-}
 
 // ------------------------gateVcData
 
@@ -115,6 +91,7 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	data=NULL;
 	event_data=NULL;
 	pv=NULL;
+	entry=NULL;
 	pv_name=strDup(name);
 	pv_string=(const char*)pv_name;
 	setState(gateVcClear);
@@ -127,12 +104,13 @@ gateVcData::gateVcData(const casCtx& c,gateServer* m,const char* name):
 	// PV already, which means that the gatePvData exists and is connected
 	// at this point, so it should be present on the pv list
 
-	if(mrg->pvFind(name,pv)==0)
+	if(mrg->pvFind(pv_name,pv)==0)
 	{
 		// Activate could possibly perform get for attributes and value
 		// before returning here.  Be sure to mark this state connecting
 		// so that everything works out OK in this situation.
 		setState(gateVcConnect);
+		entry=pv->getEntry();
 
 		if(pv->activate(this)==0)
 		{
@@ -169,10 +147,10 @@ void gateVcData::destroy(void)
 }
 
 casChannel* gateVcData::createChannel(const casCtx &ctx,
-		const char * const pUserName, const char * const pHostName)
+		const char * const u, const char * const h)
 {
 	gateDebug0(5,"~gateVcData::createChannel()\n");
-	return new gateChan(ctx,pUserName,pHostName,this);
+	return new gateChan(ctx,*this,mrg->getAs()->getInfo(entry,1,u,h));
 }
 
 unsigned gateVcData::maxSimultAsyncOps(void) const
@@ -187,7 +165,8 @@ void gateVcData::dumpValue(void)
 
 void gateVcData::report(void)
 {
-	printf("%-30.30s %-12.12s %-36.36s\n",pv_name,getUser(),getHost());
+	printf("%-30.30s %-12.12s %-36.36s\n",
+		pv_name,"NoUserAvailable","NoHostAvailable");
 }
 
 void gateVcData::dumpAttributes(void)
@@ -528,6 +507,14 @@ aitIndex gateVcData::maxBound(unsigned dim) const
 aitIndex gateVcData::maximumElements(void) const
 {
 	return pv?pv->maxElements():0;
+}
+
+void gateVcData::setWriteAccess(aitBool b)
+{
+	if(global_resources->isReadOnly())
+		write_access=aitFalse;
+	else
+		write_access=b;
 }
 
 // ------------------------------- aync read/write pending methods ----------

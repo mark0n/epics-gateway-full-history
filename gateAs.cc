@@ -72,7 +72,8 @@ int gateAs::initPvList(const char* lfile)
 	head_pv=NULL;
 	head_lines=NULL;
 
-	default_entry=new gateAsEntry(default_pattern,default_group,1,head_pat);
+	// default_entry=new gateAsEntry(default_pattern,default_group,1,head_pat);
+	default_entry=NULL;
 
 	return readPvList(lfile);
 }

@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.10  1996/12/11 13:04:09  jbk
+ * All the changes needed to implement access security.
+ * Bug fixes for createChannel and access security stuff
+ *
  * Revision 1.9  1996/12/07 16:42:23  jbk
  * many bug fixes, array support added
  *
@@ -62,29 +66,28 @@ class gateServer;
 class gateAsyncR;
 class gateAsyncW;
 class gateVcData;
+class gateAs;
+class gateAsNode;
+class gateAsEntry;
 
 // ----------------------- vc channel stuff -------------------------------
 
 class gateChan : public casChannel
 {
 public:
-	gateChan(const casCtx& ctx,const char* user,const char* host,gateVcData*);
+	gateChan(const casCtx& ctx,gateVcData& v,gateAsNode* n)
+		:casChannel(ctx),vc(v),node(n) { }
 	~gateChan(void);
 
 	virtual aitBool readAccess(void) const;
 	virtual aitBool writeAccess(void) const;
     virtual void setOwner(const char* const user,const char* const host);
 
-	void setReadAccess(aitBool b);
-	void setWriteAccess(aitBool b);
-
-	const char* getUser(void) { return user; }
-	const char* getHost(void) { return host; }
+	const char* getUser(void);
+	const char* getHost(void);
 private:
-	aitBool read_access;
-	aitBool write_access;
-	const char *user,*host;
-	gateVcData* vc;
+	gateAsNode* node; // I must delete this when done using it
+	gateVcData& vc;
 };
 
 // ----------------------- vc data stuff -------------------------------
@@ -126,12 +129,11 @@ public:
 	gdd* attribute(int) 		{ return NULL; } // not done
 	aitEnum nativeType(void) const;
 	aitIndex maximumElements(void) const;
-	const char* getUser(void) const;
-	const char* getHost(void) const;
+	gateAsEntry* getEntry(void) { return entry; }
 
 	void setReadAccess(aitBool b);
 	void setWriteAccess(aitBool b);
-	aitBool readAccess(void) const { return read_access; }
+	aitBool readAccess(void) const  { return read_access; }
 	aitBool writeAccess(void) const { return write_access; }
 
 	// Pv notification interface
@@ -171,6 +173,7 @@ protected:
 private:
 	aitBool read_access,write_access;
 	int status;
+	gateAsEntry* entry;
 	gateVcState pv_state;
 	gateServer* mrg;
 	char* pv_name;
@@ -184,10 +187,7 @@ private:
 	gdd* event_data;
 };
 
-inline const char* gateVcData::getUser(void) const { return "UnknownUser"; }
-inline const char* gateVcData::getHost(void) const { return "UnknownHost"; }
 inline void gateVcData::setReadAccess(aitBool b) { read_access=b; }
-inline void gateVcData::setWriteAccess(aitBool b) { write_access=b; }
 
 inline int gateVcData::pending(void) { return (pv_state==gateVcConnect)?1:0; }
 

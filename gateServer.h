@@ -8,6 +8,10 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.9  1996/12/11 13:04:07  jbk
+ * All the changes needed to implement access security.
+ * Bug fixes for createChannel and access security stuff
+ *
  * Revision 1.8  1996/11/27 04:55:40  jbk
  * lots of changes: disallowed pv file,home dir now works,report using SIGUSR1
  *
@@ -95,6 +99,7 @@ public:
 
 	void mainLoop(void);
 	void report(void);
+	gateAs* getAs(void) { return as_rules; }
 
 	// CAS application management functions
 	void checkEvent(void);

@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.2  1996/09/10 15:04:11  jbk
+ * many fixes.  added instructions to usage. fixed exist test problems.
+ *
  * Revision 1.1  1996/07/23 16:32:36  jbk
  * new gateway that actually runs
  *
@@ -52,6 +55,7 @@ class gateServer;
 class gatePvData
 {
 public:
+	gatePvData(gateServer*,gateAsEntry*,const char* name);
 	gatePvData(gateServer*,const char* name);
 	gatePvData(gateServer*,gateVcData*,const char* name);
 	gatePvData(gateServer*,gateExistData*,const char* name);
@@ -72,6 +76,7 @@ public:
 
 	const char* name(void) const		{ return pv_name; }
 	gateVcData* VC(void)				{ return vc; }
+	gateAsEntry* getEntry(void)			{ return ae; }
 	gatePvState getState(void) const	{ return pv_state; }
 	int getStatus(void) const			{ return status; }
 	chid getChannel(void) const			{ return chan; }
@@ -108,7 +113,7 @@ public:
 
 protected:
 	gatePvData(void) { }
-	void init(gateServer*,const char* name);
+	void init(gateServer*,gateAsEntry*,const char* name);
 	void initClear(void);
 
 	void setInactiveTime(void);
@@ -138,6 +143,7 @@ private:
 
 	gateServer* mrg;
 	gateVcData* vc;		// virtual connection
+	gateAsEntry* ae;
 	aitUint32 max_elements;
 	int status;
 	char* pv_name;		// name of the pv I am connected to

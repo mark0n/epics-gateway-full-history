@@ -5,6 +5,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.16  1996/12/11 13:04:06  jbk
+// All the changes needed to implement access security.
+// Bug fixes for createChannel and access security stuff
+//
 // Revision 1.15  1996/12/07 16:42:21  jbk
 // many bug fixes, array support added
 //
@@ -384,37 +388,37 @@ pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 		gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",real_name);
 		rc=S_casApp_pvNotFound;
 	}
-	else if((as_rules->noAccess(pvname))==aitTrue)
-	{
-		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",real_name);
-		pv=NULL;
-		rc=S_casApp_pvNotFound;
-	}
-	else
+	else if((node=getAs()->findEntry(pvname)))
 	{
 		// don't know - need to check
-		gateDebug1(5,"gateServer::pvExistTest() %s new\n",real_name);
-		pv=new gatePvData(this,real_name);
+		gateDebug1(5,"gateServer::pvExistTest() %s new\n",pvname);
+		pv=new gatePvData(this,node,real_name);
 
 		switch(pv->getState())
 		{
 		case gatePvInactive:
 		case gatePvActive:
-			gateDebug1(5,"gateServer::pvExistTest() %s OK\n",real_name);
+			gateDebug1(5,"gateServer::pvExistTest() %s OK\n",pvname);
 			rc=S_casApp_success;
 			break;
 		case gatePvDead:
-			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",real_name);
+			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",pvname);
 			rc=S_casApp_pvNotFound;
 			break;
 		case gatePvConnect:
-			gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",real_name);
+			gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",pvname);
 			rc=S_casApp_pvNotFound;
 			break;
 		default:
 			rc=S_casApp_pvNotFound;
 			break;
 		}
+	}
+	else
+	{
+		gateDebug1(1,"gateServer::pvExistTest() %s not allowed\n",pvname);
+		pv=NULL;
+		rc=S_casApp_pvNotFound;
 	}
 
 	return (rc==S_casApp_success)?pvExistReturn(rc,pv->name()):

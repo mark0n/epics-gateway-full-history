@@ -4,6 +4,10 @@
 // $Id$
 //
 // $Log$
+// Revision 1.10  1996/12/11 13:04:01  jbk
+// All the changes needed to implement access security.
+// Bug fixes for createChannel and access security stuff
+//
 // Revision 1.9  1996/12/09 20:51:07  jbk
 // bug in array support
 //
@@ -51,6 +55,7 @@
 #include "gateServer.h"
 #include "gatePv.h"
 #include "gateVc.h"
+#include "gateAs.h"
 
 // quick access to global_resources
 #define GR global_resources
@@ -74,11 +79,18 @@ void gateStringDestruct::run(void* v)
 
 // ------------------------- pv data methods ------------------------
 
+gatePvData::gatePvData(gateServer* m,gateAsEntry* e,const char* name)
+{
+	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
+	initClear();
+	init(m,e,name);
+}
+
 gatePvData::gatePvData(gateServer* m,const char* name)
 {
 	gateDebug2(5,"gatePvData(gateServer=%8.8x,name=%s)\n",(int)m,name);
 	initClear();
-	init(m,name);
+	init(m,m->getAs()->findEntry(name),name);
 }
 
 gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
@@ -88,7 +100,7 @@ gatePvData::gatePvData(gateServer* m,gateVcData* d,const char* name)
 	initClear();
 	setVC(d);
 	markAddRemoveNeeded();
-	init(m,name);
+	init(m,m->getAs()->findEntry(name),name);
 }
 
 gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
@@ -98,7 +110,7 @@ gatePvData::gatePvData(gateServer* m,gateExistData* d,const char* name)
 	initClear();
 	markAckNakNeeded();
 	addET(d);
-	init(m,name);
+	init(m,m->getAs()->findEntry(name),name);
 }
 
 gatePvData::~gatePvData(void)
@@ -122,19 +134,26 @@ void gatePvData::initClear(void)
 	setState(gatePvDead);
 }
 
-void gatePvData::init(gateServer* m,const char* n)
+void gatePvData::init(gateServer* m,gateAsEntry* n,const char* name)
 {
-	gateDebug2(5,"gatePvData::init(gateServer=%8.8x,name=%s)\n",(int)m,n);
+	gateDebug2(5,"gatePvData::init(gateServer=%8.8x,name=%s)\n",(int)m,name);
+	gateDebug1(5,"gatePvData::init entry name=%s)\n",n->name);
 	mrg=m;
-	pv_name=strdup(n);
+	ae=n;
 	setTimes();
-
 	setState(gatePvConnect);
+	status=0;
+	pv_name=strdup(name);
 
-	status=ca_search_and_connect(pv_name,&chan,connectCB,this);
-	SEVCHK(status,"gatePvData::init() - search and connect");
+	if(ae==NULL)
+		status=-1;
+	else
+	{
+		status=ca_search_and_connect(pv_name,&chan,connectCB,this);
+		SEVCHK(status,"gatePvData::init() - search and connect");
+	}
 
-	if(status==ECA_NORMAL)
+	if(status==0 || status==ECA_NORMAL)
 	{
 		status=ca_replace_access_rights_event(chan,accessCB);
 		if(status==ECA_NORMAL)
