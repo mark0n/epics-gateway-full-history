@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.23  1997/06/11 01:18:43  jba
+// Fixed delete for name_* vars.
+//
 // Revision 1.22  1997/06/09 18:02:35  jba
 // Removed unused variables, changed delete to free for name_* vars.
 //
@@ -206,6 +209,15 @@ void gateServer::report2(void)
 	printf("Total active PVs: %d\n",tot_active);
 	printf("Total connecting PVs: %d\n",tot_connect);
 	printf("\n");
+
+	printf("Dead PVs report: %s\n",ctime(&t));
+	for(node=pv_list.first();node;node=node->getNext())
+	{
+		if(node->getData()->getState()== gatePvDead &&
+		    node->getData()->name())
+			printf("%s\n",node->getData()->name());
+	}
+	printf("--------------------------------------------------------\n");
 	fflush(stdout);
 }
 
