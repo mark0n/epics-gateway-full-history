@@ -111,6 +111,7 @@ extern gateResources* global_resources;
 #define gateDebug1(l,f,v) ;
 #define gateDebug2(l,f,v1,v2) ;
 #define gateDebug3(l,f,v1,v2,v3) ;
+#define gateDebug4(l,f,v1,v2,v3,v4) ;
 #else
 #define gateDebug(l,f,v) { if(l<=global_resources->debugLevel()) \
    { fprintf(stderr,f,v); fflush(stderr); }}
@@ -122,6 +123,8 @@ extern gateResources* global_resources;
    { fprintf(stderr,f,v1,v2); fflush(stderr); }}
 #define gateDebug3(l,f,v1,v2,v3) { if(l<=global_resources->debugLevel()) \
    { fprintf(stderr,f,v1,v2,v3); fflush(stderr); }}
+#define gateDebug4(l,f,v1,v2,v3,v4) { if(l<=global_resources->debugLevel()) \
+   { fprintf(stderr,f,v1,v2,v3,v4); fflush(stderr); }}
 #endif
 
 #endif
