@@ -17,6 +17,7 @@ typedef struct capvt {
 	struct dbr_sts_double rtndata;
 	chid ch_id;
 	evid ev_id;
+	int gotFirstEvent;
 };
 typedef struct capvt CAPVT;
 
@@ -71,6 +72,11 @@ static void eventCB(struct event_handler_args eha)
 
 	pasginp=(ASGINP*)eha.usr;
 	pcapvt=(CAPVT*)pasginp->capvt;
+	if (!ready && !pcapvt->gotFirstEvent)
+	{
+		--count;
+		pcapvt->gotFirstEvent=TRUE;
+	}
 
 	if(ca_read_access(pcapvt->ch_id))
 	{
@@ -89,7 +95,6 @@ static void eventCB(struct event_handler_args eha)
 		pasg->inpChanged |= (1<<pasginp->inpIndex);
 		if(ready) asComputeAsg(pasg);
 	}
-	if(!ready) --count;
 	gateDebug2(11,"AS: %s %lf\n",pasginp->inp,pdata->value);
 	gateDebug2(11,"    stat=%d sevr=%d\n",
 		(int)pdata->status,(int)pdata->severity);
