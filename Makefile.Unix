@@ -5,6 +5,9 @@
 # $Id$
 #
 # $Log$
+# Revision 1.9  1997/03/17 16:00:58  jbk
+# bug fixes and additions
+#
 # Revision 1.8  1997/02/11 21:47:02  jbk
 # Access security updates, bug fixes
 #
@@ -25,11 +28,13 @@
 #
 
 EPICS = ../../../..
-# EPICS = /usr/local/epics/R3.12.2
 
 include Target.include
 include $(EPICS)/config/CONFIG_EXTENSIONS
+USR_INCLUDES += -I$(EPICS_BASE_INCLUDE)/os/$(T_A)
 
+CXXCMPLR=STRICT
+# CPLUSPLUS=G++
 # OPTIM_YES=-g
 # CCC=purify CC
 # CC=purify cc
