@@ -5,6 +5,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.11  1996/10/22 16:06:42  jbk
+// changed list operators head to first
+//
 // Revision 1.10  1996/10/22 15:58:40  jbk
 // changes, changes, changes
 //
@@ -273,16 +276,13 @@ void gateServer::inactiveDeadCleanup(void)
 	if(in_check)	setInactiveCheckTime();
 }
 
-caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
+pvExistReturn gateServer::pvExistTest(const casCtx& c,const char* pvname)
 {
-	gateDebug3(5,"gateServer::pvExistTest(ctx=%8.8x,pvname=%s,gdd=%8.8x)\n",
-		(int)&c,pvname,(int)&cname);
-
+	gateDebug2(5,"gateServer::pvExistTest(ctx=%8.8x,pv=%s)\n",(int)&c,pvname);
 	gatePvData* pv;
-	gateExistData* ed;
 	caStatus rc;
 	char* r_name;
-	// aitString x;
+	// gateExistData* ed;
 
 	// convert alias to real name first
 	if((r_name=global_resources->findAlias(pvname))==NULL)
@@ -302,17 +302,18 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		case gatePvActive:
 		  {
 			gateDebug1(5,"gateServer::pvExistTest() %s Exists\n",pv->name());
-			const aitString x = pv->name();
-			cname.put(x);
+			// the pc name is pv->name()
 			rc=S_casApp_success;
 			break;
 		  }
 		case gatePvDead:
 			gateDebug1(5,"gateServer::pvExistTest() %s Dead\n",pv->name());
+			// no pv name returned
 			rc=S_casApp_pvNotFound;
 			break;
-		default: // don't know yet - wait till connect complete
+		default:
 			gateDebug1(5,"gateServer::pvExistTest() %s unknown?\n",pv->name());
+			// don't know yet - wait till connect complete
 			rc=S_casApp_pvNotFound;
 			break;
 		}
@@ -322,7 +323,7 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 		if(conFind(r_name,pv)==0)
 		{
 			gateDebug1(5,"gateServer::pvExistTest() %s connecting\n",r_name);
-			// ed=new gateExistData(*this,pv,c,&cname);
+			// ed=new gateExistData(*this,pv,c);
 			// rc=S_casApp_asyncCompletion;
 			rc=S_casApp_pvNotFound;
 		}
@@ -341,8 +342,6 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 				case gatePvActive:
 				 {
 					gateDebug1(5,"gateServer::pvExistTest() %s OK\n",r_name);
-					const aitString y = pv->name();
-					cname.put(y);
 					rc=S_casApp_success;
 					break;
 				 }
@@ -352,7 +351,7 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 					break;
 				case gatePvConnect:
 					// Should use gateExistData here:
-					// ed=new gateExistData(*this,r_name,c,&cname);
+					// ed=new gateExistData(*this,r_name,c);
 					// rc=S_casApp_asyncCompletion;
 					gateDebug1(5,"gateServer::pvExistTest() %s Connecting\n",
 						r_name);
@@ -367,12 +366,14 @@ caStatus gateServer::pvExistTest(const casCtx& c,const char* pvname,gdd& cname)
 			{
 				gateDebug1(1,"gateServer::pvExistTest() name %s not allowed\n",
 					r_name);
+				pv=NULL;
 				rc=S_casApp_pvNotFound;
 			}
 		}
 	}
 
-	return rc;
+	return (rc==S_casApp_success)?pvExistReturn(rc,pv->name()):
+		pvExistReturn(rc);
 }
 
 casPV* gateServer::createPV(const casCtx& c,const char* pvname)

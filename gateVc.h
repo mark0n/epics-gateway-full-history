@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.6  1996/10/22 15:58:42  jbk
+ * changes, changes, changes
+ *
  * Revision 1.5  1996/09/23 20:40:41  jbk
  * many fixes
  *
@@ -46,7 +49,8 @@ typedef enum {
 class gdd;
 class gatePvData;
 class gateServer;
-class gateAsyncRW;
+class gateAsyncR;
+class gateAsyncW;
 
 // ----------------------- vc data stuff -------------------------------
 
@@ -126,8 +130,8 @@ private:
 	int in_list_flag;
 	int prev_post_value_changes;
 	int post_value_changes;
-	tsDLList<gateAsyncRW> rio;	// NULL unless read posting required and connect
-	tsDLList<gateAsyncRW> wio;	// NULL unless write posting required and connect
+	tsDLList<gateAsyncR> rio;	// NULL unless read posting required and connect
+	tsDLList<gateAsyncW> wio;	// NULL unless write posting required and connect
 	gdd* data;
 	gdd* event_data;
 };
@@ -146,17 +150,28 @@ inline void gateVcData::markNotInterested(void)
 
 // ---------------------- async read/write pending operation ------------------
 
-class gateAsyncRW : public casAsyncIO, public tsDLNode<gateAsyncRW>
+class gateAsyncR : public casAsyncReadIO, public tsDLNode<gateAsyncR>
 {
 public:
-	gateAsyncRW(const casCtx &ctx,gdd& wdd) : casAsyncIO(ctx),dd(wdd)
+	gateAsyncR(const casCtx &ctx,gdd& wdd) : casAsyncReadIO(ctx),dd(wdd)
 		{ dd.reference(); }
 
-	virtual ~gateAsyncRW(void);
+	virtual ~gateAsyncR(void);
 
-	virtual void destroy(void);
+	gdd& DD(void) { return dd; }
+private:
+	gdd& dd;
+};
 
-	gdd* DD(void) { return &dd; }
+class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
+{
+public:
+	gateAsyncW(const casCtx &ctx,gdd& wdd) : casAsyncWriteIO(ctx),dd(wdd)
+		{ dd.reference(); }
+
+	virtual ~gateAsyncW(void);
+
+	gdd& DD(void) { return dd; }
 private:
 	gdd& dd;
 };

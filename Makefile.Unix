@@ -5,6 +5,9 @@
 # $Id$
 #
 # $Log$
+# Revision 1.5  1996/07/26 02:34:42  jbk
+# Interum step.
+#
 # Revision 1.4  1996/07/23 16:32:32  jbk
 # new gateway that actually runs
 #
@@ -17,16 +20,13 @@ include Target.include
 include $(EPICS)/config/CONFIG_EXTENSIONS
 
 OPTIM_YES=-g
+# CCC=purify CC
+# CC=purify cc
 
 DEPENDS_RULE.cc = -$(COMPILE.cc) -xM $(SRCS.cc) >> .DEPENDS
-
 DEPLIBS = $(EPICS_BASE_LIB)/libca.a $(EPICS_BASE_LIB)/libCom.a libgate.a
-
-USR_LDLIBS = -lgate -lgdd -lca -lcas -lCom
-USR_LDFLAGS = -L$(EPICS_EXTENSIONS_LIB) -L$(EPICS_BASE_LIB)
-USR_INCLUDES = -I$(EPICS_EXTENSIONS_INCLUDE) # -I$(HOME)/epics/base/src/gdd/O.$(HOST_ARCH)
-USR_CCFLAGS = -DDEBUG_MODE # -L$(EPICS_EXTENSIONS_LIB) -L$(EPICS_BASE_LIB)
-
+USR_LDLIBS = -lgate -lca -lcas -lCom -lgdd
+# USR_CCFLAGS = -DDEBUG_MODE
 # CMPLR =
 
 SRCS.cc = ../gatePv.cc ../gateResources.cc ../gateServer.cc \

@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.6  1996/10/22 16:06:43  jbk
+// changed list operators head to first
+//
 // Revision 1.5  1996/10/22 15:58:41  jbk
 // changes, changes, changes
 //
@@ -281,7 +284,8 @@ void gateVcData::vcNew(void)
 	gateDebug1(10,"gateVcData::vcNew() name=%s\n",name());
 	gddApplicationTypeTable& table=gddApplicationTypeTable::AppTable();
 	casEventMask select(mrg->alarmEventMask|mrg->valueEventMask|mrg->logEventMask);
-	gateAsyncRW* async;
+	gateAsyncW* asyncw;
+	gateAsyncR* asyncr;
 
 	// what do I do here? should do async completion to createPV
 	// or should be async complete if there is a pending read
@@ -293,12 +297,12 @@ void gateVcData::vcNew(void)
 	if(wio.count()) // write pending
 	{
 		gateDebug0(1,"gateVcData::vcNew() write pending\n");
-		while((async=wio.first()))
+		while((asyncw=wio.first()))
 		{
-			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)async);
-			wio.remove(*async);
-			putDumb(async->DD());
-			async->postIOCompletion(S_casApp_success);
+			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)asyncw);
+			wio.remove(*asyncw);
+			putDumb(&asyncw->DD());
+			asyncw->postIOCompletion(S_casApp_success);
 		}
 	}
 
@@ -306,13 +310,13 @@ void gateVcData::vcNew(void)
 	{
 		gateDebug0(1,"gateVcData::vcNew() read pending\n");
 		// complete the read
-		while((async=rio.first()))
+		while((asyncr=rio.first()))
 		{
-			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)async);
-			rio.remove(*async);
-			if(value())			table.smartCopy(async->DD(),value());
-			if(attributes())	table.smartCopy(async->DD(),attributes());
-			async->postIOCompletion(S_casApp_success,async->DD());
+			gateDebug1(1,"gateVcData::vcNew()   posting %8.8x\n",(int)asyncr);
+			rio.remove(*asyncr);
+			if(value())			table.smartCopy(&asyncr->DD(),value());
+			if(attributes())	table.smartCopy(&asyncr->DD(),attributes());
+			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
 		}
 	}
 
@@ -372,7 +376,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 	{
 		gateDebug0(10,"gateVcData::read() pv not ready\n");
 		// the read will complete when the connection is complete
-		rio.add(*(new gateAsyncRW(ctx,dd)));
+		rio.add(*(new gateAsyncR(ctx,dd)));
 		rc=S_casApp_asyncCompletion;
 	}
 	else
@@ -396,7 +400,7 @@ caStatus gateVcData::write(const casCtx& ctx, gdd& dd)
 		if(!ready())
 		{
 			gateDebug0(10,"gateVcData::write() pv not ready\n");
-			wio.add(*(new gateAsyncRW(ctx,dd)));
+			wio.add(*(new gateAsyncW(ctx,dd)));
 			rc=S_casApp_asyncCompletion;
 		}
 		else
@@ -414,15 +418,15 @@ aitEnum gateVcData::bestExternalType(void)
 
 // ------------------------------- aync read/write pending methods ----------
 
-gateAsyncRW::~gateAsyncRW(void)
+gateAsyncR::~gateAsyncR(void)
 {
-	gateDebug0(10,"~gateAsyncRW()\n");
+	gateDebug0(10,"~gateAsyncR()\n");
 	dd.unreference();
 }
 
-void gateAsyncRW::destroy(void)
+gateAsyncW::~gateAsyncW(void)
 {
-	gateDebug0(10,"gateAsyncRW::destroy()\n");
-	casAsyncIO::destroy();
+	gateDebug0(10,"~gateAsyncW()\n");
+	dd.unreference();
 }
 

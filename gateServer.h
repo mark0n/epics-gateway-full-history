@@ -8,6 +8,9 @@
  * $Id$
  *
  * $Log$
+ * Revision 1.6  1996/09/23 20:40:43  jbk
+ * many fixes
+ *
  * Revision 1.5  1996/09/07 13:01:52  jbk
  * fixed bugs.  reference the gdds from CAS now.
  *
@@ -79,7 +82,7 @@ public:
 	virtual ~gateServer(void);
 
 	// CAS virtual overloads
-	virtual caStatus pvExistTest(const casCtx& c,const char* pvname,gdd& cname);
+	virtual pvExistReturn pvExistTest(const casCtx& c,const char* pvname);
 	virtual casPV* createPV(const casCtx& c,const char* pvname);
 
 	void mainLoop(void);

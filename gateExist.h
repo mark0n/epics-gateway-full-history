@@ -9,14 +9,13 @@ class gdd;
 
 // ------------------------ aync exist test -------------------------------
 
-class gateExistData : public casAsyncIO, public tsDLHashNode<gateExistData>
+class gateExistData:public casAsyncPVExistIO,public tsDLHashNode<gateExistData>
 {
 public:
-	gateExistData(gateServer&,const char* n,const casCtx &ctx, gdd *dd);
-	gateExistData(gateServer&,gatePvData*,const casCtx &ctx, gdd *dd);
+	gateExistData(gateServer&,const char* n,const casCtx &ctx);
+	gateExistData(gateServer&,gatePvData*,const casCtx &ctx);
 	~gateExistData(void);
 
-	void destroy(void);
 	void nak(void); // hooray, it exists
 	void ack(void); // boo, it does not exist
 	void cancel(void);
@@ -24,7 +23,6 @@ public:
 private:
 	gateServer& server;
 	gatePvData* pv;
-	gdd* ndd;
 };
 
 #endif

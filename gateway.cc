@@ -4,6 +4,9 @@
 // $Id$
 //
 // $Log$
+// Revision 1.6  1996/10/22 15:58:43  jbk
+// changes, changes, changes
+//
 // Revision 1.5  1996/09/12 12:17:55  jbk
 // Fixed up file defaults and logging in the resources class
 //
@@ -24,6 +27,8 @@
 #include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/resource.h>
 
 #include "gateResources.h"
 
@@ -148,6 +153,7 @@ static int startEverything(void)
 	char gate_ca_port[30];
 	int sid;
 	FILE* fd;
+	struct rlimit lim;
 
 	if(client_ip_addr)
 	{
@@ -159,7 +165,7 @@ static int startEverything(void)
 
 	if(server_ip_addr)
 	{
-		sprintf(gate_cas_addr,"EPICS_CAS_ADDR=%s",server_ip_addr);
+		sprintf(gate_cas_addr,"EPICS_CAS_INTF_ADDR_LIST=%s",server_ip_addr);
 		putenv(gate_cas_addr);
 		gateDebug1(15,"gateway setting <%s>\n",gate_cas_addr);
 	}
@@ -214,6 +220,19 @@ static int startEverything(void)
 	if(fd!=stderr) fclose(fd);
 	chmod(GATE_SCRIPT_FILE,00755);
 	
+	if(getrlimit(RLIMIT_NOFILE,&lim)<0)
+		fprintf(stderr,"Cannot retrieve the process FD limits\n");
+	else
+	{
+		if(lim.rlim_cur<lim.rlim_max)
+		{
+			lim.rlim_cur=lim.rlim_max;
+			if(setrlimit(RLIMIT_NOFILE,&lim)<0)
+				fprintf(stderr,"Failed to set FD limit %d\n",
+					(int)lim.rlim_cur);
+		}
+	}
+
 	gatewayServer();
 	return 0;
 }
@@ -536,7 +555,7 @@ void print_instructions(void)
   pr(stderr,"-home directory: Home directory where all your gateway\n");
   pr(stderr," configuration files are kept and where the log file goes.\n\n");
   pr(stderr,"-sip IP_address: IP address that gateway's CA server listens\n");
-  pr(stderr," for PV requests.  Sets environment variable EPICS_CAS_ADDR.\n\n");
+  pr(stderr," for PV requests.  Sets env variable EPICS_CAS_INTF_ADDR.\n\n");
   pr(stderr,"-cip IP_address_list: IP address list that the gateway's CA\n");
   pr(stderr," client uses to find the real PVs.  See CA reference manual.\n");
   pr(stderr," This sets environment variables EPICS_CA_AUTO_LIST=NO and\n");
