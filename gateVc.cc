@@ -4,6 +4,12 @@
 // $Id$
 //
 // $Log$
+// Revision 1.21  1998/12/22 19:01:57  evans
+// Has JBA ENUM hack changes if ENUM_HACK is defined.  (Needs hacks in
+// base to work.)  Fixed bug with removing items from pv_con_list (fixes
+// frequent core dumping).  This version has been in production use for
+// several weeks, is stable.
+//
 // Revision 1.20  1997/10/28 19:14:00  jba
 // pv_name change.
 //
@@ -307,7 +313,7 @@ void gateVcData::add(gdd* dd)
 	if(event_data) event_data->unreference();
 	event_data=dd;
 
-#if ENUM_HACK
+#ifdef ENUM_HACK
 	// related dd needed for enums to string conversion
 	if(data) event_data->setRelated(data);
 #endif
