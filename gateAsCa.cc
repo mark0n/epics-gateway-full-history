@@ -7,7 +7,7 @@
 extern "C" {
 #include "alarm.h"
 #include "cadef.h"
-};
+}
 
 extern ASBASE *pasbase;
 
