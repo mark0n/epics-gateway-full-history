@@ -74,7 +74,7 @@ static void eventCB(struct event_handler_args arg)
             }
             pasg->inpChanged |= (1<<pasginp->inpIndex);
             if(ready) asComputeAsg(pasg);
-	    gateDebug2(11,"AS: %s %lf\n",pasginp->inp,pdata->value);
+	    gateDebug2(11,"AS: %s %f\n",pasginp->inp,pdata->value);
 	    gateDebug2(11,"    stat=%d sevr=%d\n",
 		(int)pdata->status,(int)pdata->severity);
         }

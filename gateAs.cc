@@ -140,7 +140,7 @@ int gateAs::readPvList(const char* lfile)
 
 					// try to get two more fields - asg/asl
 					expl_as=0;
-					asg=default_group;
+					asg=(char*)default_group;
 					lev=1;
 					if((asg=strtok(NULL," \t\n")))
 					{
@@ -150,7 +150,7 @@ int gateAs::readPvList(const char* lfile)
 					}
 					else
 					{
-						asg=default_group;
+						asg=(char*)default_group;
 						lev=1;
 					}
 
