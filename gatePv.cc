@@ -1551,6 +1551,8 @@ gdd* gatePvData::eventEnumCB(void *dbr)
 	printf("gatePvData::eventEnumCB\n");
 	value->dump();
 #endif
+	value->setStatSevr(ts->status,ts->severity);
+	value->setTimeStamp(&ts->stamp);
 	return value;
 }
 

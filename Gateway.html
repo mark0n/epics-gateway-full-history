@@ -492,6 +492,17 @@ port, you need to set EPICS_CA_SERVER_PORT to the number used with -sport
 when the Gateway was started. Then just run your EPICS application, for
 example, MEDM.</p>
 
+<p>To stop the Gateway, use the <strong>gateway.killer</strong> file
+(described under <a href="#Starting">Starting the Gateway</a>), set the
+<strong>gateway.quitFlag</strong> or <strong>gateway.quitServer</strong> flag
+(described under <a href="#ProcessVariables">Gateway Process Variables</a>),
+or kill it in the usual way for your operating system. It may take a while to
+completely shut down. This is owing to EPICS cleanup processes that run after
+the program has officially exited. These processes may also print error
+messages after the Gateway prints its termination message just before calling
+exit. It is a good idea to check that the Gateway has truly shut down. This
+behavior may be corrected in future releases of base.</p>
+
 <h2><a name="Building">Building the Gateway</a></h2>
 
 <p>The Gateway uses 3.14 makefiles as it can only be built with 3.14. To
@@ -885,7 +896,7 @@ IOC.</p>
 CAS and hence to the MEDMs. It is independent of the number of MEDMs
 (providing there is at least one). It tends to be similar to the
 clientEventRate; but only value changes cause post events. The other events
-do not contribute. </p>
+do not contribute.</p>
 
 <p>In earlier versions of the Gateway this was named<strong>
 gateway:postEventRate</strong>.</p>
