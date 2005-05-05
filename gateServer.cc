@@ -162,16 +162,6 @@ volatile unsigned long gateServer::newAs_flag = 0;
 volatile unsigned long gateServer::quit_flag = 0;
 volatile unsigned long gateServer::quitserver_flag = 0;
 
-void gatewayServer(char *prefix)
-{
-	gateDebug1(5,"gateServer::gatewayServer() prefix=%s\n",
-	  prefix?prefix:"NULL");
-
-	gateServer* server = new gateServer(prefix);
-	server->mainLoop();
-	delete server;
-}
-
 void gateServer::mainLoop(void)
 {
 	int not_done=1;
@@ -348,11 +338,14 @@ void gateServer::mainLoop(void)
 			setStat(statNewAsFlag,0ul);
 		}
 		if(quit_flag) {
-			printf("%s Stopping (quitFlag was set to 1)\n",timeStamp());
-			fflush(stderr); fflush(stdout);
+			if(quit_flag == 1) {
+				printf("%s Stopping (quitFlag was set to 1)\n",timeStamp());
+				fflush(stderr); fflush(stdout);
+			}
 			quit_flag=0;
 			setStat(statQuitFlag,0ul);
-			exit(0);
+			// return here will delete gateServer
+			return;
 		}
 		if(quitserver_flag) {
 			printf("%s Stopping server (quitServerFlag was set to 1)\n",
@@ -1115,10 +1108,6 @@ gateServer::~gateServer(void)
 	gateVcData *vc,*old_vc;
 	gatePvNode *old_pv,*pv_node;
 	gatePvData *pv;
-
-#if statCount
-	delete [] stat_prefix;
-#endif
 
 	while((pv_node=pv_list.first()))
 	{

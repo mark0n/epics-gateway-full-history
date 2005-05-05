@@ -279,9 +279,11 @@ public:
 	time_t timeConnectCleanup(void) const;
 	time_t timeSinceLastBeacon(void) const;
 
-	tsDLHashList<gateVcData>* vcList(void)		{ return &vc_list; }
-	tsDLHashList<gatePvNode>* pvList(void)		{ return &pv_list; }
-	tsDLHashList<gatePvNode>* pvConList(void)	{ return &pv_con_list; }
+	tsDLHashList<gateVcData>* vcList(void) { return &vc_list; }
+	tsDLHashList<gatePvNode>* pvList(void) { return &pv_list; }
+	tsDLHashList<gatePvNode>* pvConList(void) { return &pv_con_list; }
+
+	void setQuitFlag(unsigned long flag) { quit_flag=flag; }
 
 private:
 	tsDLHashList<gatePvNode> pv_list;		// client pv list

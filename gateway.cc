@@ -55,9 +55,11 @@
 #include <gdd.h>
 #include <epicsVersion.h>
 #include "gateResources.h"
+#include "gateServer.h"
 
 // Function Prototypes
 static int startEverything(char *prefix);
+static void stopEverything(void);
 static void print_instructions(void);
 static int manage_gateway(void);
 static int setEnv(const char *var, const char *val, char **envString);
@@ -69,8 +71,9 @@ static void printEnv(FILE *fp, const char *var);
 static pid_t gate_pid;
 #endif
 static int death_flag=0;
-int nStart=0;
-time_t startTime[NRESTARTS];
+static int nStart=0;
+static time_t startTime[NRESTARTS];
+static gateServer *server=NULL;
 
 // still need to add client and server IP addr info using 
 // the CA environment variables.
@@ -295,7 +298,8 @@ static void sig_end(int sig)
 		break;
 	}
 	
-	exit(0);
+	// Have it stop itself if possible by setting the quit_flag
+	stopEverything();
 }
 
 #ifndef WIN32
@@ -600,7 +604,39 @@ static int startEverything(char *prefix)
 	fflush(stdout); fflush(stderr);
 #endif
 
-	gatewayServer(prefix);
+	// Start the gateServer
+	try {
+		server = new gateServer(prefix);
+	} catch(int status) {
+		fprintf(stderr,"%s Failed to start gateServer, aborting\n",
+		  timeStamp());
+		char name[256];
+		name[0]='\0';
+		if(status == 0) status=errno;
+		if(status > 0) {
+			errSymLookup(status,name,sizeof(name));
+		}
+		if(name[0]) fprintf(stderr,"  Reason: %s\n",name);
+		else fprintf(stderr,"  Reason: Not available\n");
+		fflush(stdout); fflush(stderr);
+		if(server) {
+			delete server;
+			server=NULL;
+		}
+		return 1;
+	} catch(...) {
+		fprintf(stderr,"%s Failed to start gateServer, aborting\n",
+		  timeStamp());
+		fflush(stdout); fflush(stderr);
+		if(server) {
+			delete server;
+			server=NULL;
+		}
+		return 1;
+	}
+	server->mainLoop();
+	delete server;
+	server = NULL;
 
 	return 0;
 }
@@ -629,7 +665,8 @@ int main(int argc, char** argv)
 	char* stat_prefix=NULL;
 	time_t t;
 #ifndef WIN32
-	char cur_time[300];
+	char logSaveFile[1024];  // Should use MAX_PATH or PATH_MAX
+	char putlogSaveFile[1024];  // Should use MAX_PATH or PATH_MAX
 	struct stat sbuf;
 #endif
 
@@ -1075,19 +1112,53 @@ int main(int argc, char** argv)
 		time(&t);
 
 #ifndef WIN32
+		char *logerror=NULL;
+		char *putlogerror=NULL;
 		// Save log file if it exists
 		if(stat(log_file,&sbuf)==0)
 		{
 			if(sbuf.st_size>0)
 			{
-				sprintf(cur_time,"%s.%lu",log_file,(unsigned long)t);
-				if(link(log_file,cur_time)<0)
+				sprintf(logSaveFile,"%s.%lu",log_file,(unsigned long)t);
+				if(link(log_file,logSaveFile)<0)
 				{
-					fprintf(stderr,"Failure to move old log to new name %s\n",
-						cur_time);
+					fprintf(stderr,"%s Failed to move old log to %s\n",
+						timeStamp(),logSaveFile);
+					char *error=strerror(errno);
+					if(error && *error) {
+						logerror=(char *)malloc(strlen(error)+1);
+						if(logerror) {
+							strcpy(logerror,error);
+							fprintf(stderr,"  Reason: %s\n",logerror);
+						}
+					}
 				}
 				else
 					unlink(log_file);
+			}
+		}
+
+		// Save putlog file if it exists
+		if(stat(putlog_file,&sbuf)==0)
+		{
+			if(sbuf.st_size>0)
+			{
+				sprintf(putlogSaveFile,"%s.%lu",putlog_file,(unsigned long)t);
+				if(link(putlog_file,putlogSaveFile)<0)
+				{
+					fprintf(stderr,"%s Failed to move old putlog to %s\n",
+						timeStamp(),putlogSaveFile);
+					char *error=strerror(errno);
+					if(error && *error) {
+						putlogerror=(char *)malloc(strlen(error)+1);
+						if(putlogerror) {
+							strcpy(putlogerror,error);
+							fprintf(stderr,"  Reason: %s\n",putlogerror);
+						}
+					}
+				}
+				else
+					unlink(putlog_file);
 			}
 		}
 #endif
@@ -1112,6 +1183,28 @@ int main(int argc, char** argv)
 			fprintf(stderr,"Redirect of stdout to file %s failed\n",log_file);
 			fflush(stderr);
 		}
+
+#ifndef WIN32
+		// Repeat error messages to log
+		if(logerror) {
+			fprintf(stderr,"%s Failed to move old log to %s\n",
+			  timeStamp(),logSaveFile);
+			if(logerror) {
+				fprintf(stderr,"  Reason: %s\n",logerror);
+				fflush(stderr);
+				free(logerror);
+			}
+		}
+		if(putlogerror) {
+			fprintf(stderr,"%s Failed to move old putlog to %s\n",
+			  timeStamp(),putlogSaveFile);
+			if(putlogerror) {
+				fprintf(stderr,"  Reason: %s\n",putlogerror);
+				fflush(stderr);
+				free(putlogerror);
+			}
+		}
+#endif
 	}
 	else
 	{
@@ -1152,27 +1245,6 @@ int main(int argc, char** argv)
 	// possible problems with FOPEN_MAX.
 	if(putlog_file)
 	{
-		time(&t);
-
-#ifndef WIN32
-		// Save putlog file if it exists
-		if(stat(putlog_file,&sbuf)==0)
-		{
-			if(sbuf.st_size>0)
-			{
-				sprintf(cur_time,"%s.%lu",putlog_file,(unsigned long)t);
-				if(link(putlog_file,cur_time)<0)
-				{
-					fprintf(stderr,"Failure to move old putlog to new name %s\n",
-						cur_time);
-				}
-				else
-					unlink(putlog_file);
-			}
-		}
-#endif
-
-		// Open it
 		FILE *fp=fopen(putlog_file,"w");
 		if(fp == NULL) {
 			fprintf(stderr,"Cannot open %s\n",putlog_file);
@@ -1180,10 +1252,22 @@ int main(int argc, char** argv)
 		}
 		gr->setPutlogFp(fp);
 	}
-
+	
 	startEverything(stat_prefix);
 	delete global_resources;
 	return 0;
+}
+
+static void stopEverything(void)
+{
+	if(server) {
+		// Set the flag and let it stop itself.  This will cause it to
+		// clean up.  Setting quit_flag to 2 keeps it from printing a
+		// message in the main loop.
+		server->setQuitFlag(2u);
+	} else {
+		exit(0);
+	}
 }
 
 #define pr fprintf

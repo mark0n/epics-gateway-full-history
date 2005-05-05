@@ -34,6 +34,7 @@
 #define DEBUG_BEAM 0
 #define DEBUG_ENUM 0
 #define DEBUG_DELAY 0
+#define DEBUG_SLIDER 0
 
 #define OMIT_CHECK_EVENT 1
 
@@ -922,6 +923,10 @@ int gatePvData::put(const gdd* dd, int docallback)
 #endif		
 			if(!cbid) return S_casApp_noMemory;
 			callback_list.add(*cbid);
+#if DEBUG_SLIDER
+			printf("  ca_array_put_callback [%d]: %g\n",
+			  callback_list.count(),*(double *)pValue);
+#endif
 			stat=ca_array_put_callback(cht,count,chID,pValue,::putCB,(void *)cbid);
 			if(stat != ECA_NORMAL) {
 				fprintf(stderr,"%s gatePvData::put ca_array_put_callback failed "
@@ -930,6 +935,9 @@ int gatePvData::put(const gdd* dd, int docallback)
 				  timeStamp(),name()?name():"Unknown",ca_message(stat));
 			}
 		} else {
+#if DEBUG_SLIDER
+			printf("  ca_array_put: %g\n",*(double *)pValue);
+#endif
 			stat=ca_array_put(cht,count,chID,pValue);
 			if(stat != ECA_NORMAL) {
 				fprintf(stderr,"%s gatePvData::put ca_array_put failed for %s:\n"

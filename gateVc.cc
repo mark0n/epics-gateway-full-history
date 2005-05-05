@@ -34,6 +34,7 @@
 #define DEBUG_RTYP 0
 #define DEBUG_DELAY 0
 #define DEBUG_ACCESS 0
+#define DEBUG_SLIDER 0
 
 #include <stdio.h>
 #include <string.h>
@@ -1097,7 +1098,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
 
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_SLIDER
 	heading("gateVcData::write",name());
 	dumpdd(1,"dd(incoming)",name(),&dd);
 #endif
@@ -1126,7 +1127,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 			// Handle async return if PV not ready
 			gateDebug0(10,"gateVcData::write() pv not ready\n");
 			wio.add(*(new gateAsyncW(ctx,dd,&wio)));
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_SLIDER
 			fflush(stderr);
 			printf("S_casApp_asyncCompletion\n");
 			fflush(stdout);
@@ -1134,7 +1135,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 			return S_casApp_asyncCompletion;
 		} else if(pending_write) {
 			// Pending write already in progress
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_SLIDER
 			fflush(stderr);
 			printf("S_casApp_postponeAsyncIO\n");
 			fflush(stdout);
@@ -1146,7 +1147,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 
 			if(docallback) {
 				// Start a pending write
-#if DEBUG_GDD
+#if DEBUG_GDD || DEBUG_SLIDER
 				fflush(stderr);
 				printf("pending_write\n");
 				fflush(stdout);
