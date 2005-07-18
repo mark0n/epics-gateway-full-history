@@ -20,7 +20,7 @@ include $(TOP)/configure/CONFIG
 # GNU_REGEX_LIB = ../../../../regex-0.12
 
 # Optimization
-#HOST_OPT = NO
+HOST_OPT = NO
 
 # Compiler options
 #USR_CXXFLAGS += -xsb

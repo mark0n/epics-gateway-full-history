@@ -35,6 +35,12 @@
 #define DEBUG_ACCESS 0
 #define DEBUG_DESC 0
 #define DEBUG_FDMGR 0
+#define DEBUG_HISTORY 0
+
+#if DEBUG_HISTORY
+# define HISTNAME "GW:432:S05"
+# define HISTNUM 10
+#endif
 
 #ifdef __linux__
 #undef USE_LINUX_PROC_FOR_CPU
@@ -789,13 +795,13 @@ void gateServer::report2(void)
 	fprintf(fp,"Total active stat DESC PVs: %d [of %d]\n",tot_stat_desc,
 	  statCount);
 
-	fprintf(fp,"\nStat PVs:\n"
-	  " Name                              Group        Level Pattern\n");
+	fprintf(fp,"\nInternal PVs [INT]:\n"
+	  " State Name                            Group        Level Pattern\n");
 	// Stat PVs
 	for(int i=0; i < statCount; i++) {
 		pStat=stat_table[i].pv;
 		if(pStat && pStat->getName()) {
-			fprintf(fp," %-33s",pStat->getName());
+			fprintf(fp," INT %-33s",pStat->getName());
 			pEntry=pStat->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -812,7 +818,7 @@ void gateServer::report2(void)
 	for(int i=0; i < statCount; i++) {
 		pStat=stat_table[i].descPv;
 		if(pStat && pStat->getName()) {
-			fprintf(fp," %-33s",pStat->getName());
+			fprintf(fp," INT %-33s",pStat->getName());
 			pEntry=pStat->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -826,13 +832,14 @@ void gateServer::report2(void)
 	}
 #endif
 
-	fprintf(fp,"\nConnecting PVs:\n"
-	  " Name                              Group        Level Pattern\n");
+	fprintf(fp,"\nConnecting PVs [CON]:\n"
+	  " State Name                            Time         Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())	{
 		pv=iter->getData();
 		if(pv && pv->getState() == gatePvConnect && pv->name()) {
-			fprintf(fp," %-33s",pv->name());
+			fprintf(fp," CON %-33s %s",pv->name(),
+			  timeString(pv->timeConnecting()));
 			pEntry=pv->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -846,14 +853,15 @@ void gateServer::report2(void)
 		iter++;
 	}
 	
-	fprintf(fp,"\nDead PVs:\n"
-	  " Name                              Group        Level Pattern\n");
+	fprintf(fp,"\nDead PVs [DEA]:\n"
+	  " State Name                            Time         Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
 		pv=iter->getData();
 		if(pv && pv->getState() == gatePvDead && pv->name()) {
-			fprintf(fp," %-33s",pv->name());
+			fprintf(fp," DEA %-33s %s",pv->name(),
+			  timeString(pv->timeDead()));
 			pEntry=pv->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -867,14 +875,15 @@ void gateServer::report2(void)
 		iter++;
 	}
 
-	fprintf(fp,"\nDisconnected PVs:\n"
-	  " Name                              Group        Level Pattern\n");
+	fprintf(fp,"\nDisconnected PVs [DIS]:\n"
+	  " State Name                            Time         Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
 		pv=iter->getData();
 		if(pv &&  pv->getState() == gatePvDisconnect &&pv->name()) {
-			fprintf(fp," %-33s",pv->name());
+			fprintf(fp," DIS %-33s %s",pv->name(),
+			  timeString(pv->timeDisconnected()));
 			pEntry=pv->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -888,14 +897,15 @@ void gateServer::report2(void)
 		iter++;
 	}
 
-	fprintf(fp,"\nInactive PVs:\n"
-	  " Name                              Group        Level Pattern\n");
+	fprintf(fp,"\nInactive PVs [INA]:\n"
+	  " State Name                            Time         Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
 		pv=iter->getData();
 		if(pv && pv->getState() == gatePvInactive && pv->name()) {
-			fprintf(fp," %-33s",pv->name());
+			fprintf(fp," INA %-33s %s",pv->name(),
+			  timeString(pv->timeInactive()));
 			pEntry=pv->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -909,14 +919,15 @@ void gateServer::report2(void)
 		iter++;
 	}
 
-	fprintf(fp,"\nActive PVs:\n"
-	  " Name                              Group        Level Pattern\n");
+	fprintf(fp,"\nActive PVs [ACT]:\n"
+	  " State Name                            Time         Group        Level Pattern\n");
 	iter=pv_list.firstIter();
 	while(iter.valid())
 	{
 		pv=iter->getData();
 		if(pv && pv->getState() == gatePvActive && pv->name()) {
-			fprintf(fp," %-33s",pv->name());
+			fprintf(fp," ACT %-33s %s",pv->name(),
+			  timeString(pv->timeActive()));
 			pEntry=pv->getEntry();
 			if(pEntry) {
 				fprintf(fp," %-16s %d %s\n",
@@ -1389,15 +1400,15 @@ void gateServer::inactiveDeadCleanup(void)
 {
 	gateDebug0(51,"gateServer::inactiveDeadCleanup()\n");
 	gatePvData *pv;
-	int dead_check=0,in_check=0;
+	int dead_check=0,inactive_check=0;
 
+	// Only do the checks if the smallest of the timeout intervals
+	// (usually the dead timeout) has passed since the last check
 	if(timeDeadCheck() >= global_resources->deadTimeout())
 		dead_check=1;
-
 	if(timeInactiveCheck() >= global_resources->inactiveTimeout())
-		in_check=1;
-
-	if(dead_check==0 && in_check==0) return;
+		inactive_check=1;
+	if(dead_check==0 && inactive_check==0) return;
 
 #if DEBUG_PV_LIST
 	int ifirst=1;
@@ -1412,16 +1423,8 @@ void gateServer::inactiveDeadCleanup(void)
 
 		pNode=iter.pointer();
 		pv=pNode->getData();
-
-		// - DONE -
-		// Can improve the algorithm here by modifying the pv->timeDead()
-		// function to return the least of last transaction time and
-		// actual dead time.  This way if someone is constantly asking for
-		// the PV even though it does not exist, I will know the answer
-		// already.
-
-		if(dead_check && pv->dead() &&
-		   pv->timeDead()>=global_resources->deadTimeout())
+		if(pv->dead() &&
+		  pv->timeDead()>=global_resources->deadTimeout())
 		{
 			gateDebug1(3,"gateServer::inactiveDeadCleanup() dead PV %s\n",
 				pv->name());
@@ -1437,12 +1440,12 @@ void gateServer::inactiveDeadCleanup(void)
 			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeDead(),pv->totalElements(),pv->getStateName());
 #endif
-			if(status) printf("%s Clean dead from PV list failed for pvname=%s.\n",
+			if(status) printf("%s Clean dead PV from PV list failed for pvname=%s.\n",
 				timeStamp(),pv->name());
 			pNode->destroy();
 		}
-		else if(in_check && pv->inactive() &&
-		   pv->timeInactive()>=global_resources->inactiveTimeout())
+		else if(pv->inactive() &&
+		  pv->timeInactive()>=global_resources->inactiveTimeout())
 		{
 			gateDebug1(3,"gateServer::inactiveDeadCleanup inactive PV %s\n",
 				pv->name());
@@ -1459,7 +1462,29 @@ void gateServer::inactiveDeadCleanup(void)
 			  total_connecting,total_dead,total_disconnected,
 			  pv->name(),pv->timeInactive(),pv->totalElements(),pv->getStateName());
 #endif
-			if(status) printf("%s Clean inactive from PV list failed for pvname=%s.\n",
+			if(status) printf("%s Clean inactive PV from PV list failed for pvname=%s.\n",
+				timeStamp(),pv->name());
+			pNode->destroy();
+		}
+		else if(pv->disconnected() &&
+		  pv->timeDisconnected()>=global_resources->inactiveTimeout())
+		{
+			gateDebug1(3,"gateServer::inactiveDeadCleanup disconnected PV %s\n",
+				pv->name());
+
+			int status=pv_list.remove(pv->name(),pNode);
+#if DEBUG_PV_LIST
+			if(ifirst) {
+			    ifirst=0;
+			}
+			printf("%s gateServer::inactiveDeadCleanup(disconnected): [%lu|%lu|%lu,%lu|%lu,%lu,%lu]: "
+			  "name=%s time=%ld count=%d state=%s\n",
+			  timeStamp(),
+			  total_vc,total_pv,total_active,total_inactive,
+			  total_connecting,total_dead,total_disconnected,
+			  pv->name(),pv->timeInactive(),pv->totalElements(),pv->getStateName());
+#endif
+			if(status) printf("%s Clean disconnected PV from PV list failed for pvname=%s.\n",
 				timeStamp(),pv->name());
 			pNode->destroy();
 		}
@@ -1467,8 +1492,8 @@ void gateServer::inactiveDeadCleanup(void)
 		iter=tmpIter;
 	}
 
-	if(dead_check)	setDeadCheckTime();
-	if(in_check)	setInactiveCheckTime();
+	setDeadCheckTime();
+	setInactiveCheckTime();
 }
 
 pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr&,
@@ -1493,6 +1518,12 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
 #if DEBUG_EXIST
 	printf("%s pvExistTest: %s\n",timeStamp(),pvname?pvname:"NULL");
+#endif
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,pvname,HISTNUM)) {
+		printf("%s gateServer::pvExistTest: loop_count=%lu %s\n",
+		  timeStamp(),loop_count,pvname);
+	}
 #endif
 #if DEBUG_FDMGR
 	startTime=epicsTime::getCurrent();
@@ -1601,13 +1632,11 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		{
 		case gatePvInactive:
 		case gatePvActive:
-	  	{
 			// We are connected to the PV
 			gateDebug2(5,"gateServer::pvExistTest() %s exists (%s)\n",
 					   real_name,pv->getStateName());
 			rc=pverExistsHere;
 			break;
-	  	}
 		default:
 			// We are not currently connected
 			gateDebug2(5,"gateServer::pvExistTest() %s is %s\n",
@@ -1617,10 +1646,17 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		}
 #if DEBUG_DELAY
 		if(!strncmp("Xorbit",pvname,6)) {
-			printf("%s gateServer::pvExistTest [pvFind]: loop_count=%d %s\n",
+			printf("%s gateServer::pvExistTest [pvFind]: loop_count=%lu %s\n",
 			  timeStamp(),loop_count,pvname);
 		}
 #endif
+#if DEBUG_HISTORY
+		if(!strncmp(HISTNAME,pvname,HISTNUM)) {
+			printf("%s gateServer::pvExistTest [pvFind]: loop_count=%lu %s\n",
+			  timeStamp(),loop_count,pvname);
+		}
+#endif
+
 	}
 	else if(conFind(real_name,pv)==0)
 	{
@@ -1629,7 +1665,13 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		pv->addET(ctx);
 #if DEBUG_DELAY
 		if(!strncmp("Xorbit",pvname,6)) {
-			printf("%s gateServer::pvExistTest [conFind]: loop_count=%d %s\n",
+			printf("%s gateServer::pvExistTest [conFind]: loop_count=%lu %s\n",
+			  timeStamp(),loop_count,pvname);
+		}
+#endif
+#if DEBUG_HISTORY
+		if(!strncmp(HISTNAME,pvname,HISTNUM)) {
+			printf("%s gateServer::pvExistTest [conFind]: loop_count=%lu %s\n",
 			  timeStamp(),loop_count,pvname);
 		}
 #endif
@@ -1643,7 +1685,13 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
 #if DEBUG_DELAY
 		if(!strncmp("Xorbit",pvname,6)) {
-			printf("\n%s gateServer::pvExistTest: loop_count=%d %s\n",
+			printf("\n%s gateServer::pvExistTest: loop_count=%lu %s\n",
+			  timeStamp(),loop_count,pvname);
+		}
+#endif
+#if DEBUG_HISTORY
+		if(!strncmp(HISTNAME,pvname,HISTNUM)) {
+			printf("\n%s gateServer::pvExistTest: loop_count=%lu %s\n",
 			  timeStamp(),loop_count,pvname);
 		}
 #endif
@@ -1681,7 +1729,20 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		printf("  Other return code\n"); 
 	}
 #endif
-
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,pv->name(),HISTNUM)) {
+		if(rc.getStatus() == pverAsyncCompletion) {
+			printf("  pverAsyncCompletion\n");
+		} else if(rc.getStatus() == pverExistsHere) {
+			printf("  pverExistsHere\n"); 
+		} else if(rc.getStatus() == pverDoesNotExistHere) {
+			printf("  pverDoesNotExistHere\n"); 
+		} else {
+			printf("  Other return code\n"); 
+		}
+	}
+#endif
+	
 #if DEBUG_FDMGR
 	endTime=epicsTime::getCurrent();
 	cumTime+=(endTime-startTime);
@@ -1733,7 +1794,13 @@ pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
 
 #if DEBUG_DELAY
 	if(!strncmp("Xorbit",real_name,6)) {
-		printf("%s gateServer::pvAttach: loop_count=%d %s\n",
+		printf("%s gateServer::pvAttach: loop_count=%lu %s\n",
+		  timeStamp(),loop_count,real_name);
+	}
+#endif
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,real_name,HISTNUM)) {
+		printf("%s gateServer::pvAttach: loop_count=%lu %s\n",
 		  timeStamp(),loop_count,real_name);
 	}
 #endif

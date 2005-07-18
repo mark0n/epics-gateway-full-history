@@ -54,6 +54,7 @@
 
 // Utilities
 char *timeStamp(void);
+char *timeString(time_t time);
 char *getComputerName(void);
 void printRecentHistory(void);
 

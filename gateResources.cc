@@ -62,6 +62,23 @@ char *timeStamp(void)
 	return timeStampStr;
 }
 
+// Gets current time and puts it in a static array The calling program
+// should copy it to a safe place e.g. strcpy(savetime,timestamp());
+char *timeString(time_t time)
+{
+	static char timeStr[80];
+	int rem=time;
+	int days=rem/86400;
+	rem-=days*86400;
+	int hours=rem/3600;
+	rem-=hours*3600;
+	int min=rem/60;
+	rem-=min*60;
+	int sec=rem;
+	sprintf(timeStr,"%3d:%02d:%02d:%02d",days,hours,min,sec);
+	return timeStr;
+}
+
 // Gets the computer name and allocates memory for it using strDup
 // (from base/src/gdd/aitHelpers.h)
 char *getComputerName(void)

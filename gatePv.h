@@ -103,6 +103,7 @@ public:
 	
 	int active(void) const { return (pv_state==gatePvActive)?1:0; }
 	int inactive(void) const { return (pv_state==gatePvInactive)?1:0; }
+	int disconnected(void) const { return (pv_state==gatePvDisconnect)?1:0; }
 	int dead(void) const { return (pv_state==gatePvDead)?1:0; }
 	int pendingConnect(void) const { return (pv_state==gatePvConnect)?1:0; }
 	
@@ -144,16 +145,17 @@ public:
 	int get(void);                  // get callback
 	int put(const gdd*, int docallback);  // put
 	
-	time_t timeInactive(void) const;
-	time_t timeActive(void) const;
-	time_t timeDead(void) const;
 	time_t timeAlive(void) const;
-
+	time_t timeActive(void) const;
+	time_t timeInactive(void) const;	
+	time_t timeConnecting(void) const;
+	time_t timeDead(void) const;
+	time_t timeDisconnected(void) const;
+	
 #if 0
 	// KE: Unused
 	time_t timeSinceLastTrans(void) const;
 #endif
-	time_t timeConnecting(void) const;
 	
 	void setVC(gateVcData* t) { vc=t; }
 	void setTransTime(void);
@@ -221,7 +223,7 @@ private:
 	
 	time_t no_connect_time; // when no one connected to held PV
 	time_t dead_alive_time; // when PV went from dead to alive
-	time_t last_trans_time; // last transaction occurred at this time
+	time_t last_trans_time; // last transaction (put or get) occurred at this time
 
 	// Callback functions used in eventCB
 	gdd* eventStringCB(void*);
@@ -254,6 +256,8 @@ public:
 inline void gatePvData::addET(const casCtx& c)
 	{ eio.add(*(new gateAsyncE(c,&eio))); }
 
+inline time_t gatePvData::timeDisconnected(void) const
+	{ return disconnected()?(time(NULL)-no_connect_time):0; }
 inline time_t gatePvData::timeInactive(void) const
 	{ return inactive()?(time(NULL)-no_connect_time):0; }
 inline time_t gatePvData::timeActive(void) const
@@ -289,8 +293,7 @@ inline void gatePvData::setTransTime(void)     { time(&last_trans_time); }
 inline void gatePvData::setTimes(void)
 {
 	time(&dead_alive_time);
-	no_connect_time=dead_alive_time;
-	last_trans_time=dead_alive_time;
+	no_connect_time=last_trans_time=dead_alive_time;
 }
 
 inline void gatePvData::setDeathTime(void)

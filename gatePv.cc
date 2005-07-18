@@ -35,6 +35,12 @@
 #define DEBUG_ENUM 0
 #define DEBUG_DELAY 0
 #define DEBUG_SLIDER 0
+#define DEBUG_HISTORY 0
+
+#if DEBUG_HISTORY
+# define HISTNAME "GW:432:S05"
+# define HISTNUM 10
+#endif
 
 #define OMIT_CHECK_EVENT 1
 
@@ -169,6 +175,12 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* pase,const char* name)
 #if DEBUG_TOTAL_PV
 	printf("gatePvdata: name=%s total_pv=%ld total_alive=%ld\n",
 	  name,mrg->total_pv,mrg->total_alive);
+#endif
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,name,HISTNUM)) {
+		printf("%s gatePvData::gatePvData: %s state=%s\n",timeStamp(),name,
+		  getStateName());
+	}
 #endif
 }
 
@@ -342,6 +354,12 @@ int gatePvData::activate(gateVcData* vcd)
 			  getState());
 		}
 #endif
+#if DEBUG_HISTORY
+		if(!strncmp(HISTNAME,name(),HISTNUM)) {
+			printf("%s gatePvData::activate: %s state=%s\n",timeStamp(),name(),
+			  getStateName());
+		}
+#endif
 
 	switch(getState())
 	{
@@ -423,10 +441,16 @@ int gatePvData::life(void)
 	gateDebug1(5,"gatePvData::life() name=%s\n",name());
 
 #if DEBUG_DELAY
-		if(!strncmp("Xorbit",name(),6)) {
-			printf("%s gatePvData::life: loop_count=%d %s state=%d\n",
-			  timeStamp(),mrg->loop_count,name(),getState());
-		}
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gatePvData::life: loop_count=%d %s state=%d\n",
+		  timeStamp(),mrg->loop_count,name(),getState());
+	}
+#endif
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,name(),HISTNUM)) {
+		printf("%s gatePvData::life: loop_count=%lu %s state=%s\n",
+		  timeStamp(),mrg->loop_count,name(),getStateName());
+	}
 #endif
 
 	switch(getState())
@@ -531,6 +555,12 @@ int gatePvData::death(void)
 	if(!strncmp("Xorbit",name(),6)) {
 		printf("%s gatePvData::death: loop_count=%d %s state=%d\n",
 		  timeStamp(),mrg->loop_count,name(),getState());
+	}
+#endif
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,name(),HISTNUM)) {
+		printf("%s gatePvData::death: loop_count=%lu %s state=%s\n",
+		  timeStamp(),mrg->loop_count,name(),getStateName());
 	}
 #endif
 
@@ -977,6 +1007,12 @@ void gatePvData::flushAsyncETQueue(pvExistReturnEnum er)
 			  timeStamp(),name(),eio.count(),getState());
 		}
 #endif
+#if DEBUG_HISTORY
+		if(!strncmp(HISTNAME,name(),HISTNUM)) {
+			printf("%s gatePvData::flushAsyncETQueue: %s count=%d state=%s\n",
+			  timeStamp(),name(),eio.count(),getStateName());
+		}
+#endif
 	while((asynce=eio.first()))	{
 		gateDebug1(1,"gatePvData::flushAsyncETQueue() posting %p\n",
 				   (void *)asynce);
@@ -1009,6 +1045,13 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 		  pv->getState());
 	}
 #endif
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,pv->name(),HISTNUM)) {
+		printf("%s gatePvData::connectCB: %s state=%s\n",timeStamp(),pv->name(),
+		  pv->getStateName());
+	}
+#endif
+
 #if DEBUG_ENUM
 	printf("gatePvData::connectCB\n");
 #endif
