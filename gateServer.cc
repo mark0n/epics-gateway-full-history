@@ -1763,7 +1763,7 @@ pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
     {
         gateDebug1(2,"gateServer::pvAttach() called for denied PV %s "
 		  " - this should not happen!\n", pvname);
-        return pvCreateReturn(S_casApp_pvNotFound);
+        return pvAttachReturn(S_casApp_pvNotFound);
     }
 
     pEntry->getRealName(pvname, real_name, sizeof(real_name));
@@ -1778,7 +1778,7 @@ pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
 #if DEBUG_DESC
 				printf("gateServer::pvAttach:  %s\n",stat_table[i].pv->getName());
 #endif
-				return pvCreateReturn(*stat_table[i].pv);
+				return pvAttachReturn(*stat_table[i].pv);
 			}
 			if(strcmp(real_name,stat_table[i].descPvName) == 0) {
 				if(stat_table[i].descPv == NULL)
@@ -1786,7 +1786,7 @@ pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
 #if DEBUG_DESC
 				printf("gateServer::pvAttach:  %s\n",stat_table[i].descPv->getName());
 #endif
-				return pvCreateReturn(*stat_table[i].descPv);
+				return pvAttachReturn(*stat_table[i].descPv);
 			}
 		}
 	}
@@ -1794,12 +1794,6 @@ pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
 
 #if DEBUG_DELAY
 	if(!strncmp("Xorbit",real_name,6)) {
-		printf("%s gateServer::pvAttach: loop_count=%lu %s\n",
-		  timeStamp(),loop_count,real_name);
-	}
-#endif
-#if DEBUG_HISTORY
-	if(!strncmp(HISTNAME,real_name,HISTNUM)) {
 		printf("%s gateServer::pvAttach: loop_count=%lu %s\n",
 		  timeStamp(),loop_count,real_name);
 	}
@@ -1818,6 +1812,15 @@ pvAttachReturn gateServer::pvAttach(const casCtx& /*c*/,const char* pvname)
 			rc=NULL;
 		}
 	}
+
+#if DEBUG_HISTORY
+	if(!strncmp(HISTNAME,real_name,HISTNUM)) {
+		printf("%s gateServer::pvAttach: loop_count=%lu %s %s\n",
+		  timeStamp(),loop_count,
+		  rc?"Found":"Not Found",
+		  real_name);
+	}
+#endif
 
 	return rc?pvCreateReturn(*rc):pvCreateReturn(S_casApp_pvNotFound);
 }

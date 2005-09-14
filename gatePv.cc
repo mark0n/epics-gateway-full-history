@@ -1047,8 +1047,25 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 #endif
 #if DEBUG_HISTORY
 	if(!strncmp(HISTNAME,pv->name(),HISTNUM)) {
-		printf("%s gatePvData::connectCB: %s state=%s\n",timeStamp(),pv->name(),
-		  pv->getStateName());
+		const int HOST_NAME_SZ=80;
+		char hostNameStr[HOST_NAME_SZ];
+
+		ca_get_host_name(args.chid,hostNameStr,HOST_NAME_SZ);
+
+		printf("%s gatePvData::connectCB: %s state=%s\n",
+		  timeStamp(),pv->name(),pv->getStateName());
+		printf("  op=%s[%ld]\n",
+		  args.op==CA_OP_CONN_UP?"CA_OP_CONN_UP":"CA_OP_CONN_DOWN",
+		  args.op);
+		printf("  ca_state=%d\n",ca_state(args.chid));
+		printf("  ca_name=%s\n",ca_name(args.chid));
+		printf("  ca_get_host_name=%s\n",hostNameStr);
+		printf("  ca_field_type=%d\n",ca_field_type(args.chid));
+		printf("  ca_element_count=%ld\n",
+		  (long)ca_element_count(args.chid));
+		printf("  ca_host_name=%s\n",ca_host_name(args.chid));
+		printf("  ca_read_access=%d\n",ca_read_access(args.chid));
+		printf("  ca_write_access=%d\n",ca_write_access(args.chid));
 	}
 #endif
 
@@ -1057,8 +1074,8 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 #endif
 
 	// send message to user concerning connection
-	if(ca_state(args.chid)==cs_conn)
-	{
+			if(ca_state(args.chid)==cs_conn)
+{
 		gateDebug0(9,"gatePvData::connectCB() connection ok\n");
 
 		switch(ca_field_type(args.chid))

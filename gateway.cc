@@ -1393,11 +1393,10 @@ static int manage_gateway(void)
 	case 0:
 		// Child
 		// Make this process a session leader
-#if defined UNIX
-		setpgrp();
-#else
-		setpgrp(0,0);
-#endif
+		// KE: Not sure why this is necessary
+		// Used to use setgrp() for UNIX, else setgrp(0,0)
+		//   but this failed for Darwin
+		setpgid(0,0);
 		// Make a new session
 		setsid();
 		break;
