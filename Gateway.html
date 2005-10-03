@@ -1,7 +1,7 @@
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
 <html>
 <head>
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <meta http-equiv="content-type" content="text/html; charset=UTF-8">
   <title>Gateway Users Guide</title>
 </head>
 
@@ -15,7 +15,7 @@
 
 <h2 style="text-align: center">Kenneth Evans, Jr.</h2>
 
-<h2 style="text-align: center">April 2004</h2>
+<h2 style="text-align: center">September 2005</h2>
 <br>
 
 
@@ -81,7 +81,7 @@ Gateway 1.3. The new version, starting as Gateway 2.0, only works well with
 EPICS 3.14.6 or later and does not otherwise require a special EPICS base. It
 also has additional features compared to Gateway 1.3. Note that even if you
 are using EPICS 3.13 for your other applications, you can still use Gateway
-2.x built with EPICS 3.14 as your Gateway./p&gt;</p>
+2.x built with EPICS 3.14 as your Gateway.</p>
 
 <p>For this guide we will often refer to the clients as <a
 href="http://www.aps.anl.gov/epics/extensions/medm/index.php">MEDM</a> and
@@ -124,8 +124,7 @@ the order of 60 Gateways running at the APS.</p>
 <p>In addition to connections to process variables in IOCs and other servers,
 the Gateway, as a server, provides its own <a
 href="#ProcessVariables">internal process variables</a>. These are used for
-diagnostic purposes, to initiate reports, and to control the
-Gateway./p&gt;</p>
+diagnostic purposes, to initiate reports, and to control the Gateway.</p>
 
 <p>Internally the Gateway maintains two objects for each process variable.
 There is a PV (Process Variable) object that handles the Gateway client
@@ -142,14 +141,14 @@ src="Gateway.Internals.gif"></p>
 still trying to connect or because the connection has been lost. In that case
 there is no VC, and the MEDMs see the process variable as not existing. In
 this case the PV object is destroyed after two minutes unless it connects.
-The middle state is most typical. There is a connection to the IOC and each
+The middle state is most typical. There is a connection to the IOC, and each
 MEDM is connected through the VC. In the lower state the PV is connected to
 the IOC, but there are no MEDMs interested in the process variable. The PV
 object and connection to the IOC are maintained for two hours after the last
 time they are used in case another MEDM or other client wants to use it
 again. The other client could be a command-line program like caget, that
 requests the value and then exits. In that case the PV object will still stay
-around for at least 2 hours.</p>
+around for at least two hours.</p>
 
 <p>When a Channel Access Client wants to connect to a process variable, it
 send out a series of search requests, which are UDP packets, on the network.
@@ -157,8 +156,8 @@ These packets are initially sent at a very fast rate with the time between
 them doubling at each try until 100 are sent or there is an affirmative
 reply. Each server that gets such a packet is required to determine if it has
 the process variable. When the Gateway gets such a request, it creates an
-unconnected PV object which itself sends a search request to the IOCs. This
-PV starts out as<strong> Connecting</strong> and the Gateway responds to the
+unconnected PV object that itself sends a search request to the IOCs. This PV
+starts out as<strong> Connecting</strong>, and the Gateway responds to the
 search request as postponed. If it does not connect in a very short time, it
 becomes <strong>Dead</strong> and the Gateway responds to subsequent search
 requests as not having it. If it is not found by the Gateway after two
@@ -168,8 +167,8 @@ state depends on its old state. If it was <strong>Disconnected</strong> or
 <strong>Exist Test</strong> will return that it was found. If it was
 <strong>Connecting</strong>, postponed <strong>Exist Tests</strong> are
 processed, and if a VC is created because an MEDM is still interested, it
-becomes <strong>Active</strong>. Soon afterward a Chan is created and the
-MEDM is connected to the VC and through it to the PV. Once it is
+becomes <strong>Active</strong>. Soon afterward a Chan is created, and the
+MEDM is connected to the VC and through it to the PV. Once the PV is
 <strong>Active</strong> or <strong>Inactive</strong>, the Gateway responds to
 subsequent search requests as having the process variable. If the connection
 is then lost, the VC and its Chans are destroyed, and the PV becomes
@@ -184,7 +183,7 @@ understanding of these states.</p>
 <strong>Connected</strong> consists of either <strong>Active</strong> or
 <strong>Inactive</strong>. <strong>Unconnected</strong> consists of
 <strong>Connecting</strong>, <strong>Dead</strong>, or
-<strong>Disconnected</strong>.The top state in the picture above is
+<strong>Disconnected</strong>. The top state in the picture above is
 <strong>Unconnected,</strong> but it is not clear whether it is
 <strong>Connecting</strong>, <strong>Dead</strong>, or
 <strong>Disconnected</strong>. The middle state is <strong>Connected
@@ -196,7 +195,7 @@ understanding of these states.</p>
   <li>unconnected = connecting + dead + disconnected</li>
 </ul>
 
-<p>Saying this another way: The PVs for which the Gateway has an established
+<p>Saying this another way: the PVs for which the Gateway has an established
 client connection with an IOC are<strong> Connected</strong>. Otherwise they
 are <strong>Unconnected</strong>. For the <strong>Connected</strong> ones, if
 there is a connection to an MEDM, then they are<strong> Active</strong>.
@@ -443,8 +442,8 @@ workstation. That situation should be avoided.</p>
 
 <p>The Gateway makes two files, <strong>gateway.killer</strong> and
 <strong>gateway.restart</strong>, when it starts. The file
-<strong>gateway.killer</strong> contains a summary of the the settings used,
-as well as commands to kill the current Gateway, kill the server if in server
+<strong>gateway.killer</strong> contains a summary of the settings used, as
+well as commands to kill the current Gateway, kill the server if in server
 mode, execute the <a href="#Report">commands file</a>, and execute the <a
 href="#Report">Process Variable Report</a>. It is a valid shell script, and
 the only line not commented is the one which kills the server in server mode
@@ -564,7 +563,7 @@ create Makefile and Makefile.Host yourself to do that.</p>
 that may be implemented in the IOCs or other servers to which it connects. It
 supplements but cannot override IOC access security. The access security is
 specified in two files,<strong> gateway.pvlist</strong> and
-<strong>gateway.access</strong> by default. See -pvlist and -access on the<a
+<strong>gateway.access</strong>, by default. See -pvlist and -access on the<a
 href="#Starting"> command line</a>. The first file,
 <strong>gateway.pvlist</strong>, specifies what process variable name
 patterns are allowed and denied, and is described in more detail below. The
@@ -724,11 +723,11 @@ file that has a rule with WRITE and TRAPWRITE specified, for example,
 "RULE(1,WRITE,TRAPWRITE)". (The security level could also be 0.) Then
 whenever there is a write (or put) to any process variable in that group, it
 will be logged in the specified putlog file. As with the log file, this file
-will be automatically renamed if the Gateway is in server mode and it
-restarts. An example may be found in the<a href="GATEWAY.access"> sample
-access file</a>, where writes are logged for process variables that belong to
-the GatewayAdmin group. Using the <a href="GATEWAY.pvlist">sample pvlist
-file</a>, these would be those that fit the pattern "gateway:*Flag".</p>
+will be automatically renamed whenever the Gateway restarts. An example may
+be found in the<a href="GATEWAY.access"> sample access file</a>, where writes
+are logged for process variables that belong to the GatewayAdmin group. Using
+the <a href="GATEWAY.pvlist">sample pvlist file</a>, these would be those
+that fit the pattern "gateway:*Flag".</p>
 
 <h2><a name="BeaconAnomalies">Beacon Anomalies and Search Requests</a></h2>
 
@@ -788,8 +787,8 @@ Gateway if possible.</p>
 
 <p>The Gateway prints three kinds of reports: (1) the Virtual Connection
 Report, which includes all MEDM or other client connections to all process
-variables, (2) the Process Variable Report, which includes all process
-variables grouped by state, and (3) the Access Security Report, which
+variables; (2) the Process Variable Report, which includes all process
+variables grouped by state; and (3) the Access Security Report, which
 includes the allowed and denied process-variable patterns from the pvlist
 file, <strong>gateway.pvlist</strong>, by default. The Gateway prints its
 reports to the report file, <strong>gateway.report</strong>, by default,
@@ -836,7 +835,7 @@ will be created.</p>
 <h2><a name="ProcessVariables">Gateway Process Variables</a></h2>
 
 <p>The Gateway publishes several process variables, allowing you to control
-it and monitor it. By default these have a prefix which is the name of the
+it and monitor it. By default these have a prefix, which is the name of the
 host machine, but this can be changed by -prefix in the<a href="#Starting">
 command-line options</a>. Here, we will use the prefix "gateway". See the <a
 href="#Introduction">Introduction</a> for a more detailed description of the
@@ -903,6 +902,11 @@ that is, which have just been created and are trying to connect to an IOC.</p>
 
 <p>This is the number of PV objects which are <strong>Disconnected</strong>,
 that is, which were formerly connected but have lost the connection.</p>
+
+<p><strong>gateway:dead</strong></p>
+
+<p>This is the number of PV objects which are <strong>Dead</strong>, that is,
+which did not connect and are scheduled for removal.</p>
 
 <p><strong>gateway:fd</strong></p>
 
@@ -1124,16 +1128,16 @@ network.</p>
 <h3><a name="SymmetricGateways">Symmetric Gateways</a></h3>
 
 <p>The following shows a configuration in which each of three networks has a
-Gateway that finds process variables in IOCs on the other two. This is a
-configuration used at BESSY.</p>
+Gateway that finds process variables in IOCs on the other two networks. This
+is a configuration used at BESSY.</p>
 
 <p>However, note that if you are on say, Net A, and using the Gateway whose
 server is on Net A, then the client side of this Gateway sees the server side
 of the other two Gateways. However, these Gateways each see servers on Net A
-and consequently see the the Net A Gateway. Therefore, the Net A Gateway can
-see process variables on IOCs on Net B and Net C directly and also through
-the other two servers. To prevent this loop, each Gateway must be configured
-to not allow process variables from the other two Gateways. This can be done
+and consequently see the Net A Gateway. Therefore, the Net A Gateway can see
+process variables on IOCs on Net B and Net C directly and also through the
+other two servers. To prevent this loop, each Gateway must be configured to
+not allow process variables from the other two Gateways. This can be done
 through the -ignore <a href="#Starting">command-line option</a>.</p>
 
 <p align="center"><img alt="Symmetric Gateways"
@@ -1149,7 +1153,7 @@ gets process variables from Net Z. This is a configuration used at Argonne.
 Net Z is the machine network, and the other networks belong to individual
 experimental teams. These teams have read access to the machine network and
 whatever access they want to the IOCs on their own network. Argonne at
-present has seven of these configurations, most with four Gateways plus a
+present has eight of these configurations, most with four Gateways plus a
 reverse Gateway. Owing to the reverse Gateways, the internal process
 variables for all these Gateways can be seen on one MEDM screen, as in the <a
 href="#APSGatewaysScreen">example above</a>, through a Gateway that sees
@@ -1161,7 +1165,7 @@ variables from the other four Gateways and itself, and each of the other
 Gateways denies the internal process variables from the other three. As a
 result these four Gateways do not see internal process variables from the
 other three. They do see the ones from other configurations of four. This
-limitiation could be overcome by using one reverse Gateway for every regular
+limitation could be overcome by using one reverse Gateway for every regular
 Gateway. Note that another Gateway that is not on a network with the client
 side of any of the reverse Gateways does not need to deny anything and can
 see all the internal process variables from any of the Gateways in any of
@@ -1174,10 +1178,10 @@ above</a>).</p>
 
 <p>It is possible to use the Gateway just to provide aliases for process
 variables, and the following configuration shows an alias Gateway. Only one
-subnet is needed. If an MEDM asks for the alias name it is found through the
+subnet is needed. If an MEDM asks for the alias name, it is found through the
 Gateway. If it uses the real name, it is found through the IOC. The two names
-should be different to avoid finding the same process variable in two
-different servers.</p>
+must be different to avoid finding the same process variable in two different
+servers.</p>
 
 <p align="center"><img alt="Alias Gateway" src="AliasGateway.gif"></p>
 
