@@ -996,7 +996,8 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			printf("  S_casApp_noSupport\n");
 		}
 #endif
-		return S_casApp_noSupport;
+//		return S_casApp_noSupport;
+		return S_casApp_success;
 	case gddAppType_dbr_stsack_string:
 		if((event_data && 
 		  !(event_data->applicationType()==gddAppType_dbr_stsack_string))
