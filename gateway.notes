@@ -46,3 +46,10 @@ Tue Dec 22 13:15:08 CST 1998
         Did minor cleanup as noticed problems.
         This version appears to work but has debugging (mostly turned off).
         Will be tagged Gateway0_3 after commit.
+
+
+
+------------------------------------------------------------------
+
+Wed Feb 28 10:02:45 CST 2007   Gateway2-0-0-1
+	Fixed return code for gddAppType acks.
