@@ -53,3 +53,6 @@ Tue Dec 22 13:15:08 CST 1998
 
 Wed Feb 28 10:02:45 CST 2007   Gateway2-0-0-1
 	Fixed return code for gddAppType acks.
+
+Tue May 22 15:11:09 CDT 2007   Gateway2-0-0-2
+	Removed pre R3.14 Makefiles.
