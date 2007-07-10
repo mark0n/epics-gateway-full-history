@@ -34,6 +34,8 @@
 # include <sys/time.h>
 #endif
 
+#include <caProto.h>
+
 #include "casdef.h"
 #include "aitTypes.h"
 
@@ -49,6 +51,13 @@ typedef enum {
 	gateFalse=0,
 	gateTrue
 } gateBool;
+
+typedef enum {
+	ctrlType=0,
+	timeType
+} readType;
+
+
 
 class gdd;
 class gatePvData;
@@ -157,14 +166,14 @@ public:
 	aitBool writeAccess(void) const { return write_access; }
 
 	// Pv notification interface
-	virtual void vcNew(void);
+	virtual void vcNew(readType read_type);
 	virtual void vcDelete(void);
-	virtual void vcPostEvent(void);
-	virtual void vcData(void);
+	virtual void vcPostEvent(casEventMask event_mask);
+	virtual void vcData(readType read_type);
 
 	void vcRemove(void);
-	void vcAdd(void);
-	void setEventData(gdd *dd); // Sets event_data from GatePvData::eventCB
+	void vcAdd(readType read_type);
+	int setEventData(gdd *dd); // Sets event_data from GatePvData::eventCB
 	void setPvData(gdd *dd);    // Sets pv_data from GatePvData::getCB
 	void setAlhData(gdd *dd);   // Sets event_data from GatePvData::alhCB
 	void copyState(gdd &dd);    // Copies pv_data and event_data to dd
@@ -174,7 +183,7 @@ public:
 	unsigned long getVcID(void) const { return vcID; }
 	gatePendingWrite *pendingWrite() const { return pending_write; }
 	void cancelPendingWrite(void) { pending_write=NULL; }
-	void flushAsyncReadQueue(void);
+	void flushAsyncReadQueue(readType read_type);
 	void flushAsyncWriteQueue(int docallback);
 	void flushAsyncAlhReadQueue(void);
 
@@ -199,6 +208,8 @@ public:
 	casEventMask select_mask;
 	casEventMask alh_mask;
 	
+	ca_uint16_t client_mask;
+	
 protected:
 	void setState(gateVcState s) { pv_state=s; }
 	gatePvData* pv;     // Pointer to the associated gatePvData
@@ -221,7 +232,8 @@ private:
 	int prev_post_value_changes;
 	int post_value_changes;
 	tsDLList<gateVcChan> chan_list;
-	tsDLList<gateAsyncR> rio;	 // Queue for read's received when not ready
+	tsDLList<gateAsyncR> ctrl_rio;	 // Queue for ctrl read's received when not ready
+	tsDLList<gateAsyncR> time_rio;	 // Queue for time read's received when not ready
 	tsDLList<gateAsyncW> wio;	 // Queue for write's received when not ready
 	tsDLList<gateAsyncR> alhRio; // Queue for alh read's received when not ready
 	gatePendingWrite *pending_write;  // NULL unless a write (put) is in progress

@@ -195,9 +195,14 @@ public:
 	virtual ~gateServer(void);
 
 	// caServer virtual overloads
+#ifdef USE_DENYFROM
+	virtual pvExistReturn pvExistTest(const casCtx& ctx, const caNetAddr& netAddr,
+	  const char* pvname);
+#else
 	virtual pvExistReturn pvExistTest(const casCtx& ctx, const caNetAddr& netAddr,
 	  const char* pvname);
 	virtual pvExistReturn pvExistTest(const casCtx& ctx, const char* pvname);
+#endif
 	virtual pvAttachReturn pvAttach(const casCtx& ctx, const char* pvname);
 
 	// caServer overwrite

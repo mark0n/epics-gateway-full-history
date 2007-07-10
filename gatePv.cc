@@ -62,6 +62,7 @@
 #include <gddApps.h>
 #include <gddAppTable.h>
 #include <dbMapper.h>
+#include <caProto.h>
 
 #include "gateResources.h"
 #include "gateServer.h"
@@ -89,6 +90,12 @@ extern "C" {
 	extern void getCB(EVENT_ARGS args) {        // get callback
 		gatePvData::getCB(args);
 	}
+	extern void getTimeCB(EVENT_ARGS args) {        // get DBR_TIME callback
+		gatePvData::getTimeCB(args);
+	}
+	extern void logEventCB(EVENT_ARGS args) {        // log event callback
+		gatePvData::logEventCB(args);
+	}	
 }
 
 // quick access to global_resources
@@ -222,6 +229,7 @@ gatePvData::~gatePvData(void)
 		vc=NULL;
 	}
 	unmonitor();
+	logUnmonitor();
 	alhUnmonitor();
 	status=ca_clear_channel(chID);
 	if(status != ECA_NORMAL) {
@@ -252,7 +260,9 @@ void gatePvData::initClear(void)
 	setVC(NULL);
 	status=0;
 	markNotMonitored();
-	markNoGetPending();
+	markLogNotMonitored();
+	markNoCtrlGetPending();
+	markNoTimeGetPending();
 	markAlhNotMonitored();
 	markAlhNoGetPending();
 	markNoAbort();
@@ -375,8 +385,11 @@ int gatePvData::activate(gateVcData* vcd)
 		setActiveTime();
 		vc->setReadAccess(ca_read_access(chID)?aitTrue:aitFalse);
 		vc->setWriteAccess(ca_write_access(chID)?aitTrue:aitFalse);
-		if(ca_read_access(chID)) rc=get();
-		else rc=0;
+		if(!global_resources->getCacheMode()) rc=0;
+		else{
+			if(ca_read_access(chID)) rc=get(ctrlType);
+			else rc=0;
+		}
 		break;
 	case gatePvDisconnect:
 	case gatePvDead:
@@ -408,6 +421,7 @@ int gatePvData::deactivate(void)
 	case gatePvActive:
 		gateDebug1(10,"gatePvData::deactivate() %s PV\n",getStateName());
 		unmonitor();
+		logUnmonitor();
 		alhUnmonitor();
 		setState(gatePvInactive);
 #ifdef STAT_PVS
@@ -473,7 +487,7 @@ int gatePvData::life(void)
 				mrg->setStat(statActive,++mrg->total_active);
 				mrg->setStat(statAlive,++mrg->total_alive);
 #endif
-				get();
+				if(global_resources->getCacheMode()) get(ctrlType);
 			}
 		} else {
 			setState(gatePvInactive);
@@ -626,8 +640,10 @@ int gatePvData::death(void)
 	setDeathTime();
 	markNoAbort();
 	markAddRemoveNotNeeded();
-	markNoGetPending();
+	markNoCtrlGetPending();
+	markNoTimeGetPending();
 	unmonitor();
+	logUnmonitor();
 	alhUnmonitor();
 
 	return rc;
@@ -662,6 +678,39 @@ int gatePvData::unmonitor(void)
 		}
 #endif
 		markNotMonitored();
+	}
+	return rc;
+}
+
+int gatePvData::logUnmonitor(void)
+{
+	gateDebug1(5,"gatePvData::logUnmonitor() name=%s\n",name());
+	int rc=0;
+
+	if(logMonitored())
+	{
+#ifdef USE_313
+		rc=ca_clear_event(logID);
+		if(rc != ECA_NORMAL) {
+			fprintf(stderr,"%s gatePvData::logUnmonitor: ca_clear_event failed "
+			  "for %s:\n"
+			  " %s\n",
+			  timeStamp(),name()?name():"Unknown",ca_message(rc));
+		} else {
+			rc=0;
+		}
+#else
+		rc=ca_clear_subscription(logID);
+		if(rc != ECA_NORMAL) {
+			fprintf(stderr,"%s gatePvData::logUnmonitor: ca_clear_subscription failed "
+			  "for %s:\n"
+			  " %s\n",
+			  timeStamp(),name()?name():"Unknown",ca_message(rc));
+		} else {
+			rc=0;
+		}
+#endif
+		markLogNotMonitored();
 	}
 	return rc;
 }
@@ -761,6 +810,68 @@ int gatePvData::monitor(void)
 	return rc;
 }
 
+int gatePvData::logMonitor(void)
+{
+	gateDebug1(5,"gatePvData::logMonitor() name=%s\n",name());
+	int rc=0;
+
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",name(),6)) {
+		printf("%s gatePvData::logMonitor: %s state=%d\n",timeStamp(),name(),
+		  getState());
+	}
+#endif
+
+	if(!logMonitored())
+	{
+		// gets only 1 element:
+		// rc=ca_add_event(eventType(),chID,eventCB,this,&event);
+		// gets native element count number of elements:
+
+		if(ca_read_access(chID)) {
+			gateDebug1(5,"gatePvData::logMonitor() type=%ld\n",eventType());
+#ifdef USE_313
+			rc=ca_add_masked_array_event(eventType(),0,chID,::logEventCB,this,
+			  0.0,0.0,0.0,&logID,DBE_LOG);
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::logMonitor: "
+				  "ca_add_masked_array_event failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
+				rc=-1;
+			} else {
+				rc=0;
+				markLogMonitored();
+#if OMIT_CHECK_EVENT
+#else
+				checkEvent();
+#endif
+			}
+#else
+			rc=ca_create_subscription(eventType(),0,chID,DBE_LOG,
+			  ::logEventCB,this,&logID);
+			if(rc != ECA_NORMAL) {
+				fprintf(stderr,"%s gatePvData::logMonitor: "
+				  "ca_create_subscription failed for %s:\n"
+				  " %s\n",
+				  timeStamp(),name()?name():"Unknown",ca_message(rc));
+				rc=-1;
+			} else {
+				rc=0;
+				markLogMonitored();
+#if OMIT_CHECK_EVENT
+#else
+				checkEvent();
+#endif
+			}
+#endif
+		} else {
+			rc=-1;
+		}
+	}
+	return rc;
+}
+
 int gatePvData::alhMonitor(void)
 {
 	gateDebug1(5,"gatePvData::alhMonitor() name=%s\n",name());
@@ -813,7 +924,7 @@ int gatePvData::alhMonitor(void)
 	return rc;
 }
 
-int gatePvData::get(void)
+int gatePvData::get(readType read_type)
 {
 	gateDebug1(5,"gatePvData::get() name=%s\n",name());
 	int rc=ECA_NORMAL;
@@ -823,20 +934,79 @@ int gatePvData::get(void)
 	{
 	case gatePvActive:
 		gateDebug1(3,"gatePvData::get() %s PV\n",getStateName());
-		if(!pendingGet()) {
-			gateDebug0(3,"gatePvData::get() doing ca_array_get_callback\n");
-			setTransTime();
-			markGetPending();
-			// always get only one element, the monitor will get
-			// all the rest of the elements
-			rc=ca_array_get_callback(dataType(),1 /*totalElements()*/,
-				chID,::getCB,this);
-			if(rc != ECA_NORMAL) {
-				fprintf(stderr,"%s gatePvData::get: ca_array_get_callback "
-				  "failed for %s:\n"
-				  " %s\n",
-				  timeStamp(),name()?name():"Unknown",ca_message(rc));
+
+		
+		if(global_resources->getCacheMode()) /* caching enabled */
+		{
+			if(!pendingCtrlGet()) {
+				gateDebug0(3,"gatePvData::get() doing ca_array_get_callback\n");
+				setTransTime();
+				markCtrlGetPending();				
+				rc=ca_array_get_callback(dataType(), 1/*totalElements()*/,
+					chID,::getCB,this);
+				if(rc != ECA_NORMAL) {
+					fprintf(stderr,"%s gatePvData::get: ca_array_get_callback "
+					  "failed for %s:\n"
+					  " %s\n",
+					  timeStamp(),name()?name():"Unknown",ca_message(rc));
+				}
 			}
+		}
+		else
+		{
+			// do ctrl get only if requested from client
+			if(read_type == ctrlType)
+			{
+				if(!pendingCtrlGet()) {
+					/*check if array is longer than available memory*/
+					if(global_resources->getMaxBytes() >= (unsigned long)(bytes*totalElements()+sizeof(caHdr)+12)){
+						gateDebug0(3,"gatePvData::get() doing ca_array_get_callback of type CTRL\n");
+						setTransTime();
+						markCtrlGetPending();				
+						rc=ca_array_get_callback(dataType(),totalElements(),
+							chID,::getCB,this);
+						if(rc != ECA_NORMAL) {
+							fprintf(stderr,"%s gatePvData::get: ca_array_get_callback "
+							  "failed for %s:\n"
+							  " %s\n",
+							  timeStamp(),name()?name():"Unknown",ca_message(rc));
+						}
+					}else
+					{
+					  fprintf(stderr,"%s gatePvData::get: EPICS_CA_MAX_ARRAY_BYTES to small "
+					  	"for %s.\n"
+					  	"Set EPICS_CA_MAX_ARRAY_BYTES to at least %u\n",
+					  	timeStamp(),name()?name():"Unknown",bytes*totalElements()+sizeof(caHdr)+12);
+					}	
+				}				
+			}
+			else
+			{
+				if(!pendingTimeGet()) {
+					/*check if array is longer than available memory*/	
+					if(global_resources->getMaxBytes() >= (unsigned long)(bytes*totalElements()+sizeof(caHdr)+12)){
+						gateDebug0(3,"gatePvData::get() doing ca_array_get_callback of type TIME\n");
+						setTransTime();
+						markTimeGetPending();	
+						rc=ca_array_get_callback(eventType(),totalElements(),
+							chID,::getTimeCB,this);
+						if(rc != ECA_NORMAL) {
+							fprintf(stderr,"%s gatePvData::get: ca_array_get_callback for DBR_TIME "
+							  "failed for %s:\n"
+							  " %s\n",
+							  timeStamp(),name()?name():"Unknown",ca_message(rc));
+						}
+					}else
+					{
+					  fprintf(stderr,"%s gatePvData::get: EPICS_CA_MAX_ARRAY_BYTES to small "
+					  	"for %s.\n"
+					  	"Set EPICS_CA_MAX_ARRAY_BYTES to at least %u\n",
+					  	timeStamp(),name()?name():"Unknown",bytes*totalElements()+sizeof(caHdr)+12);
+					}
+				}						
+			}	
+
+
 #if OMIT_CHECK_EVENT
 #else
 			checkEvent();
@@ -1085,42 +1255,56 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 			pv->event_type=DBR_TIME_STRING;
 			pv->event_func=&gatePvData::eventStringCB;
 			pv->data_func=&gatePvData::dataStringCB;
+			pv->value_data_func=&gatePvData::dataStringCB;
+			pv->bytes=sizeof(aitFixedString);
 			break;
 		case DBF_SHORT: // DBF_INT is same as DBF_SHORT
 			pv->data_type=DBR_CTRL_SHORT;
 			pv->event_type=DBR_TIME_SHORT;
 			pv->event_func=&gatePvData::eventShortCB;
 			pv->data_func=&gatePvData::dataShortCB;
+			pv->value_data_func=&gatePvData::valueDataShortCB;
+			pv->bytes=sizeof(aitInt16);
 			break;
 		case DBF_FLOAT:
 			pv->data_type=DBR_CTRL_FLOAT;
 			pv->event_type=DBR_TIME_FLOAT;
 			pv->event_func=&gatePvData::eventFloatCB;
 			pv->data_func=&gatePvData::dataFloatCB;
+			pv->value_data_func=&gatePvData::valueDataFloatCB;
+			pv->bytes=sizeof(aitFloat32);
 			break;
 		case DBF_ENUM:
 			pv->data_type=DBR_CTRL_ENUM;
 			pv->event_type=DBR_TIME_ENUM;
 			pv->event_func=&gatePvData::eventEnumCB;
 			pv->data_func=&gatePvData::dataEnumCB;
+			pv->value_data_func=&gatePvData::valueDataEnumCB;
+			pv->bytes=sizeof(aitEnum16);
 			break;
 		case DBF_CHAR:
 			pv->data_type=DBR_CTRL_CHAR;
 			pv->event_type=DBR_TIME_CHAR;
 			pv->event_func=&gatePvData::eventCharCB;
 			pv->data_func=&gatePvData::dataCharCB;
+			pv->value_data_func=&gatePvData::valueDataCharCB;
+			pv->bytes=sizeof(aitInt8);
 			break;
 		case DBF_LONG:
 			pv->data_type=DBR_CTRL_LONG;
 			pv->event_type=DBR_TIME_LONG;
 			pv->event_func=&gatePvData::eventLongCB;
 			pv->data_func=&gatePvData::dataLongCB;
+			pv->value_data_func=&gatePvData::valueDataLongCB;
+			pv->bytes=sizeof(aitInt32);
 			break;
 		case DBF_DOUBLE:
 			pv->data_type=DBR_CTRL_DOUBLE;
 			pv->event_type=DBR_TIME_DOUBLE;
 			pv->event_func=&gatePvData::eventDoubleCB;
 			pv->data_func=&gatePvData::dataDoubleCB;
+			pv->value_data_func=&gatePvData::valueDataDoubleCB;
+			pv->bytes=sizeof(aitFloat64);
 			break;
 		default:
 #if 1
@@ -1133,6 +1317,7 @@ void gatePvData::connectCB(CONNECT_ARGS args)
 			pv->data_type=(chtype)-1;
 			pv->event_func=(gateCallback)NULL;
 			pv->data_func=(gateCallback)NULL;
+			pv->value_data_func=(gateCallback)NULL;
 			break;
 		}
 		pv->max_elements=pv->totalElements();
@@ -1215,6 +1400,8 @@ void gatePvData::eventCB(EVENT_ARGS args)
 	gateDebug2(5,"gatePvData::eventCB(gatePvData=%p) type=%d\n",
 	  (void *)pv, (unsigned int)args.type);
 	gdd* dd;
+	readType read_type = timeType;
+	int stat_sevr_changed = 1;
 
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
@@ -1246,24 +1433,96 @@ void gatePvData::eventCB(EVENT_ARGS args)
 					   dd,
 					   pv->needAddRemove());
 #endif
-				pv->vc->setEventData(dd);
+				stat_sevr_changed = pv->vc->setEventData(dd);
 
 				if(pv->needAddRemove())
 				{
 					gateDebug0(5,"gatePvData::eventCB() need add/remove\n");
 					pv->markAddRemoveNotNeeded();
-					pv->vc->vcAdd();
+					if(!global_resources->getCacheMode())
+						pv->vc->vcAdd(read_type);
+					else{
+						read_type = ctrlType;
+						pv->vc->vcAdd(read_type);
+					}
 				}
 				else
 				{
 					// Post the event
-					pv->vc->vcPostEvent();
+					if(stat_sevr_changed)
+						pv->vc->vcPostEvent(pv->mrg->alarmEventMask() | pv->mrg->valueEventMask());
+					else
+						pv->vc->vcPostEvent(pv->mrg->valueEventMask());
 				}
 			}
 		}
 		++(pv->event_count);
 	}
 }
+
+void gatePvData::logEventCB(EVENT_ARGS args)
+{
+	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
+	gateDebug2(5,"gatePvData::LogEventCB(gatePvData=%p) type=%d\n",
+	  (void *)pv, (unsigned int)args.type);
+	gdd* dd;
+	readType read_type = timeType;
+
+
+#ifdef RATE_STATS
+	++pv->mrg->client_event_count;
+#endif
+
+#if DEBUG_BEAM
+	printf("gatePvData::LogEventCB(): status=%d %s\n",
+	  args.status,
+	  pv->name());
+#endif
+
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pv->name(),6)) {
+		printf("%s gatePvData::LogEventCB: %s state=%d\n",timeStamp(),pv->name(),
+		  pv->getState());
+	}
+#endif
+
+	if(args.status==ECA_NORMAL)
+	{
+		// only sends event_data and does ADD transactions
+		if(pv->active())
+		{
+			gateDebug1(5,"gatePvData::LogEventCB() %s PV\n",pv->getStateName());
+			if((dd=pv->runEventCB((void *)(args.dbr))))
+			{
+#if DEBUG_BEAM
+				printf("  dd=%p needAddRemove=%d\n",
+					   dd,
+					   pv->needAddRemove());
+#endif
+				pv->vc->setEventData(dd);
+
+				if(pv->needAddRemove())
+				{
+					gateDebug0(5,"gatePvData::LogEventCB() need add/remove\n");
+					pv->markAddRemoveNotNeeded();
+					if(!global_resources->getCacheMode())
+						pv->vc->vcAdd(read_type);
+					else{
+						read_type = ctrlType;
+						pv->vc->vcAdd(read_type);
+					}
+				}
+				else
+				{
+					// Post the event
+					pv->vc->vcPostEvent(pv->mrg->logEventMask());
+				}
+			}
+		}
+		++(pv->event_count);
+	}
+}
+
 
 // This is the callback registered with ca_add_subscription in the
 // alhMonitor routine.  If conditions are right, it calls the routines
@@ -1318,6 +1577,8 @@ void gatePvData::getCB(EVENT_ARGS args)
 	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
 	gateDebug1(5,"gatePvData::getCB(gatePvData=%p)\n",(void *)pv);
 	gdd* dd;
+	readType read_type = ctrlType;
+
 
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
@@ -1334,15 +1595,51 @@ void gatePvData::getCB(EVENT_ARGS args)
 	}
 #endif
 
-	pv->markNoGetPending();
+
+	pv->markNoCtrlGetPending();
 	if(args.status==ECA_NORMAL)
 	{
-		// get only sends pv_data
+
 		if(pv->active())
 		{
 			gateDebug1(5,"gatePvData::getCB() %s PV\n",pv->getStateName());
 			if((dd=pv->runDataCB((void *)(args.dbr)))) pv->vc->setPvData(dd);
-			pv->monitor();
+			
+			if(!global_resources->getCacheMode()) //we must set also value if only ctrl was requested from client
+			{
+				if((dd=pv->runValueDataCB((void *)(args.dbr)))) pv->vc->setEventData(dd);
+				
+				if(pv->needAddRemove() && !pv->vc->needPosting())
+				{
+					gateDebug0(5,"gatePvData::getCB() need add/remove\n");
+					pv->markAddRemoveNotNeeded();
+					pv->vc->vcAdd(read_type);
+				}
+				else
+					pv->vc->vcData(read_type);				
+				
+				if(pv->vc->needPosting() && !pv->monitored()) // do monitor only if requested
+				{
+					pv->monitor();
+
+				}
+				
+				if(pv->vc->needPosting() &&  // do archive monitor only if requested
+				   global_resources->getArchiveMode() &&
+				   !pv->logMonitored() &&
+				   (pv->vc->client_mask == DBE_LOG)) pv->logMonitor();	
+															
+			}
+			else
+			{
+				pv->monitor();//chacing enabled
+				
+				if(pv->vc->needPosting() &&  // do archive monitor only if requested
+				   global_resources->getArchiveMode() &&
+				   !pv->logMonitored() &&
+				   (pv->vc->client_mask == DBE_LOG)) pv->logMonitor();		 
+			}
+
 		}
 	}
 	else
@@ -1350,7 +1647,89 @@ void gatePvData::getCB(EVENT_ARGS args)
 		// problems with the PV if status code not normal - attempt monitor
 		// should check if Monitor() fails and send remove trans if
 		// needed
-		if(pv->active()) pv->monitor();
+		if(pv->active())
+		{
+			if(global_resources->getCacheMode())//chacing enabled
+			{
+				pv->monitor();
+				if(pv->vc->needPosting() &&  // do archive monitor only if requested
+				   global_resources->getArchiveMode() &&
+				   !pv->logMonitored() &&
+				   (pv->vc->client_mask == DBE_LOG)) pv->logMonitor();	
+			}
+			else
+			{
+				if(pv->vc->needPosting())
+				{
+					pv->monitor();
+				}
+				
+				if(pv->vc->needPosting() &&  // do archive monitor only if requested
+				   global_resources->getArchiveMode() &&
+				   !pv->logMonitored() &&
+				   (pv->vc->client_mask == DBE_LOG)) pv->logMonitor();		
+									
+			}
+		}
+			
+	}
+}
+
+void gatePvData::getTimeCB(EVENT_ARGS args)
+{
+	gatePvData* pv=(gatePvData*)ca_puser(args.chid);
+	gateDebug1(5,"gatePvData::getTimeCB(gatePvData=%p)\n",(void *)pv);
+	gdd* dd;
+	readType read_type = timeType;
+
+
+#ifdef RATE_STATS
+	++pv->mrg->client_event_count;
+#endif
+
+#if DEBUG_ENUM
+	printf("gatePvData::getTimeCB\n");
+#endif
+
+#if DEBUG_DELAY
+	if(!strncmp("Xorbit",pv->name(),6)) {
+		printf("%s gatePvData::getTimeCB: %s state=%d\n",timeStamp(),pv->name(),
+		  pv->getState());
+	}
+#endif
+
+	pv->markNoTimeGetPending();
+	if(args.status==ECA_NORMAL)
+	{
+		
+		
+		if(pv->active())
+		{
+			gateDebug1(5,"gatePvData::getTimeCB() %s PV\n",pv->getStateName());
+			if((dd=pv->runEventCB((void *)(args.dbr)))) pv->vc->setEventData(dd);
+			
+			/* flush async get request */
+			if(pv->needAddRemove() && !pv->vc->needPosting())
+			{
+				gateDebug0(5,"gatePvData::getTimeCB() need add/remove\n");
+				pv->markAddRemoveNotNeeded();
+				pv->vc->vcAdd(read_type);
+			}
+			else
+				pv->vc->vcData(read_type);			
+			
+			if(pv->vc->needPosting() && !pv->monitored()) // do monitor only if requested
+			{
+				pv->monitor();
+			}
+			
+			if(pv->vc->needPosting() &&  // do archive monitor only if requested
+			   global_resources->getArchiveMode() &&
+			   !pv->logMonitored() &&
+			    (pv->vc->client_mask == DBE_LOG)) pv->logMonitor();			
+
+
+		}
 	}
 }
 
@@ -1772,16 +2151,195 @@ gdd* gatePvData::eventSTSAckStringCB(dbr_stsack_string *ts)
 
 	// DBR_STSACK_STRING response
 	// (the value gdd carries the severity and status information)
+	
+	// change type of value gdd to native type of pv 	
+	dd[gddAppTypeIndex_dbr_stsack_string_value].setPrimType(nativeType()); 
 
 	dd[gddAppTypeIndex_dbr_stsack_string_ackt] = ts->ackt;
 	dd[gddAppTypeIndex_dbr_stsack_string_acks] = ts->acks;
 
-	aitString* str = (aitString*)vdd.dataAddress();
-	str->copy(ts->value);
-
 	vdd.setStatSevr(ts->status,ts->severity);
 
 	return dd;
+}
+
+// one function for each of the different value type :
+
+gdd* gatePvData::valueDataEnumCB(void *dbr)
+{
+	gateDebug0(10,"gatePvData::valueDataEnumCB\n");
+	dbr_ctrl_enum* ts = (dbr_ctrl_enum*)dbr;
+	aitIndex count = totalElements();
+	gdd* value;
+
+#if DEBUG_ENUM
+	printf("gatePvData::valueDataEnumCB\n");
+#endif
+
+	// DBR_CTRL_ENUM response
+	if(count>1)
+	{
+		// KE: For arrays of enums.  This case was not originally
+		// included and was added 11-2004.  It is not commonly, if
+		// ever, used, so if this implementation is wrong, it may be
+		// awhile before it is discovered.  The waveform can be an
+		// array of enums (FTVL="ENUM"), but there is no support for
+		// the menu strings, so this is an unwise thing to do.  Note
+		// that the menu strings (which don't exist for the waveform)
+		// are added in dataEnumCB.
+		aitEnum16 *d,*nd;
+		nd=new aitEnum16[count];
+		d=(aitEnum16*)&ts->value;
+		memcpy(nd,d,count*sizeof(aitEnum16));
+		value=new gddAtomic(GR->appValue,aitEnumInt16,1,&count);
+		value->putRef(nd,new gateEnumDestruct());
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumEnum16);
+		value->putConvert(ts->value);
+	}
+#if DEBUG_ENUM
+	printf("gatePvData::valueDataEnumCB\n");
+	value->dump();
+#endif
+	value->setStatSevr(ts->status,ts->severity);
+	return value;
+}
+
+gdd* gatePvData::valueDataLongCB(void *dbr)
+{
+	gateDebug0(10,"gatePvData::valueDataLongCB\n");
+	dbr_ctrl_long* ts = (dbr_ctrl_long*)dbr;
+	aitIndex count = totalElements();
+	gdd* value;
+
+	// DBR_CTRL_LONG response
+	// set up the value
+	if(count>1)
+	{
+		aitInt32 *d,*nd;
+		nd=new aitInt32[count];
+		d=(aitInt32*)&ts->value;
+		memcpy(nd,d,count*sizeof(aitInt32));
+		value=new gddAtomic(GR->appValue,aitEnumInt32,1,&count);
+		value->putRef(nd,new gateIntDestruct());
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumInt32);
+		*value=ts->value;
+	}
+	value->setStatSevr(ts->status,ts->severity);
+	return value;
+}
+
+gdd* gatePvData::valueDataCharCB(void *dbr)
+{
+	gateDebug0(10,"gatePvData::valueDataCharCB\n");
+	dbr_ctrl_char* ts = (dbr_ctrl_char*)dbr;
+	aitIndex count = totalElements();
+	gdd* value;
+
+	// DBR_CTRL_CHAR response
+	// set up the value
+	if(count>1)
+	{
+		aitInt8 *d,*nd;
+		nd=new aitInt8[count];
+		d=(aitInt8*)&(ts->value);
+		memcpy(nd,d,count*sizeof(aitInt8));
+		value = new gddAtomic(GR->appValue,aitEnumInt8,1,&count);
+		value->putRef(nd,new gateCharDestruct());
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumInt8);
+		*value=ts->value;
+	}
+	value->setStatSevr(ts->status,ts->severity);
+	return value;
+}
+
+gdd* gatePvData::valueDataFloatCB(void *dbr)
+{
+	gateDebug0(10,"gatePvData::valueDataFloatCB\n");
+	dbr_ctrl_float* ts = (dbr_ctrl_float*)dbr;
+	aitIndex count = totalElements();
+	gdd* value;
+
+	// DBR_TIME_FLOAT response
+	// set up the value
+	if(count>1)
+	{
+		aitFloat32 *d,*nd;
+		nd=new aitFloat32[count];
+		d=(aitFloat32*)&(ts->value);
+		memcpy(nd,d,count*sizeof(aitFloat32));
+		value= new gddAtomic(GR->appValue,aitEnumFloat32,1,&count);
+		value->putRef(nd,new gateFloatDestruct());
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumFloat32);
+		*value=ts->value;
+	}
+	value->setStatSevr(ts->status,ts->severity);
+	return value;
+}
+
+gdd* gatePvData::valueDataDoubleCB(void *dbr)
+{
+	gateDebug0(10,"gatePvData::valueDataDoubleCB\n");
+	dbr_ctrl_double* ts = (dbr_ctrl_double*)dbr;
+	aitIndex count = totalElements();
+	gdd* value;
+
+	// DBR_CTRL_DOUBLE response
+	// set up the value
+	if(count>1)
+	{
+		aitFloat64 *d,*nd;
+		nd=new aitFloat64[count];
+		d=(aitFloat64*)&(ts->value);
+		memcpy(nd,d,count*sizeof(aitFloat64));
+		value= new gddAtomic(GR->appValue,aitEnumFloat64,1,&count);
+		value->putRef(nd,new gateDoubleDestruct());
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumFloat64);
+		*value=ts->value;
+	}
+	value->setStatSevr(ts->status,ts->severity);
+	return value;
+}
+
+gdd* gatePvData::valueDataShortCB(void *dbr)
+{
+	gateDebug0(10,"gatePvData::valueDataShortCB\n");
+	dbr_ctrl_short* ts = (dbr_ctrl_short*)dbr;
+	aitIndex count = totalElements();
+	gdd* value;
+
+	// DBR_CTRL_FLOAT response
+	// set up the value
+	if(count>1)
+	{
+		aitInt16 *d,*nd;
+		nd=new aitInt16[count];
+		d=(aitInt16*)&(ts->value);
+		memcpy(nd,d,count*sizeof(aitInt16));
+		value=new gddAtomic(GR->appValue,aitEnumInt16,1,&count);
+		value->putRef(nd,new gateShortDestruct);
+	}
+	else
+	{
+		value = new gddScalar(GR->appValue,aitEnumInt16);
+		*value=ts->value;
+	}
+	value->setStatSevr(ts->status,ts->severity);
+	return value;
 }
 
 /* **************************** Emacs Editing Sequences ***************** */

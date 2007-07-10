@@ -79,6 +79,8 @@ USR_CXXFLAGS += -DCONTROL_PVS
 USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Install exception handler and print exceptions to log file
 USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
+# Use deny from
+USR_CXXFLAGS += -DUSE_DENYFROM
 # Reserve file descriptor for fopen to avoid fd limit of 256 on Solaris
 USR_CXXFLAGS_solaris += -DRESERVE_FOPEN_FD
 
@@ -93,8 +95,10 @@ ifeq ($(OS_CLASS),WIN32)
   PROD_LIBS = regexObj
   regexObj_DIR = $(EPICS_EXTENSIONS_LIB)
 else
+ifneq ($(OS_CLASS),Linux) 
   PROD_LIBS = regex
   regex_DIR = $(EPICS_EXTENSIONS_LIB)
+endif
 endif
 
 USR_LIBS_DEFAULT += ca cas asHost Com gdd
@@ -114,7 +118,13 @@ gateway_SRCS += gateAsyncIO.cc
 gateway_SRCS += gateAsCa.cc
 gateway_SRCS += gateStat.cc
 
+# need access to casCtx.h
+USR_INCLUDES += -I$(EPICS_BASE)/src/cas/generic
+
 PROD_HOST = gateway
+
+
+
 
 include $(TOP)/configure/RULES
 

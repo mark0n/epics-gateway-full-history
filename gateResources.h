@@ -119,6 +119,15 @@ public:
 
 	void setServerMode(bool mode)        { serverMode=mode; }
 	bool getServerMode(void) const       { return serverMode; }
+	
+	void setCacheMode(bool mode)		 { cacheMode=mode; }
+	bool getCacheMode(void) const	     { return cacheMode; }
+	
+	void setArchiveMode(bool mode)		 { archiveMode=mode; }
+	bool getArchiveMode(void) const	     { return archiveMode; }	
+	
+	void setMaxBytes(unsigned long bytes){ maxBytes=bytes; }
+	unsigned long getMaxBytes() const	 { return maxBytes; }	
 
 	gateAs* getAs(void);
 	bool isAsSetUp(void) const { return as?true:false; }
@@ -137,6 +146,9 @@ private:
 	char *access_file, *pvlist_file, *command_file, *putlog_file, *report_file;
 	int debug_level, ro;
 	bool serverMode;
+	bool cacheMode;
+	bool archiveMode;
+	unsigned long maxBytes;
 	unsigned long event_mask;
 	char event_mask_string[4];
 	time_t connect_timeout,inactive_timeout,dead_timeout;

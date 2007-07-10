@@ -51,6 +51,8 @@
 #include <gdd.h>
 #include <gddApps.h>
 #include <dbMapper.h>
+#include <osiWireFormat.h>
+#include <casCtx.h>
 
 #include "gateResources.h"
 #include "gateServer.h"
@@ -188,7 +190,7 @@ void gateChan::resetAsClient(gateAsEntry *asentry)
 	}
 #if DEBUG_ACCESS
 	printf("user=%s host=%s asentry=%p asclient=%p\n",
-	  user,host,asclient);
+	  user,host,asentry,asclient);
 	report(stdout);
 #endif
 	// Notify the server.  postAccessRightsEvent() just causes the
@@ -312,6 +314,7 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	  mrg->valueEventMask()|
 	  mrg->logEventMask());
 	alh_mask|=mrg->alarmEventMask();
+	client_mask=0u;
 
 	// Important Note: The exist test should have been performed for this
 	// PV already, which means that the gatePvData exists and is connected
@@ -389,9 +392,12 @@ gateVcData::~gateVcData(void)
 		asyncw->removeFromQueue();
 	}
 	gateAsyncR* asyncr;
-	while((asyncr=rio.first()))	{
+	while((asyncr=ctrl_rio.first()))	{
 		asyncr->removeFromQueue();
 	}
+	while((asyncr=time_rio.first()))	{
+		asyncr->removeFromQueue();
+	}	
 	while((asyncr=alhRio.first()))	{
 		asyncr->removeFromQueue();
 	}
@@ -465,7 +471,7 @@ void gateVcData::vcRemove(void)
 // generated there into the event_data when needAddRemove is True,
 // otherwise setEventData is called.  For ENUM's the event_data's
 // related gdd is set to the pv_data, which holds the enum strings.
-void gateVcData::vcAdd(void)
+void gateVcData::vcAdd(readType read_type)
 {
 	// an add indicates that the pv_data and event_data are ready
 	gateDebug1(1,"gateVcData::vcAdd() name=%s\n",name());
@@ -482,7 +488,7 @@ void gateVcData::vcAdd(void)
 	case gateVcConnect:
 		gateDebug0(1,"gateVcData::vcAdd() connecting -> ready\n");
 		setState(gateVcReady);
-		vcNew();
+		vcNew(read_type);
 		break;
 	case gateVcReady:
 		gateDebug0(1,"gateVcData::vcAdd() ready ?\n");
@@ -497,10 +503,11 @@ void gateVcData::vcAdd(void)
 // generated there into the event_data when needAddRemove is False,
 // otherwise vcAdd is called.  For ENUM's the event_data's related gdd
 // is set to the pv_data, which holds the enum strings.
-void gateVcData::setEventData(gdd* dd)
+int gateVcData::setEventData(gdd* dd)
 {
 	gddApplicationTypeTable& app_table=gddApplicationTypeTable::AppTable();
 	gdd* ndd=event_data;
+	int stat_sevr_changed = 1;
 
 	gateDebug2(10,"gateVcData::setEventData(dd=%p) name=%s\n",(void *)dd,name());
 
@@ -518,6 +525,11 @@ void gateVcData::setEventData(gdd* dd)
 
 	if(event_data)
 	{
+		dbr_short_t oldSevr;
+		dbr_short_t newSevr;
+		dbr_short_t oldStat;
+		dbr_short_t newStat;
+	
 		// Containers get special treatment (for performance reasons)
 		if(event_data->isContainer())
 		{
@@ -528,6 +540,11 @@ void gateVcData::setEventData(gdd* dd)
 				app_table.smartCopy(ndd,event_data);
 				event_data->unreference();
 			}
+
+			ndd[gddAppTypeIndex_dbr_stsack_string_value].getStatSevr(oldStat,oldSevr);
+			dd->getStatSevr(newStat,newSevr);		
+			if(oldSevr == newSevr && oldStat == newStat) stat_sevr_changed=0;
+						
 			// Fill in the new value
 			app_table.smartCopy(ndd,dd);
 			event_data = ndd;
@@ -536,6 +553,10 @@ void gateVcData::setEventData(gdd* dd)
 		// Scalar and atomic data: Just replace the event_data
 		else
 		{
+			event_data->getStatSevr(oldStat,oldSevr);
+			dd->getStatSevr(newStat,newSevr);		
+			if(oldSevr == newSevr && oldStat == newStat) stat_sevr_changed=0;			
+			
 			event_data = dd;
 			ndd->unreference();
 		}
@@ -574,6 +595,8 @@ void gateVcData::setEventData(gdd* dd)
 		heading("*** gateVcData::setEventData: end",name());
 	}
 #endif
+		
+	return stat_sevr_changed;
 }
 
 // This function is called by the gatePvData::alhCB to copy the ackt and
@@ -595,6 +618,7 @@ void gateVcData::setAlhData(gdd* dd)
 
 	if(event_data)
 	{
+	
 		// If the event_data is already an ALH Container, ackt/acks are adjusted
 		if(event_data->applicationType() == gddAppType_dbr_stsack_string)
 		{
@@ -648,7 +672,7 @@ void gateVcData::setAlhData(gdd* dd)
 #endif
 
 	// Post the extra alarm data event if there is a change
-	if(ackt_acks_changed) vcPostEvent();
+	if(ackt_acks_changed) vcPostEvent(mrg->alarmEventMask());
 
 #if DEBUG_STATE
 	switch(getState())
@@ -690,7 +714,9 @@ void gateVcData::setPvData(gdd* dd)
 		gateDebug0(2,"gateVcData::setPvData() default state\n");
 		break;
 	}
-	vcData();
+	//don't call vcData if caching disabled
+	//if(global_resources->getCacheMode())
+	//	vcData();
 }
 
 // The state of a process variable in the gateway is maintained in two
@@ -743,7 +769,7 @@ void gateVcData::copyState(gdd &dd)
 #endif
 }
 
-void gateVcData::vcNew(void)
+void gateVcData::vcNew(readType read_type)
 {
 	gateDebug1(10,"gateVcData::vcNew() name=%s\n",name());
 
@@ -756,7 +782,7 @@ void gateVcData::vcNew(void)
 
 	// Flush any accumulated reads and writes
 	if(wio.count()) flushAsyncWriteQueue(GATE_NOCALLBACK);
-	if(rio.count()) flushAsyncReadQueue();
+	if(ctrl_rio.count() || time_rio.count()) flushAsyncReadQueue(read_type);
 	if(!pv->alhGetPending()) {
 		if(alhRio.count()) flushAsyncAlhReadQueue();
 	}
@@ -795,31 +821,59 @@ void gateVcData::flushAsyncWriteQueue(int docallback)
 
 // The asynchronous io queues are filled when the vc is not ready.
 // This routine, called from vcNew, flushes the read queue.
-void gateVcData::flushAsyncReadQueue(void)
+void gateVcData::flushAsyncReadQueue(readType read_type)
 {
 	gateDebug1(10,"gateVcData::flushAsyncReadQueue() name=%s\n",name());
 	gateAsyncR* asyncr;
 
-	while((asyncr=rio.first()))	{
-		gateDebug2(5,"gateVcData::flushAsyncReadQueue() "
-		  "posting asyncr %p (DD at %p)\n",
-		  (void *)asyncr,(void *)&asyncr->DD());
-		asyncr->removeFromQueue();
-		
+
+	
+	if(read_type == ctrlType)
+	{
+		while((asyncr=ctrl_rio.first()))	{
+			gateDebug2(5,"gateVcData::flushAsyncReadQueue() (ctrl read) "
+			  "posting asyncr %p (DD at %p)\n",
+			  (void *)asyncr,(void *)&asyncr->DD());
+			asyncr->removeFromQueue();
+			
 #if DEBUG_GDD
-		heading("gateVcData::flushAsyncReadQueue",name());
-		dumpdd(1,"asyncr->DD()(before)",name(),&asyncr->DD());
+			heading("gateVcData::flushAsyncReadQueue",name());
+			dumpdd(1,"asyncr->DD()(before)",name(),&asyncr->DD());
 #endif
-		// Copy the current state into the asyncr->DD()
-		copyState(asyncr->DD());
+			// Copy the current state into the asyncr->DD()
+			copyState(asyncr->DD());
 #if DEBUG_DELAY
-		if(!strncmp("Xorbit",name(),6)) {
-			printf("%s gateVcData::flushAsyncReadQueue: %s state=%d\n",
-			  timeStamp(),name(),getState());
-			printf("  S_casApp_success\n");
-		}
+			if(!strncmp("Xorbit",name(),6)) {
+				printf("%s gateVcData::flushAsyncReadQueue: %s state=%d\n",
+				  timeStamp(),name(),getState());
+				printf("  S_casApp_success\n");
+			}
 #endif
-		asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
+			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
+		}
+	}
+	else{
+		while((asyncr=time_rio.first()))	{
+			gateDebug2(5,"gateVcData::flushAsyncReadQueue() (time read) "
+			  "posting asyncr %p (DD at %p)\n",
+			  (void *)asyncr,(void *)&asyncr->DD());
+			asyncr->removeFromQueue();
+			
+#if DEBUG_GDD
+			heading("gateVcData::flushAsyncReadQueue",name());
+			dumpdd(1,"asyncr->DD()(before)",name(),&asyncr->DD());
+#endif
+			// Copy the current state into the asyncr->DD()
+			copyState(asyncr->DD());
+#if DEBUG_DELAY
+			if(!strncmp("Xorbit",name(),6)) {
+				printf("%s gateVcData::flushAsyncReadQueue: %s state=%d\n",
+				  timeStamp(),name(),getState());
+				printf("  S_casApp_success\n");
+			}
+#endif
+			asyncr->postIOCompletion(S_casApp_success,asyncr->DD());
+		}		
 	}
 }
 
@@ -856,7 +910,7 @@ void gateVcData::flushAsyncAlhReadQueue(void)
 // Called from setEventData, which is called from the gatePvData's
 // eventCB.  Posts an event to the server library owing to changes in
 // the process variable.
-void gateVcData::vcPostEvent(void)
+void gateVcData::vcPostEvent(casEventMask event_mask)
 {
 	gateDebug1(10,"gateVcData::vcPostEvent() name=%s\n",name());
 //	time_t t;
@@ -871,7 +925,8 @@ void gateVcData::vcPostEvent(void)
 	if(needPosting())
 	{
 		gateDebug1(2,"gateVcData::vcPostEvent() posting event (event_data at %p)\n",
-		  (void *)event_data);
+			(void *)event_data);
+			
 		if(event_data->isAtomic())
 		{
 #if DEBUG_EVENT_DATA
@@ -883,7 +938,9 @@ void gateVcData::vcPostEvent(void)
 			heading("gateVcData::vcPostEvent(1)",name());
 			dumpdd(1,"event_data",name(),event_data);
 #endif
-			postEvent(select_mask,*event_data);
+
+				postEvent(event_mask,*event_data);
+				
 #ifdef RATE_STATS
 			mrg->post_event_count++;
 #endif
@@ -902,7 +959,9 @@ void gateVcData::vcPostEvent(void)
 				heading("gateVcData::vcPostEvent(2)",name());
 				dumpdd(1,"event_data",name(),event_data);
 #endif
-				postEvent(select_mask,*event_data);
+
+				postEvent(event_mask,*event_data);
+		
 #ifdef RATE_STATS
 				mrg->post_event_count++;
 #endif
@@ -910,10 +969,15 @@ void gateVcData::vcPostEvent(void)
 	}
 }
 
-void gateVcData::vcData()
+void gateVcData::vcData(readType read_type)
 {
 	// pv_data just appeared - don't really care
 	gateDebug1(10,"gateVcData::vcData() name=%s\n",name());
+	
+	//flush any accumulated reads if caching disabled
+	if(!global_resources->getCacheMode()){		
+		if(ctrl_rio.count() || time_rio.count()) flushAsyncReadQueue(read_type);
+	}
 }
 
 void gateVcData::vcDelete(void)
@@ -939,6 +1003,20 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 {
 	gateDebug1(10,"gateVcData::read() name=%s\n",name());
 	static const aitString str = "Not Supported by Gateway";
+	readType read_type = ctrlType;
+	
+	
+	/* This is to obtain mask from client */
+	if(ctx.getMsg()->m_cmmd == CA_PROTO_EVENT_ADD){
+		struct mon_info *pMonInfo = (struct mon_info *) ctx.getData();
+	//If build with R3.14.9 next two lines must be switched	
+     	ca_uint16_t caProtoMask = AlignedWireRef < epicsUInt16 >(pMonInfo->m_mask);
+		//ca_uint16_t caProtoMask = epicsNTOH16 (pMonInfo->m_mask);
+
+		if (caProtoMask & DBE_LOG) {
+			client_mask = DBE_LOG;
+		}
+	}
 
 #if DEBUG_GDD || DEBUG_ENUM
 	heading("gateVcData::read",name());
@@ -1012,6 +1090,10 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			gateDebug0(10,"gateVcData::read() alh data not ready\n");
 			// the read will complete when the data is available
 			alhRio.add(*(new gateAsyncR(ctx,dd,&alhRio)));
+			if(!global_resources->getCacheMode())
+			{
+				pv->get(timeType);
+			}			
 			return S_casApp_asyncCompletion;
 		} else if(pending_write) {
 			// Pending write in progress, don't read now
@@ -1021,12 +1103,20 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			copyState(dd);
 		}
 		return S_casApp_success;
+	case gddAppType_value: if(!global_resources->getCacheMode()) read_type = timeType;
 	default:
 		if(!ready()) {
 			// Specify async return if PV not ready
 			gateDebug0(10,"gateVcData::read() pv not ready\n");
 			// the read will complete when the connection is complete
-			rio.add(*(new gateAsyncR(ctx,dd,&rio)));
+			if(read_type == ctrlType)
+				ctrl_rio.add(*(new gateAsyncR(ctx,dd,&ctrl_rio)));
+			else
+				time_rio.add(*(new gateAsyncR(ctx,dd,&time_rio)));
+			if(!global_resources->getCacheMode()) 
+			{
+				pv->get(read_type);
+			}
 #if DEBUG_GDD
 			fflush(stderr);
 			printf("gateVcData::read: return S_casApp_asyncCompletion\n");
@@ -1053,7 +1143,17 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			}
 #endif
 			return S_casApp_postponeAsyncIO;
-		} else {
+		} else if(!global_resources->getCacheMode())
+		{// get request forwarded to pv if caching disabled
+			if(read_type == ctrlType)
+				ctrl_rio.add(*(new gateAsyncR(ctx,dd,&ctrl_rio)));
+			else
+				time_rio.add(*(new gateAsyncR(ctx,dd,&time_rio)));			
+
+			pv->get(read_type);
+			return S_casApp_asyncCompletion;
+		}
+		else{
 			// Copy the current state into the dd
 			copyState(dd);
 #if DEBUG_GDD
@@ -1096,6 +1196,7 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 {
 	int docallback=GATE_DOCALLBACK;
+	
 
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
 

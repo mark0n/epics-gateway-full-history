@@ -78,6 +78,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
+
 #ifdef SOLARIS
 // Is in stdlib.h elsewhere, not available on WIN32
 #include <sys/loadavg.h>
@@ -1496,7 +1497,13 @@ void gateServer::inactiveDeadCleanup(void)
 	setInactiveCheckTime();
 }
 
-pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr&,
+#ifdef USE_DENYFROM
+pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr& clientAddress,
+  const char* pvname)
+{
+
+#else
+pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr& clientAddress,
   const char* pvname)
 {
 	return pvExistTest(ctx, pvname);
@@ -1504,6 +1511,7 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const caNetAddr&,
 
 pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 {
+#endif
 	gateDebug2(5,"gateServer::pvExistTest(ctx=%p,pv=%s)\n",(void *)&ctx,pvname);
 	gatePvData* pv;
 	pvExistReturn rc;
@@ -1540,8 +1548,19 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 		char hostname[GATE_MAX_HOSTNAME_LENGTH];
 		
 		// Get the hostname and check if it is allowed
-		getClientHostName(ctx, hostname, sizeof(hostname));
+		//getClientHostName(ctx, hostname, sizeof(hostname));
+		//clientAddress.stringConvert(hostname, sizeof(hostname))
 		
+		struct sockaddr_in sockAdd	= clientAddress.getSockIP();
+		struct sockaddr_in* pSockAdd;
+		pSockAdd = &sockAdd;
+
+		ipAddrToDottedIP(pSockAdd,hostname,sizeof(hostname));
+		char * ch;
+		ch=strchr(hostname,':');
+		if(ch != NULL) hostname[ch-hostname]=0;			
+		
+				
 		// See if requested name is allowed and check for aliases
 		if ( !(pEntry = getAs()->findEntry(pvname, hostname)) )
 		{
@@ -1584,13 +1603,13 @@ pvExistReturn gateServer::pvExistTest(const casCtx& ctx, const char* pvname)
 
     pEntry->getRealName(pvname, real_name, sizeof(real_name));
 
-#ifdef USE_DENYFROM
-    gateDebug3(1,"gateServer::pvExistTest() %s (from %s) real name %s\n",
-	  pvname, hostname, real_name);
-#else
+//#ifdef USE_DENYFROM
+//    gateDebug3(1,"gateServer::pvExistTest() %s (from %s) real name %s\n",
+//	  pvname, hostname, real_name);
+//#else
     gateDebug2(1,"gateServer::pvExistTest() %s real name %s\n",
 	  pvname, real_name);
-#endif
+//#endif
 
 #if statCount
 	// Check internal PVs

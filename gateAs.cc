@@ -42,6 +42,7 @@
 
 #include "tsSLList.h"
 #include <epicsVersion.h>
+#include <osiSock.h>
 
 #include "gateAs.h"
 #include "gateResources.h"
@@ -285,7 +286,6 @@ gateAs::~gateAs(void)
 #ifdef USE_DENYFROM
 // Probably OK but not checked for reinitializing all of access
 // security including the pvlist.
-# error DENY FROM implementation should be checked here
 	tsSLIter<gateAsHost> pi = host_list.firstIter();
 	gateAsList* l;
 	
@@ -293,8 +293,10 @@ gateAs::~gateAs(void)
 	while(pi.pointer())	{
 		pNode=pi.pointer();
 		deny_from_table.remove(pNode->host,l);
-		deleteAsList(*l);
+		clearAsList(*l);
+		pi++;
 	}
+	clearHostList(host_list);
 #endif
 	
 	clearAsList(deny_list);
@@ -323,6 +325,16 @@ void gateAs::clearAsList(gateLineList& list)
 		if(pl) delete pl;
 	}
 }
+#ifdef USE_DENYFROM
+// Remove the items from the list and delete them
+void gateAs::clearHostList(gateHostList& list)
+{
+	while(list.first()) {
+		gateAsHost *ph=list.get();
+		if(ph) delete ph;
+	}
+}
+#endif
 
 gateAsEntry* gateAs::findEntryInList(const char* pv, gateAsList& list) const
 {
@@ -342,6 +354,10 @@ int gateAs::readPvList(const char* lfile)
 	int line=0;
 	FILE* fd;
 	char inbuf[GATE_MAX_PVLIST_LINE_LENGTH];
+#ifdef USE_DENYFROM		
+	char inbufWithIPs[GATE_MAX_PVLIST_LINE_LENGTH];	
+	char tempInbuf[GATE_MAX_PVLIST_LINE_LENGTH];
+#endif
 	const char *pattern,*rname,*hname;
 	char *cmd,*asg,*asl,*ptr;
 	gateAsEntry* pe;
@@ -375,22 +391,92 @@ int gateAs::readPvList(const char* lfile)
 	
 	// Read all PV file lines
 	while(fgets(inbuf,sizeof(inbuf),fd)) {
-		if((ptr=strchr(inbuf,'#'))) *ptr='\0'; // Take care of comments
+				
 		
-		// Allocate memory for input line
-		pl=new gateAsLine(inbuf,strlen(inbuf),line_list);
 		++line;
-		pattern=rname=hname=NULL;
-		if(!(pattern=strtok(pl->buf," \t\n"))) continue;
+		pattern=rname=hname=NULL;		
 		
-		// Two strings (pattern and command) are mandatory
+#ifdef USE_DENYFROM		
+		//All deny from rules with host names will be conveted to ip addresses		
+		strncpy(tempInbuf,inbuf,strlen(inbuf));
+		tempInbuf[strlen(inbuf)-1]='\0';
+		
+		if((ptr=strchr(inbuf,'#'))) *ptr='\0'; // Take care of comments		
+			
+		if(!(pattern=strtok(inbuf," \t\n"))) continue;
 		
 		if(!(cmd=strtok(NULL," \t\n")))	{
 			fprintf(stderr,"Error in PV list file (line %d): "
 			  "missing command\n",line);
 			continue;
 		}
+		if(strcasecmp(cmd,"DENY")==0) {              
+			// Arbitrary number of arguments: [from] host names
+			if((hname=strtok(NULL,", \t\n")) && strcasecmp(hname,"FROM")==0)
+			  hname=strtok(NULL,", \t\n");
+			if(hname) {           // host pattern(s) present
+				struct sockaddr_in sockAdd;
+				struct sockaddr_in* pSockAdd;				
+				char hostname[GATE_MAX_HOSTNAME_LENGTH];			
+				int status;				
+				char *ch;
+				char *pIPInput;
+				
+				pSockAdd = &sockAdd;
+				
+				strncpy(inbufWithIPs,tempInbuf,hname - inbuf);
+				
+				pIPInput = inbufWithIPs + (hname - inbuf);
+
+				do {										
+					/*convert all host names to ip addresses*/										
+					status = aToIPAddr(hname,0,pSockAdd);
+
+					if(status != -1)
+					{
+						ipAddrToDottedIP(pSockAdd,hostname,sizeof(hostname));
+						ch=strchr(hostname,':');
+						if(ch != NULL) hostname[ch-hostname]=0;
+						
+						strncpy(pIPInput,hostname,strlen(hostname));
+						*(pIPInput+strlen(hostname)) = ' ';
+						pIPInput = pIPInput + strlen(hostname) + 1;
+					}
+					else{
+						fprintf(stderr,"Error in PV list file (line %d): "
+			  				"cannot resolve host name >%s<\n",line,hname);
+					}					
+
+				} while((hname=strtok(NULL,", \t\n")));
+				
+				*(pIPInput)='\0';
+				
+			}else
+			{
+				strncpy(inbufWithIPs,tempInbuf,strlen(tempInbuf));
+				inbufWithIPs[strlen(tempInbuf)]='\0';
+			}
+				
+		}else
+		{
+			strncpy(inbufWithIPs,tempInbuf,strlen(tempInbuf));
+			inbufWithIPs[strlen(tempInbuf)]='\0';
+		}
+
+		pl=new gateAsLine(inbufWithIPs,strlen(inbufWithIPs),line_list);				
+#else
+		if((ptr=strchr(inbuf,'#'))) *ptr='\0'; // Take care of comments	
+		pl=new gateAsLine(inbuf,strlen(inbuf),line_list);
+#endif
+		if(!(pattern=strtok(pl->buf," \t\n"))) continue;
 		
+		if(!(cmd=strtok(NULL," \t\n")))	{
+			fprintf(stderr,"Error in PV list file (line %d): "
+			  "missing command\n",line);
+			continue;
+		}	
+		
+
 #ifdef USE_DENYFROM
 		if(strcasecmp(cmd,"DENY")==0) {                          // DENY [FROM]
 			// Arbitrary number of arguments: [from] host names
@@ -549,9 +635,17 @@ long gateAs::reInitialize(const char* afile, const char* lfile)
 
 	// Cleanup
 #ifdef USE_DENYFROM
-	// There should be no reason to use DENY FROM , but if it is
-	// desired, it needs to be implemented here.
-# error DENY FROM is not implemented here
+	tsSLIter<gateAsHost> pi = host_list.firstIter();
+	gateAsList* l;
+	
+	gateAsHost *pNode;
+	while(pi.pointer())	{
+		pNode=pi.pointer();
+		deny_from_table.remove(pNode->host,l);
+		clearAsList(*l);
+		pi++;
+	}
+	clearHostList(host_list);
 #endif
 	clearAsList(deny_list);
 	clearAsList(allow_list);
@@ -660,6 +754,7 @@ void gateAs::report(FILE* fd)
 			while(pi4.pointer()) {
 				pEntry4=pi4.pointer();
 				fprintf(fd," %s\n",pEntry4->pattern);
+				pi4++;
 			}
 		}
 		pi3++;

@@ -56,3 +56,22 @@ Wed Feb 28 10:02:45 CST 2007   Gateway2-0-0-1
 
 Tue May 22 15:11:09 CDT 2007   Gateway2-0-0-2
 	Removed pre R3.14 Makefiles.
+
+Tue Jul 10 14:54:49 CDT 2007   Gateway2-0-1-0  Changes from Dirk Zimoch
+	The two main changes in behavior ("don't use cached values in caget"
+	and "create separate archive monitor for archivers") are controlled by
+	command line switches: -no_cache and -archive.
+
+	The option to use "DENY FROM" in the configuration is chosen by a 
+	compiler switch in the Makefile.
+
+	Other changes fix bugs (enable behavior that matches the documentation 
+	or the expectation) without any switch:
+	- events are now forwared to alarm handler clients only when STAT or 
+	  SEVR changes
+	- bugfix: beacons were not sent to clients when -cip option was used.
+	- bugfix: enums appeared frozen and analog values were rounded when 
+	  alarm handler client is connected
+	- bugfix: gateway hung (using 100% CPU time) then arrays > 
+	  EPICS_CA_MAX_ARRAY_BYTES were read.
+

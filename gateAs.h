@@ -224,6 +224,9 @@ private:
 	long initialize(const char* as_file);
 	void clearAsList(gateAsList& list);
 	void clearAsList(gateLineList& list);
+#ifdef USE_DENYFROM	
+	void clearHostList(gateHostList& list);
+#endif	
 	gateAsEntry* findEntryInList(const char* pv, gateAsList& list) const;
 
 	// These are static only so they can be used in readFunc callback
@@ -240,7 +243,7 @@ public:
 inline gateAsEntry* gateAs::findEntry(const char* pv, const char* host)
 {
 	gateAsList* pl=NULL;
-
+	
 	if(host && deny_from_table.find(host,pl)==0 &&	// DENY FROM
 	   findEntryInList(pv, *pl)) return NULL;
 	

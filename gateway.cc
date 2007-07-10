@@ -54,6 +54,7 @@
 #include <osiProcess.h>
 #include <gdd.h>
 #include <epicsVersion.h>
+#include <caProto.h>
 #include "gateResources.h"
 #include "gateServer.h"
 
@@ -163,16 +164,22 @@ void operator delete(void* x)
 #define PARM_DISCONNECT       23
 #define PARM_MASK             24
 #define PARM_SERVER_IGNORE_IP 25
+#define PARM_CACHE 			  26
+#define PARM_ARCHIVE		  27
+
 
 #define HOME_DIR_SIZE    300
 
 static char *gate_ca_auto_list=NULL;
+static char *gate_beacon_ca_auto_list=NULL;
 static char *server_ip_addr=NULL;
 static char *server_ignore_ip_addr=NULL;
 static char *client_ip_addr=NULL;
 static int server_port=0;
 static int client_port=0;
 static int make_server=0;
+static bool cache=1;
+static bool archive=0;
 static char *home_directory;
 static const char *log_file=NULL;
 static const char *putlog_file=NULL;
@@ -216,6 +223,8 @@ static PARM_STUFF ptable[] = {
     { "-ro",                  3, PARM_RO,          NULL },
     { "-prefix",              7, PARM_PREFIX,      "statistics_prefix" },
     { "-mask",                5, PARM_MASK,        "event_mask" },
+	{ "-no_cache",            9, PARM_CACHE,       "(no caching)" },
+	{ "-archive",             8, PARM_ARCHIVE,     "archive monitor" },	
     { "-help",                5, PARM_HELP,        NULL },
     { NULL,                  -1, -1,               NULL }
 };
@@ -348,6 +357,14 @@ static int startEverything(char *prefix)
 		// EPICS_CA_AUTO_ADDR_LIST=NO must be set also as this branch
 		// will not be taken.
 		status=setEnv("EPICS_CA_AUTO_ADDR_LIST","NO",&gate_ca_auto_list);
+		/*gjansa: for beacons*/
+		char *tempBuff;
+		tempBuff = getenv("EPICS_CAS_AUTO_BEACON_ADDR_LIST");
+		if(tempBuff != NULL){
+			if(strcasecmp(tempBuff,"NO")){
+				status=setEnv("EPICS_CAS_AUTO_BEACON_ADDR_LIST","YES",&gate_beacon_ca_auto_list);
+			}
+		}
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_auto_list);
 		gateDebug1(15,"gateway setting <%s>\n",gate_ca_list);
 	}
@@ -416,6 +433,8 @@ static int startEverything(char *prefix)
 	fprintf(fp,"# event mask=%s\n",global_resources->eventMaskString());
 	fprintf(fp,"# user id=%ld\n",(long)getuid());
 	fprintf(fp,"# group id=%ld\n",(long)getgid());
+	fprintf(fp,"# caching=%s\n",global_resources->getCacheMode() ? "enabled" : "disabled" );
+	fprintf(fp,"# archive monitor=%s\n",global_resources->getArchiveMode() ? "enabled" : "disabled" );	
 
 	// Print command-line arguments
 	fprintf(fp,"# \n");
@@ -727,6 +746,14 @@ int main(int argc, char** argv)
 					make_server=1;
 					not_done=0;
 					break;
+				case PARM_CACHE:
+					cache=0;
+					not_done=0;
+					break;	
+				case PARM_ARCHIVE:
+					archive=1;
+					not_done=0;
+					break;						
 				case PARM_RO:
 					read_only=1;
 					not_done=0;
@@ -1042,6 +1069,8 @@ int main(int argc, char** argv)
 		fprintf(stderr,"\treconnect=%ld\n",gr->reconnectInhibit());
 		fprintf(stderr,"\tinactive=%ld\n",gr->inactiveTimeout());
 		fprintf(stderr,"\tmask=%s\n",gr->eventMaskString());
+		fprintf(stderr,"\tcaching = %s\n",gr->getCacheMode() ? "enabled" : "disabled" );
+		fprintf(stderr,"\tarchive monitor = %s\n",gr->getArchiveMode() ? "enabled" : "disabled" );		
 #ifndef WIN32
 		fprintf(stderr,"\tuser id=%ld\n",(long)getuid());
 		fprintf(stderr,"\tgroup id=%ld\n",(long)getgid());
@@ -1085,6 +1114,18 @@ int main(int argc, char** argv)
 	if(command_file)		gr->setCommandFile(command_file);
 	if(putlog_file)	    	gr->setPutlogFile(putlog_file);
 	if(report_file)	    	gr->setReportFile(report_file);
+	
+	//set caching and archive mode 
+	gr->setCacheMode(cache);
+	gr->setArchiveMode(archive);
+	
+	//get EPICS_CA_MAX_ARRAY_BYTES
+    long maxBytesAsALong;
+    long byteStatus =  envGetLongConfigParam ( & EPICS_CA_MAX_ARRAY_BYTES, & maxBytesAsALong );	
+	if ( byteStatus || maxBytesAsALong <= 0 || ((unsigned)maxBytesAsALong < MAX_TCP)) maxBytesAsALong = MAX_TCP;
+	gr->setMaxBytes((unsigned)maxBytesAsALong);	
+
+	
 #ifndef WIN32
 	gr->setServerMode(make_server);
 #endif
@@ -1230,6 +1271,8 @@ int main(int argc, char** argv)
 		fprintf(stderr," inactive timeout = %ld\n",gr->inactiveTimeout());
 		fprintf(stderr," dead timeout = %ld\n",gr->deadTimeout());
 		fprintf(stderr," event mask = %s\n",gr->eventMaskString());
+		fprintf(stderr," caching = %s\n",gr->getCacheMode() ? "enabled" : "disabled" );
+		fprintf(stderr," archive monitor = %s\n",gr->getArchiveMode() ? "enabled" : "disabled" );		
 #ifndef WIN32
 		fprintf(stderr," user id= %ld\n",(long)getuid());
 		fprintf(stderr," group id= %ld\n",(long)getgid());
@@ -1361,6 +1404,13 @@ static void print_instructions(void)
 
 	pr(stderr,"-gid number: Run the server with this id, server does a\n");
 	pr(stderr," setgid(2) to this group id number.\n\n");
+	
+	pr(stderr,"-no_cache: Disables caching. Every get request will be forwarded to\n");
+	pr(stderr," the ioc and monitor will be created only if needed.\n");
+	
+	pr(stderr,"-archive: Enables archive monitor. Additional log event monitor is \n");
+	pr(stderr," is created.\n");	
+
 }
 
 #ifndef WIN32

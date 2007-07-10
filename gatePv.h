@@ -61,6 +61,9 @@ typedef enum {
 	gatePvDisconnect
 } gatePvState;
 
+
+
+
 // Other state information is boolean:
 //	monitored state: 0=false or not monitored, 1=true or is monitored
 //	get state: 0=false or no get pending, 1=true or get pending
@@ -107,8 +110,10 @@ public:
 	int dead(void) const { return (pv_state==gatePvDead)?1:0; }
 	int pendingConnect(void) const { return (pv_state==gatePvConnect)?1:0; }
 	
-	int pendingGet(void) const { return (get_state)?1:0; }
+	int pendingCtrlGet(void) const { return (ctrl_get_state)?1:0; }
+	int pendingTimeGet(void) const { return (time_get_state)?1:0; }
 	int monitored(void) const { return (mon_state)?1:0; }
+	int logMonitored(void) const { return (log_mon_state)?1:0; }	
 	int alhMonitored(void) const { return (alh_mon_state)?1:0; }
 	int alhGetPending(void) const { return (alh_get_state)?1:0; }
 	int needAddRemove(void) const { return (complete_flag)?1:0; }
@@ -139,10 +144,12 @@ public:
 	int death(void);                // set to not connected (CAC disconnect)
 	int life(void);                 // set to connected (CAC connect)
 	int monitor(void);              // add monitor
+	int logMonitor(void);           // add log monitor	
 	int unmonitor(void);            // delete monitor
+	int logUnmonitor(void);         // delete log monitor	
 	int alhMonitor(void);           // add alh info monitor
 	int alhUnmonitor(void);         // delete alh info monitor
-	int get(void);                  // get callback
+	int get(readType read_type);                  // get callback
 	int put(const gdd*, int docallback);  // put
 	
 	time_t timeAlive(void) const;
@@ -179,8 +186,12 @@ protected:
 private:
 	void markMonitored(void) { mon_state=1; }
 	void markNotMonitored(void) { mon_state=0; }
-	void markGetPending(void) { get_state=1; }
-	void markNoGetPending(void) { get_state=0; }
+	void markLogMonitored(void) { log_mon_state=1; }
+	void markLogNotMonitored(void) { log_mon_state=0; }		
+	void markCtrlGetPending(void) { ctrl_get_state=1; }
+	void markNoCtrlGetPending(void) { ctrl_get_state=0; }
+	void markTimeGetPending(void) { time_get_state=1; }
+	void markNoTimeGetPending(void) { time_get_state=0; }
 	void markAlhMonitored(void) { alh_mon_state=1; }
 	void markAlhNotMonitored(void) { alh_mon_state=0; }
 	void markAddRemoveNeeded(void) { complete_flag=1; }
@@ -192,6 +203,7 @@ private:
 	
 	gdd* runEventCB(void* data) { return (this->*event_func)(data); }
 	gdd* runDataCB(void* data) { return (this->*data_func)(data); }
+	gdd* runValueDataCB(void* data) { return (this->*value_data_func)(data); }
 	
 	tsDLList<gateAsyncE> eio;  // pending exist test list
 	tsDLList<gatePvCallbackId> callback_list;  // callback list for puts
@@ -204,6 +216,7 @@ private:
 	char* pv_name;             // Name of the process variable
 	chid chID;                 // Channel access ID
 	evid evID;                 // Channel access event id
+	evid logID;                 // Channel access event id	
 	evid alhID;                // Channel access alh info event id
 	chtype event_type;         // DBR type associated with eventCB (event_data)
 	chtype data_type;          // DBR type associated with getCB (pv_data)
@@ -213,9 +226,12 @@ private:
 
 	gateCallback event_func;   // Function called in eventCB for event_data
 	gateCallback data_func;    // Function called in getCB for pv_data
+	gateCallback value_data_func;    // Function called in getCB for pv_data
 	
 	int mon_state;     // 0=not monitored, 1=is monitored
-	int get_state;     // 0=no get pending, 1=get pending
+	int log_mon_state;     // 0=not log monitored, 1=is log monitored	
+	int ctrl_get_state;     // 0=no ctrl get pending, 1=ctrl get pending
+	int time_get_state;     // 0=no time get pending, 1=time get pending
 	int alh_mon_state; // 0=alh info not monitored, 1=alh info is monitored
 	int alh_get_state; // 0=no alh info get pending, 1=alh info get pending
 	int abort_flag;	   // true if activate-connect sequence should be aborted
@@ -224,6 +240,9 @@ private:
 	time_t no_connect_time; // when no one connected to held PV
 	time_t dead_alive_time; // when PV went from dead to alive
 	time_t last_trans_time; // last transaction (put or get) occurred at this time
+	
+	//gjansa: until something better is found out
+	unsigned int bytes;
 
 	// Callback functions used in eventCB
 	gdd* eventStringCB(void*);
@@ -243,14 +262,25 @@ private:
 	gdd* dataDoubleCB(void*);
 	gdd* dataCharCB(void*);
 	gdd* dataLongCB(void*);
+	
+	// Callback functions used in getCB for value
+	gdd* valueDataStringCB(void*);
+	gdd* valueDataEnumCB(void*);
+	gdd* valueDataShortCB(void*);
+	gdd* valueDataFloatCB(void*);
+	gdd* valueDataDoubleCB(void*);
+	gdd* valueDataCharCB(void*);
+	gdd* valueDataLongCB(void*);	
 
 public:
 	static void connectCB(CONNECT_ARGS args);	// connection callback
 	static void accessCB(ACCESS_ARGS args);		// access security callback
 	static void eventCB(EVENT_ARGS args);       // value-changed callback
+	static void logEventCB(EVENT_ARGS args);       // value-changed callback	
     static void alhCB(EVENT_ARGS args);         // alh info value-changed callback
 	static void putCB(EVENT_ARGS args);         // put callback
 	static void getCB(EVENT_ARGS args);         // get callback
+	static void getTimeCB(EVENT_ARGS args);         // get time callback
 };
 
 inline void gatePvData::addET(const casCtx& c)

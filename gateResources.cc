@@ -125,7 +125,9 @@ gateResources::gateResources(void)
       command_file=strDup(GATE_COMMAND_FILE);
     else
       command_file=NULL;
-
+      
+      
+    
 	// Miscellaneous initializations
 	putlog_file=NULL;
 	putlogFp=NULL;
