@@ -19,6 +19,15 @@ include $(TOP)/configure/CONFIG
 # GNU_REGEX_INC = ../../../../regex-0.12
 # GNU_REGEX_LIB = ../../../../regex-0.12
 
+# use Perl compatible regular expressions
+#USE_PCRE=YES
+
+# Negative regexp matching: !pattern matches when pattern does not match
+#USE_NEG_REGEXP=YES
+
+# Enable DENY FROM
+USE_DENY_FROM=YES
+
 # Optimization
 #HOST_OPT = NO
 
@@ -79,8 +88,10 @@ USR_CXXFLAGS += -DCONTROL_PVS
 USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Install exception handler and print exceptions to log file
 USR_CXXFLAGS += -DHANDLE_EXCEPTIONS
+ifeq ($(USE_DENY_FROM),YES)
 # Use deny from
 USR_CXXFLAGS += -DUSE_DENYFROM
+endif
 # Reserve file descriptor for fopen to avoid fd limit of 256 on Solaris
 USR_CXXFLAGS_solaris += -DRESERVE_FOPEN_FD
 
@@ -90,6 +101,10 @@ WIN32_RUNTIME=MD
 USR_CXXFLAGS_WIN32 += /DWIN32 /D_WINDOWS
 USR_LDFLAGS_WIN32 += /SUBSYSTEM:CONSOLE
 
+ifeq ($(USE_PCRE),YES)
+  USR_CXXFLAGS += -DUSE_PCRE
+  USR_SYS_LIBS_DEFAULT += pcre
+else
 ifeq ($(OS_CLASS),WIN32)
 # Use Obj for object libraries and no Obj for import libraries
   PROD_LIBS = regexObj
@@ -98,6 +113,7 @@ else
 ifneq ($(OS_CLASS),Linux) 
   PROD_LIBS = regex
   regex_DIR = $(EPICS_EXTENSIONS_LIB)
+endif
 endif
 endif
 

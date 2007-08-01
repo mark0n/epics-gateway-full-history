@@ -84,3 +84,8 @@ gateway\.\(.*\)            ALIAS     gateway:\1
 gateway\.\(.*\)Flag        ALIAS     gateway:\1Flag          GatewayAdmin
 gateway\.alive             ALIAS     gateway:connected
 gateway\.postEventRate     ALIAS     gateway:clientPostRate
+
+# Use DENY FROM and negated regular expressions to prevent loops in reverse
+# gateways while allowing access to the internal PVs.
+# This requires USE_NEG_REGEXP=YES and USE_DENY_FROM=YES in Makefile.
+# !gateway:.*   DENY FROM <ip address of reverse gateway>

@@ -80,6 +80,11 @@ gateAsEntry::gateAsEntry(const char* pattern, const char* realname, const char* 
 	level(asl),
 	asmemberpvt(NULL)
 {
+#ifdef USE_PCRE
+	pat_buff = NULL;
+	ovector = NULL;
+	ovecsize = 0;
+#else
 	// Set pointers in the pattern buffer
 	pat_buff.buffer=NULL;
 	pat_buff.translate=NULL;
@@ -87,17 +92,22 @@ gateAsEntry::gateAsEntry(const char* pattern, const char* realname, const char* 
 
 	// Initialize registers
 	re_set_registers(&pat_buff,&regs,0,0,0);
+#endif
 }
 
 gateAsEntry::~gateAsEntry(void)
 {
 	// Free allocated stuff in the pattern buffer
+#ifdef USE_PCRE
+	pcre_free(pat_buff);
+	pcre_free(ovector);
+#else
 	regfree(&pat_buff);
-
 	// Free allocted stuff in registers
 	if(regs.start) free(regs.start);
 	if(regs.end) free(regs.end);
 	regs.num_regs=0;
+#endif
 }
 
 long gateAsEntry::removeMember(void)
@@ -126,6 +136,18 @@ void gateAsEntry::getRealName(const char* pv, char* rname, int len)
 				c = alias[++in];
 				if(c >= '0' && c <= '9') {
 					n = c - '0';
+#ifdef USE_PCRE
+					if(n < substrings && ovector[2*n] >= 0) {
+						for(j=ovector[2*n];
+							ir<len && j<ovector[2*n+1];
+							j++)
+						  rname[ir++] = pv[j];
+						if(ir==len)	{
+							rname[ir-1] = '\0';
+							break;
+						}
+					}
+#else
 					if(regs.start[n] >= 0) {
 						for(j=regs.start[n];
 							ir<len && j<regs.end[n];
@@ -136,6 +158,7 @@ void gateAsEntry::getRealName(const char* pv, char* rname, int len)
 							break;
 						}
 					}
+#endif
 					continue;
 				}
 			}
@@ -187,13 +210,36 @@ aitBool gateAsEntry::init(const char* host,	// Host name to deny
 
 aitBool gateAsEntry::compilePattern(int line) {
 	const char *err;
+        
+#ifdef USE_NEG_REGEXP
+        negate_pattern = (pattern[0] == '!');
+        if (negate_pattern) pattern++;
+#endif
+        
+#ifdef USE_PCRE
+	int erroffset;
+        pat_buff = pcre_compile(pattern, 0, &err, &erroffset, NULL);
+	if(!pat_buff)	{
+		fprintf(stderr,"Line %d: Error after %d chars in Perl regexp: %s\n",
+                    line, erroffset, err);
+                fprintf(stderr,"%s\n", pattern);
+                fprintf(stderr,"%*c\n", erroffset+1, '^');
+		return aitFalse;
+	}
+        ovecsize = (pcre_info(pat_buff, NULL, NULL)+1)*3;
+        ovector = (int*) pcre_malloc (sizeof(int)*ovecsize);
+#else
 	pat_buff.translate=0; pat_buff.fastmap=0;
 	pat_buff.allocated=0; pat_buff.buffer=0;
-	
+
 	if((err = re_compile_pattern(pattern, strlen(pattern), &pat_buff)))	{
 		fprintf(stderr,"Line %d: Error in regexp %s : %s\n", line, pattern, err);
 		return aitFalse;
 	}
+#endif
+#ifdef USE_NEG_REGEXP
+        if (negate_pattern) pattern--;
+#endif
 	return aitTrue;
 }
 
@@ -341,8 +387,22 @@ gateAsEntry* gateAs::findEntryInList(const char* pv, gateAsList& list) const
 	tsSLIter<gateAsEntry> pi = list.firstIter();
 	
 	while(pi.pointer()) {
-		if(re_match(&pi->pat_buff,pv,strlen(pv),0,&pi->regs) ==
-		  (int)strlen(pv)) break;
+		int len = strlen(pv);
+#ifdef USE_PCRE
+		pi->substrings=pcre_exec(pi->pat_buff, NULL,
+                    pv, len, 0, PCRE_ANCHORED, pi->ovector, 30);
+		if((pi->substrings>=0 && pi->ovector[1] == len)
+#ifdef USE_NEG_REGEXP                
+		    ^ pi->negate_pattern
+#endif
+		) break;
+#else
+		if((re_match(&pi->pat_buff,pv,len,0,&pi->regs) == len)
+#ifdef USE_NEG_REGEXP                
+		    ^ pi->negate_pattern
+#endif
+		) break;
+#endif
 		pi++;
 	}
 	return pi.pointer();

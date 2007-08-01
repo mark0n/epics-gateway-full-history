@@ -45,6 +45,10 @@ extern "C" {
 #include "tsHash.h"
 #include "aitTypes.h"
 
+#ifdef USE_PCRE
+#include <pcre/pcre.h>
+#else
+
 extern "C" {
 // Patch for regex.h not testing __cplusplus, only __STDC__
 // KE: This leaves __STDC_ changed in some cases
@@ -61,6 +65,7 @@ extern "C" {
 #endif
 }
 
+#endif /* USE_PCRE */
 /*
  * Standard FALSE and TRUE macros
  */
@@ -123,9 +128,19 @@ public:
 	const char* group;
 	int level;
 	ASMEMBERPVT asmemberpvt;
+#ifdef USE_PCRE
+	pcre* pat_buff;
+	int substrings;
+	int ovecsize;
+	int *ovector;
+#else
 	char pat_valid;
 	struct re_pattern_buffer pat_buff;
 	struct re_registers regs;
+#endif
+#ifdef USE_NEG_PAT
+	bool negate_pattern;
+#endif
 	
 private:
 	aitBool compilePattern(int line);

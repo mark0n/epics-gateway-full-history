@@ -57,7 +57,9 @@ Wed Feb 28 10:02:45 CST 2007   Gateway2-0-0-1
 Tue May 22 15:11:09 CDT 2007   Gateway2-0-0-2
 	Removed pre R3.14 Makefiles.
 
-Tue Jul 10 14:54:49 CDT 2007   Gateway2-0-1-0  Changes from Dirk Zimoch
+Tue Jul 10 14:54:49 CDT 2007   Gateway2-0-1-0 = Gateway2-0-0-3  
+        Changes from Dirk Zimoch
+
 	The two main changes in behavior ("don't use cached values in caget"
 	and "create separate archive monitor for archivers") are controlled by
 	command line switches: -no_cache and -archive.
@@ -75,3 +77,13 @@ Tue Jul 10 14:54:49 CDT 2007   Gateway2-0-1-0  Changes from Dirk Zimoch
 	- bugfix: gateway hung (using 100% CPU time) then arrays > 
 	  EPICS_CA_MAX_ARRAY_BYTES were read.
 
+Wed Aug  1 09:20:30 CDT 2007   Gateway2-0-2-0
+	New option to use Perl regexp instead of GNU regexp, controlled with a
+	compiler switch defined in the Makefile.  - Dirk Zimoch
+
+        New options to use DENY FROM and negated regular expressions to prevent
+	loops in reverse gateways while allowing access to the internal PVs.
+        These require USE_NEG_REGEXP=YES and USE_DENY_FROM=YES in Makefile. -
+	Dirk Zimoch
+
+        Added docs subdirectory containing all Gateway docs.
