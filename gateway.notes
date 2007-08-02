@@ -87,3 +87,9 @@ Wed Aug  1 09:20:30 CDT 2007   Gateway2-0-2-0
 	Dirk Zimoch
 
         Added docs subdirectory containing all Gateway docs.
+
+Thu Aug  2 16:32:10 CDT 2007   Gateway2-0-2-1
+	Bug fix to the conditional compilation for the "negated regexp" feature.
+        - Dirk Zimoch
+
+

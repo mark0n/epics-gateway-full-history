@@ -92,6 +92,11 @@ ifeq ($(USE_DENY_FROM),YES)
 # Use deny from
 USR_CXXFLAGS += -DUSE_DENYFROM
 endif
+ifeq ($(USE_NEG_REGEXP),YES)
+# Use deny from
+USR_CXXFLAGS += -DUSE_NEG_REGEXP
+endif
+
 # Reserve file descriptor for fopen to avoid fd limit of 256 on Solaris
 USR_CXXFLAGS_solaris += -DRESERVE_FOPEN_FD
 

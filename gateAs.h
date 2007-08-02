@@ -138,7 +138,7 @@ public:
 	struct re_pattern_buffer pat_buff;
 	struct re_registers regs;
 #endif
-#ifdef USE_NEG_PAT
+#ifdef USE_NEG_REGEXP
 	bool negate_pattern;
 #endif
 	
