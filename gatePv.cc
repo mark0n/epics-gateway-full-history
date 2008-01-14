@@ -189,6 +189,12 @@ gatePvData::gatePvData(gateServer* m,gateAsEntry* pase,const char* name)
 		  getStateName());
 	}
 #endif
+
+	select_mask|=(mrg->alarmEventMask()|mrg->valueEventMask()|mrg->logEventMask());
+	alh_mask|=mrg->alarmEventMask();
+	value_alarm_mask|=(mrg->valueEventMask()|mrg->alarmEventMask());
+	value_log_mask|=(mrg->valueEventMask()|mrg->logEventMask());
+	value_mask|=mrg->valueEventMask();
 }
 
 gatePvData::~gatePvData(void)
@@ -959,7 +965,7 @@ int gatePvData::get(readType read_type)
 			{
 				if(!pendingCtrlGet()) {
 					/*check if array is longer than available memory*/
-					if(global_resources->getMaxBytes() >= (unsigned long)(bytes*totalElements()+sizeof(caHdr)+12)){
+					if(global_resources->getMaxBytes() >= (unsigned long)(bytes*totalElements()+sizeof(caHdr) + 2 * sizeof ( ca_uint32_t ))){
 						gateDebug0(3,"gatePvData::get() doing ca_array_get_callback of type CTRL\n");
 						setTransTime();
 						markCtrlGetPending();				
@@ -976,15 +982,15 @@ int gatePvData::get(readType read_type)
 					  fprintf(stderr,"%s gatePvData::get: EPICS_CA_MAX_ARRAY_BYTES to small "
 					  	"for %s.\n"
 					  	"Set EPICS_CA_MAX_ARRAY_BYTES to at least %u\n",
-					  	timeStamp(),name()?name():"Unknown",bytes*totalElements()+sizeof(caHdr)+12);
+					  	timeStamp(),name()?name():"Unknown",bytes*totalElements()+sizeof(caHdr) + 2 * sizeof ( ca_uint32_t ));
 					}	
 				}				
 			}
 			else
 			{
 				if(!pendingTimeGet()) {
-					/*check if array is longer than available memory*/	
-					if(global_resources->getMaxBytes() >= (unsigned long)(bytes*totalElements()+sizeof(caHdr)+12)){
+					/*check if array is longer than available memory*/
+					if(global_resources->getMaxBytes() >= (unsigned long)(bytes*totalElements()+sizeof(caHdr) + 2 * sizeof ( ca_uint32_t ))){
 						gateDebug0(3,"gatePvData::get() doing ca_array_get_callback of type TIME\n");
 						setTransTime();
 						markTimeGetPending();	
@@ -1001,7 +1007,7 @@ int gatePvData::get(readType read_type)
 					  fprintf(stderr,"%s gatePvData::get: EPICS_CA_MAX_ARRAY_BYTES to small "
 					  	"for %s.\n"
 					  	"Set EPICS_CA_MAX_ARRAY_BYTES to at least %u\n",
-					  	timeStamp(),name()?name():"Unknown",bytes*totalElements()+sizeof(caHdr)+12);
+					  	timeStamp(),name()?name():"Unknown",bytes*totalElements()+sizeof(caHdr)+2 * sizeof ( ca_uint32_t ));
 					}
 				}						
 			}	
@@ -1378,7 +1384,7 @@ void gatePvData::putCB(EVENT_ARGS args)
 	delete cbid;
 
 	// Check if the put was successful
-	if(args.status != ECA_NORMAL) return;
+	if(args.status != ECA_NORMAL) return;	
 	
 	// Check if the originating vc is still around.
 	if(!pv->vc || pv->vc->getVcID() != vcid) return;
@@ -1448,11 +1454,21 @@ void gatePvData::eventCB(EVENT_ARGS args)
 				}
 				else
 				{
-					// Post the event
-					if(stat_sevr_changed)
-						pv->vc->vcPostEvent(pv->mrg->alarmEventMask() | pv->mrg->valueEventMask());
-					else
-						pv->vc->vcPostEvent(pv->mrg->valueEventMask());
+					
+					if(global_resources->getArchiveMode()){
+						// Post the event
+						if(stat_sevr_changed)
+							pv->vc->vcPostEvent(pv->value_alarm_mask);
+						else
+							pv->vc->vcPostEvent(pv->value_mask);
+					}
+					else{
+						// Post the event
+						if(stat_sevr_changed)
+							pv->vc->vcPostEvent(pv->select_mask);
+						else
+							pv->vc->vcPostEvent(pv->value_log_mask);						
+					}
 				}
 			}
 		}
@@ -2349,3 +2365,5 @@ gdd* gatePvData::valueDataShortCB(void *dbr)
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */
+
+

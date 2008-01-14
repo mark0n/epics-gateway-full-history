@@ -172,6 +172,7 @@ public:
 	void markAlhGetPending(void) { alh_get_state=1; }
 	void markAlhNoGetPending(void) { alh_get_state=0; }
 	
+	
 protected:
 	void init(gateServer*,gateAsEntry *pase, const char* name);
 	void initClear(void);
@@ -243,6 +244,12 @@ private:
 	
 	//gjansa: until something better is found out
 	unsigned int bytes;
+	
+	casEventMask select_mask;
+	casEventMask alh_mask;
+	casEventMask value_mask;
+	casEventMask value_alarm_mask;
+	casEventMask value_log_mask;	
 
 	// Callback functions used in eventCB
 	gdd* eventStringCB(void*);
@@ -341,3 +348,5 @@ inline void gatePvData::setDeathTime(void)
 /* c-comment-only-line-offset: 0 */
 /* c-file-offsets: ((substatement-open . 0) (label . 0)) */
 /* End: */
+
+

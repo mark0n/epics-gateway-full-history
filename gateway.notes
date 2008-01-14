@@ -92,4 +92,8 @@ Thu Aug  2 16:32:10 CDT 2007   Gateway2-0-2-1
 	Bug fix to the conditional compilation for the "negated regexp" feature.
         - Dirk Zimoch
 
+Mon Jan 14 09:25:27 CST 2008   Gateway2-0-3-0
+	Restored gateway default behavior. Now if "-archive" is not used gateway 
+	will post log events along with value change events. - Gasper Jansa
+
 
