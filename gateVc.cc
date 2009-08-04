@@ -251,6 +251,34 @@ caStatus gateVcChan::write(const casCtx &ctx, const gdd &value)
 	else return S_casApp_noSupport;
 }
 
+// This is a new virtual write in CAS that knows the casChannel.  The
+// casPV::write() is not called if this one is implemented.  This
+// write calls a new, overloaded gateVcData::write() that has the
+// gateChan as an argument to do what used to be done in the virtual
+// gateVcData::writeNotify().
+caStatus gateVcChan::writeNotify(const casCtx &ctx, const gdd &value)
+{
+	gateVcData *vc=(gateVcData *)casPv;
+
+	// Trap writes
+	if(asclient && asclient->clientPvt()->trapMask) {
+		FILE *fp=global_resources->getPutlogFp();
+		if(fp) {
+			fprintf(fp,"%s %s@%s %s\n",
+			  timeStamp(),
+			  user?user:"Unknown",
+			  host?host:"Unknown",
+			  vc && vc->getName()?vc->getName():"Unknown");
+			fflush(fp);
+		}
+	}
+	
+	// Call the non-virtual-function write() in the gateVcData
+	if(vc) return vc->writeNotify(ctx,value,*this);
+	else return S_casApp_noSupport;
+}
+
+// Called from the server to determine access before each read
 // Called from the server to determine access before each read
 bool gateVcChan::readAccess(void) const
 {
@@ -1191,13 +1219,36 @@ caStatus gateVcData::write(const casCtx& ctx, const gdd& dd)
 	return S_casApp_noSupport;
 }
 
+// This is the virtual write function defined in casPV.  It should no
+// longer be called if casChannel::write is implemented.
+caStatus gateVcData::writeNotify(const casCtx& ctx, const gdd& dd)
+{
+	fprintf(stderr,"Virtual gateVcData::writeNotify called for %s.\n"
+	  "  This is an error!\n",name());
+	return S_casApp_noSupport;
+}
+
 // This is a non-virtual-function write that allows passing a pointer
 // to the gateChannel.  Currently chan is not used.
-caStatus gateVcData::write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
+caStatus gateVcData::
+    write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 {
-	int docallback=GATE_DOCALLBACK;
-	
+    return this->writeSpecifyingCBMechanism (ctx, dd, GATE_NOCALLBACK);
+}
 
+// This is a non-virtual-function write that allows passing a pointer
+// to the gateChannel.  Currently chan is not used.
+caStatus gateVcData::
+    writeNotify(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
+{
+    return this->writeSpecifyingCBMechanism (ctx, dd, GATE_DOCALLBACK);
+}
+
+// This is a non-virtual-function write that allows passing a pointer
+// to the gateChannel.  Currently chan is not used.
+caStatus gateVcData::writeSpecifyingCBMechanism(
+    const casCtx& ctx, const gdd& dd, int docallback)
+{
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
 
 #if DEBUG_GDD || DEBUG_SLIDER

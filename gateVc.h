@@ -112,6 +112,7 @@ public:
 	~gateVcChan(void);
 
     virtual caStatus write(const casCtx &ctx, const gdd &value);
+    virtual caStatus writeNotify(const casCtx &ctx, const gdd &value);
 	virtual bool readAccess(void) const;
 	virtual bool writeAccess(void) const;
 };
@@ -131,6 +132,7 @@ public:
 	virtual aitEnum bestExternalType(void) const;
 	virtual caStatus read(const casCtx &ctx, gdd &prototype);
 	virtual caStatus write(const casCtx &ctx, const gdd &value);
+	virtual caStatus writeNotify(const casCtx &ctx, const gdd &value);
 	virtual void destroy(void);
 	virtual unsigned maxDimension(void) const;
 	virtual aitIndex maxBound(unsigned dim) const;
@@ -139,6 +141,7 @@ public:
 	virtual const char *getName() const;
 
 	caStatus write(const casCtx &ctx, const gdd &value, gateChan &chan);
+	caStatus writeNotify(const casCtx &ctx, const gdd &value, gateChan &chan);
 
 	int pending(void);
 	int pendingConnect(void)	{ return (pv_state==gateVcConnect)?1:0; }
@@ -240,6 +243,8 @@ private:
 	// The state of the process variable is kept in these two gdd's
 	gdd* pv_data;     // Filled in by gatePvData::getCB on activation
 	gdd* event_data;  // Filled in by gatePvData::eventCB on channel change
+	caStatus writeSpecifyingCBMechanism(const casCtx &ctx, 
+		const gdd &value, int docallback);
 };
 
 inline int gateVcData::pending(void) { return (pv_state==gateVcConnect)?1:0; }
