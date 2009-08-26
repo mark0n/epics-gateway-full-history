@@ -141,9 +141,16 @@ private:
 # define statNewAsFlag              NEXT_CONTROL_PV+4
 # define statQuitFlag               NEXT_CONTROL_PV+5
 # define statQuitServerFlag         NEXT_CONTROL_PV+6
-# define NEXT_CAS_STAT              NEXT_CONTROL_PV+7
+# define NEXT_HEARTBEAT_PV          NEXT_CONTROL_PV+7
 #else
-# define NEXT_CAS_STAT              NEXT_CONTROL_PV
+# define NEXT_HEARTBEAT_PV          NEXT_CONTROL_PV
+#endif
+
+#ifdef HEARTBEAT_PV
+# define heartbeat                  NEXT_HEARTBEAT_PV
+# define NEXT_CAS_STAT              NEXT_HEARTBEAT_PV+1
+#else
+# define NEXT_CAS_STAT              NEXT_HEARTBEAT_PV
 #endif
 
 // Number of server stats definitions

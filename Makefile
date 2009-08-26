@@ -84,6 +84,8 @@ USR_CXXFLAGS += -DSTAT_PVS
 USR_CXXFLAGS += -DRATE_STATS
 # Use control PV's
 USR_CXXFLAGS += -DCONTROL_PVS
+# Use heartbeat PV
+#USR_CXXFLAGS += -DHEARTBEAT_PV
 # Use CAS diagnostics statistics
 USR_CXXFLAGS += -DCAS_DIAGNOSTICS
 # Install exception handler and print exceptions to log file

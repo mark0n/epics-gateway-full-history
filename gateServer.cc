@@ -2111,6 +2111,15 @@ void gateServer::initStats(char *prefix)
 			stat_table[i].precision=0;
 			break;
 #endif
+#ifdef HEARTBEAT_PV
+		case heartbeat:
+			stat_table[i].name="heartbeat";
+			stat_table[i].desc="Gateway heartbeat";
+			stat_table[i].init_value=&zero;
+			stat_table[i].units="";
+			stat_table[i].precision=0;
+			break;
+#endif
 		}
 
 		stat_table[i].pvName=new char[stat_prefix_len+1+strlen(stat_table[i].name)+1];
