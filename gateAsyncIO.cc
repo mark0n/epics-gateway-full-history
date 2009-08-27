@@ -63,6 +63,14 @@ gatePendingWrite::~gatePendingWrite(void)
     owner.cancelPendingWrite();
 }
 
+void gateAsyncW::flush ( gatePvData & pv )
+{
+    pv.put(&dd,docallback);
+    if ( docallback ) {
+        postIOCompletion ( S_casApp_success );
+    }
+}
+
 /* **************************** Emacs Editing Sequences ***************** */
 /* Local Variables: */
 /* tab-width: 4 */

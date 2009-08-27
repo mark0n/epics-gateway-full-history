@@ -91,6 +91,7 @@ public:
 			wio=NULL;
 		}
 	}
+        void flush ( class gatePvData & pv );
 private:
 	const gdd& dd;
 	tsDLList<gateAsyncW> *wio;

@@ -840,13 +840,12 @@ void gateVcData::flushAsyncWriteQueue()
 	gateDebug1(10,"gateVcData::flushAsyncWriteQueue() name=%s\n",name());
 	gateAsyncW* asyncw;
 
-	while((asyncw=wio.first()))	{
-		asyncw->removeFromQueue();
-		pv->put(&asyncw->DD(),asyncw->docallback);
-		if ( ! asyncw->docallback ) {
-		    asyncw->postIOCompletion ( S_casApp_success );
+	if ( pv ) {
+	    while((asyncw=wio.first()))	{
+	        asyncw->removeFromQueue();
+	        asyncw->flush ( *pv );
 	    }
-	}
+        }
 }
 
 // The asynchronous io queues are filled when the vc is not ready.
