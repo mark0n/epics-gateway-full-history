@@ -77,8 +77,9 @@ private:
 class gateAsyncW : public casAsyncWriteIO, public tsDLNode<gateAsyncW>
 {
 public:
-	gateAsyncW(const casCtx &ctx, const gdd& ddIn, tsDLList<gateAsyncW> *wioIn) :
-	  casAsyncWriteIO(ctx),dd(ddIn),wio(wioIn)
+	gateAsyncW(const casCtx &ctx, const gdd& ddIn, 
+	    tsDLList<gateAsyncW> *wioIn, int docallbackIn) :
+	  casAsyncWriteIO(ctx),dd(ddIn),wio(wioIn),docallback(docallbackIn)
 	  { dd.reference(); }
 
 	virtual ~gateAsyncW(void);
@@ -93,6 +94,7 @@ public:
 private:
 	const gdd& dd;
 	tsDLList<gateAsyncW> *wio;
+	int docallback;
 };
 
 class gatePendingWrite : public casAsyncWriteIO

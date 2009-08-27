@@ -809,7 +809,7 @@ void gateVcData::vcNew(readType read_type)
 #endif
 
 	// Flush any accumulated reads and writes
-	if(wio.count()) flushAsyncWriteQueue(GATE_NOCALLBACK);
+	if(wio.count()) flushAsyncWriteQueue();
 	if(ctrl_rio.count() || time_rio.count()) flushAsyncReadQueue(read_type);
 	if(!pv->alhGetPending()) {
 		if(alhRio.count()) flushAsyncAlhReadQueue();
@@ -835,15 +835,17 @@ void gateVcData::markAlhDataAvailable(void)
 
 // The asynchronous io queues are filled when the vc is not ready.
 // This routine, called from vcNew, flushes the write queue.
-void gateVcData::flushAsyncWriteQueue(int docallback)
+void gateVcData::flushAsyncWriteQueue()
 {
 	gateDebug1(10,"gateVcData::flushAsyncWriteQueue() name=%s\n",name());
 	gateAsyncW* asyncw;
 
 	while((asyncw=wio.first()))	{
 		asyncw->removeFromQueue();
-		pv->put(&asyncw->DD(),docallback);
-		asyncw->postIOCompletion(S_casApp_success);
+		pv->put(&asyncw->DD(),asyncw->docallback);
+		if ( ! asyncw->docallback ) {
+		    asyncw->postIOCompletion ( S_casApp_success );
+	    }
 	}
 }
 
@@ -1279,7 +1281,7 @@ caStatus gateVcData::writeSpecifyingCBMechanism(
 		if(!ready()) {
 			// Handle async return if PV not ready
 			gateDebug0(10,"gateVcData::write() pv not ready\n");
-			wio.add(*(new gateAsyncW(ctx,dd,&wio)));
+			wio.add(*(new gateAsyncW(ctx,dd,&wio,docallback)));
 #if DEBUG_GDD || DEBUG_SLIDER
 			fflush(stderr);
 			printf("S_casApp_asyncCompletion\n");

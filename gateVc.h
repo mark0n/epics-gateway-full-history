@@ -187,7 +187,7 @@ public:
 	gatePendingWrite *pendingWrite() const { return pending_write; }
 	void cancelPendingWrite(void) { pending_write=NULL; }
 	void flushAsyncReadQueue(readType read_type);
-	void flushAsyncWriteQueue(int docallback);
+	void flushAsyncWriteQueue();
 	void flushAsyncAlhReadQueue(void);
 
 	void markNoList(void) { in_list_flag=0; }
