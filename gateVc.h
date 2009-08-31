@@ -54,7 +54,8 @@ typedef enum {
 
 typedef enum {
 	ctrlType=0,
-	timeType
+	timeType,
+	noCacheType
 } readType;
 
 
@@ -182,10 +183,8 @@ public:
 	void copyState(gdd &dd);    // Copies pv_data and event_data to dd
 
 	// Asynchronous IO
-	caStatus putCB(int status);
+	void putCB(int status,gateAsyncW &);
 	unsigned long getVcID(void) const { return vcID; }
-	gatePendingWrite *pendingWrite() const { return pending_write; }
-	void cancelPendingWrite(void) { pending_write=NULL; }
 	void flushAsyncReadQueue(readType read_type);
 	void flushAsyncWriteQueue();
 	void flushAsyncAlhReadQueue(void);
@@ -237,14 +236,15 @@ private:
 	tsDLList<gateVcChan> chan_list;
 	tsDLList<gateAsyncR> ctrl_rio;	 // Queue for ctrl read's received when not ready
 	tsDLList<gateAsyncR> time_rio;	 // Queue for time read's received when not ready
-	tsDLList<gateAsyncW> wio;	 // Queue for write's received when not ready
 	tsDLList<gateAsyncR> alhRio; // Queue for alh read's received when not ready
-	gatePendingWrite *pending_write;  // NULL unless a write (put) is in progress
+	tsDLList<gateAsyncW> nrWio;
+	tsDLList<gateAsyncW> pendWio;
 	// The state of the process variable is kept in these two gdd's
 	gdd* pv_data;     // Filled in by gatePvData::getCB on activation
 	gdd* event_data;  // Filled in by gatePvData::eventCB on channel change
 	caStatus writeSpecifyingCBMechanism(const casCtx &ctx, 
-		const gdd &value, int docallback);
+		const gdd &value, bool isPutNotify );
+	static const unsigned maxSimlWriteIO = 100u;
 };
 
 inline int gateVcData::pending(void) { return (pv_state==gateVcConnect)?1:0; }

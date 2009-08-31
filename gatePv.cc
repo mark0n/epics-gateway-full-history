@@ -381,7 +381,6 @@ int gatePvData::activate(gateVcData* vcd)
 	{
 	case gatePvInactive:
 		gateDebug1(10,"gatePvData::activate() %s PV\n",getStateName());
-		markAddRemoveNeeded();
 		vc=vcd;
 		setState(gatePvActive);
 #ifdef STAT_PVS
@@ -391,8 +390,12 @@ int gatePvData::activate(gateVcData* vcd)
 		setActiveTime();
 		vc->setReadAccess(ca_read_access(chID)?aitTrue:aitFalse);
 		vc->setWriteAccess(ca_write_access(chID)?aitTrue:aitFalse);
-		if(!global_resources->getCacheMode()) rc=0;
+		if(!global_resources->getCacheMode()) {
+		    vc->vcAdd(noCacheType);
+		    rc=0;
+		}
 		else{
+			markAddRemoveNeeded();
 			if(ca_read_access(chID)) rc=get(ctrlType);
 			else rc=0;
 		}
@@ -1036,9 +1039,9 @@ int gatePvData::get(readType read_type)
 // not do so otherwise.  Returns S_casApp_success for a successful put
 // and as good an error code as we can generate otherwise.  There is
 // unfortunately no S_casApp return code defined for failure.
-int gatePvData::put(const gdd* dd, int docallback)
+int gatePvData::put(const gdd & dd, class gateAsyncW * pWIO )
 {
-	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",(void *)dd,name());
+	gateDebug2(5,"gatePvData::put(dd=%p) name=%s\n",(void *)&dd,name());
 	// KE: Check for valid index here !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 	chtype cht;
 	gatePvCallbackId *cbid;
@@ -1047,7 +1050,7 @@ int gatePvData::put(const gdd* dd, int docallback)
 	unsigned long count;
 	static int full=0;
 
-	switch(dd->applicationType())
+	switch(dd.applicationType())
 	{
 	case gddAppType_ackt:
 		cht = DBR_PUT_ACKT;
@@ -1056,15 +1059,15 @@ int gatePvData::put(const gdd* dd, int docallback)
 		cht = DBR_PUT_ACKS;
 		break;
 	default:
-		cht = gddAitToDbr[dd->primitiveType()];
+		cht = gddAitToDbr[dd.primitiveType()];
 		break;
 	}
 
 #if DEBUG_GDD
 	printf("gatePvData::put(%s): at=%d pt=%d dbr=%ld ft=%ld[%s] name=%s\n",
-		   docallback?"callback":"nocallback",
-		   dd->applicationType(),
-		   dd->primitiveType(),
+		   sPutCallback?"callback":"nocallback",
+		   dd.applicationType(),
+		   dd.primitiveType(),
 		   cht,
 		   fieldType(),dbr_type_to_text(fieldType()),
 		   ca_name(chID));
@@ -1089,13 +1092,13 @@ int gatePvData::put(const gdd* dd, int docallback)
 		}
 
 		setTransTime();
-		switch(dd->primitiveType())
+		switch(dd.primitiveType())
 		{
 		case aitEnumString:
-			if(dd->isScalar())
-				str=(aitString*)dd->dataAddress();
+			if(dd.isScalar())
+				str=(aitString*)dd.dataAddress();
 			else
-				str=(aitString*)dd->dataPointer();
+				str=(aitString*)dd.dataPointer();
 
 			// can only put one of these - arrays not valid to CA client
 			count=1;
@@ -1103,26 +1106,28 @@ int gatePvData::put(const gdd* dd, int docallback)
 			gateDebug1(5," putting String <%s>\n",str->string());
 			break;
 		case aitEnumFixedString:     // Always a pointer
-			count=dd->getDataSizeElements();
-			pValue=dd->dataPointer();
+			count=dd.getDataSizeElements();
+			pValue=dd.dataPointer();
 			gateDebug1(5," putting FString <%s>\n",(char*)pValue);
 			break;
 		default:
-			if(dd->isScalar()) {
+			if(dd.isScalar()) {
 				count=1;
-				pValue=dd->dataAddress();
+				pValue=dd.dataAddress();
 			} else {
-				count=dd->getDataSizeElements();
-				pValue=dd->dataPointer();
+				count=dd.getDataSizeElements();
+				pValue=dd.dataPointer();
 			}
 			break;
 		}
 
-		if(docallback) {
+		// if true, its a put callback request
+		if(pWIO) {
 			// We need to keep track of which vc requested the put, so we
 			// make a gatePvCallbackId, save it in the callback_list, and
 			// use it as the puser for the callback, which is putCB.
-			cbid=new gatePvCallbackId(vc->getVcID(),this);
+			cbid=new (std::nothrow)
+			    gatePvCallbackId(vc->getVcID(),this,pWIO);
 #if DEBUG_PUT
 			printf("gatePvData::put: cbid=%p this=%p dbr=%ld id=%ld pv=%p\n",
 			  cbid,this,cht,cbid->getID(),cbid->getPV());
@@ -1381,20 +1386,19 @@ void gatePvData::putCB(EVENT_ARGS args)
 	// We are through with the callback id.  Remove it from the
 	// callback_list and delete it.
 	pv->callback_list.remove(*cbid);
+	gateAsyncW * pWIO = reinterpret_cast < gateAsyncW * > 
+				( cbid->getPrivatePtr () );
 	delete cbid;
 
-	// Check if the put was successful
-	if(args.status != ECA_NORMAL) return;	
-	
+	if (!pWIO) return;
 	// Check if the originating vc is still around.
 	if(!pv->vc || pv->vc->getVcID() != vcid) return;
 
 #ifdef RATE_STATS
 	++pv->mrg->client_event_count;
 #endif
-
     // The originating vc is still around.  Let it handle it.
-	pv->vc->putCB(args.status);
+	pv->vc->putCB(args.status,*pWIO);
 }
 
 // This is the callback registered with ca_add_subscription in the

@@ -332,7 +332,6 @@ gateVcData::gateVcData(gateServer* m,const char* name) :
 	in_list_flag(0),
 	prev_post_value_changes(0),
 	post_value_changes(0),
-	pending_write(NULL),
 	pv_data(NULL),
 	event_data(NULL)
 {
@@ -382,13 +381,21 @@ gateVcData::~gateVcData(void)
 	gateVcData* x;
 	if(in_list_flag) mrg->vcDelete(pv_name,x);
 
-// Clean up the pending write.  The server library destroys the
-// asynchronous io before destroying the casPV which results in
-// calling this destructor.  For this reason we do not have to worry
-// about it.  Moreover, it will cause a core dump if we call
-// pending_write->postIOCompletion(S_casApp_canceledAsyncIO) here,
-// because the asynchronous io is gone.  Just null the pointer.
-	if(pending_write) pending_write=NULL;
+	// Clean up the pending write. The server library destroys the
+	// asynchronous io before destroying the casPV. When the casPv
+	// is destroyed this destructor is called. However, when the
+	// user types control C I notice that we end up here with some
+	// IO requests that are still pending. Our obligation is
+	// to track all of the IO requests until we post competion to
+	// the server. The server always destroys the IO request object.
+	while ( gateAsyncW * pWIO = nrWio.first() ) {
+	    pWIO->listRemove ();
+	    pWIO->postIOCompletion ( S_casApp_canceledAsyncIO );
+	}
+	while ( gateAsyncW * pWIO = pendWio.first() ) {
+	    pWIO->listRemove ();
+	    pWIO->postIOCompletion ( S_casApp_canceledAsyncIO );
+	}
 	if(pv_data) {
 		pv_data->unreference();
 		pv_data=NULL;
@@ -415,10 +422,6 @@ gateVcData::~gateVcData(void)
 	// to remove themselves from the lists after the gateVcData and
 	// the lists are gone. removeFromQueue sets the pointer to the
 	// list in the gateAsyncX to NULL.
-	gateAsyncW* asyncw;
-	while((asyncw=wio.first()))	{
-		asyncw->removeFromQueue();
-	}
 	gateAsyncR* asyncr;
 	while((asyncr=ctrl_rio.first()))	{
 		asyncr->removeFromQueue();
@@ -809,7 +812,7 @@ void gateVcData::vcNew(readType read_type)
 #endif
 
 	// Flush any accumulated reads and writes
-	if(wio.count()) flushAsyncWriteQueue();
+	flushAsyncWriteQueue();
 	if(ctrl_rio.count() || time_rio.count()) flushAsyncReadQueue(read_type);
 	if(!pv->alhGetPending()) {
 		if(alhRio.count()) flushAsyncAlhReadQueue();
@@ -837,15 +840,35 @@ void gateVcData::markAlhDataAvailable(void)
 // This routine, called from vcNew, flushes the write queue.
 void gateVcData::flushAsyncWriteQueue()
 {
+    // gateAsyncW object will be destroyed by PCAS library
+    // so there is no leak here
+    while ( gateAsyncW * pWIO = nrWio.first () ) {
 	gateDebug1(10,"gateVcData::flushAsyncWriteQueue() name=%s\n",name());
-	gateAsyncW* asyncw;
-
+	pWIO->listRemove ();
+	pWIO->listAdd ( pendWio );
 	if ( pv ) {
-	    while((asyncw=wio.first()))	{
-	        asyncw->removeFromQueue();
-	        asyncw->flush ( *pv );
+	    assert ( ready() );
+	    smartConstGDDPointer pDD = pWIO->extractDD ();
+	    assert ( pDD.valid () );
+	    caStatus stat = 
+		pv->put( *pDD, pWIO->isPutNotify() ? pWIO : 0 );
+	    pDD.set ( 0 );
+	    if ( pWIO->isPutNotify() ) {
+		if ( stat != S_casApp_success ) {
+		    pWIO->listRemove ();
+		    pWIO->postIOCompletion ( stat );
+		}
 	    }
-        }
+	    else {
+		pWIO->listRemove ();
+		pWIO->postIOCompletion ( stat );
+	    }
+	}
+	else {
+	    pWIO->listRemove ();
+	    pWIO->postIOCompletion ( S_casApp_canceledAsyncIO );
+	}
+    }
 }
 
 // The asynchronous io queues are filled when the vc is not ready.
@@ -855,8 +878,6 @@ void gateVcData::flushAsyncReadQueue(readType read_type)
 	gateDebug1(10,"gateVcData::flushAsyncReadQueue() name=%s\n",name());
 	gateAsyncR* asyncr;
 
-
-	
 	if(read_type == ctrlType)
 	{
 		while((asyncr=ctrl_rio.first()))	{
@@ -1124,7 +1145,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 				pv->get(timeType);
 			}			
 			return S_casApp_asyncCompletion;
-		} else if(pending_write) {
+		} else if(pendWio.count()||nrWio.count()) {
 			// Pending write in progress, don't read now
 			return S_casApp_postponeAsyncIO;
 		} else {
@@ -1159,7 +1180,7 @@ caStatus gateVcData::read(const casCtx& ctx, gdd& dd)
 			}
 #endif
 			return S_casApp_asyncCompletion;
-		} else if(pending_write) {
+		} else if(pendWio.count()||nrWio.count()) {
 			// Pending write in progress, don't read now
 #if DEBUG_GDD
 			fflush(stderr);
@@ -1234,7 +1255,7 @@ caStatus gateVcData::writeNotify(const casCtx& ctx, const gdd& dd)
 caStatus gateVcData::
     write(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 {
-    return this->writeSpecifyingCBMechanism (ctx, dd, GATE_NOCALLBACK);
+    return this->writeSpecifyingCBMechanism (ctx, dd, false);
 }
 
 // This is a non-virtual-function write that allows passing a pointer
@@ -1242,13 +1263,13 @@ caStatus gateVcData::
 caStatus gateVcData::
     writeNotify(const casCtx& ctx, const gdd& dd, gateChan &/*chan*/)
 {
-    return this->writeSpecifyingCBMechanism (ctx, dd, GATE_DOCALLBACK);
+    return this->writeSpecifyingCBMechanism (ctx, dd, true);
 }
 
 // This is a non-virtual-function write that allows passing a pointer
 // to the gateChannel.  Currently chan is not used.
 caStatus gateVcData::writeSpecifyingCBMechanism(
-    const casCtx& ctx, const gdd& dd, int docallback)
+    const casCtx& ctx, const gdd& dd, bool isPutNotify)
 {
 	gateDebug1(10,"gateVcData::write() name=%s\n",name());
 
@@ -1273,21 +1294,28 @@ caStatus gateVcData::writeSpecifyingCBMechanism(
 		return S_casApp_noSupport;
 	case gddAppType_ackt:
 	case gddAppType_acks:
-		docallback = GATE_NOCALLBACK;
-		// Fall through
 	default:
-		if(global_resources->isReadOnly()) return S_casApp_success;
+		if(global_resources->isReadOnly()) return S_cas_noWrite;
 		if(!ready()) {
 			// Handle async return if PV not ready
 			gateDebug0(10,"gateVcData::write() pv not ready\n");
-			wio.add(*(new gateAsyncW(ctx,dd,&wio,docallback)));
+			if ( nrWio.count () > maxSimlWriteIO ) {
+			    return S_casApp_postponeAsyncIO;
+			}
+			gateAsyncW * pGateAsyncW = 
+			    new ( std :: nothrow )
+				gateAsyncW ( ctx,dd,isPutNotify );
+			if ( ! pGateAsyncW ) {
+			    return S_casApp_noMemory;
+			}
+			pGateAsyncW->listAdd ( nrWio );
 #if DEBUG_GDD || DEBUG_SLIDER
 			fflush(stderr);
 			printf("S_casApp_asyncCompletion\n");
 			fflush(stdout);
 #endif
 			return S_casApp_asyncCompletion;
-		} else if(pending_write) {
+		} else if(pendWio.count()>=maxSimlWriteIO) {
 			// Pending write already in progress
 #if DEBUG_GDD || DEBUG_SLIDER
 			fflush(stderr);
@@ -1296,51 +1324,48 @@ caStatus gateVcData::writeSpecifyingCBMechanism(
 #endif
 			return S_casApp_postponeAsyncIO;
 		} else {
-			caStatus stat = pv->put(&dd, docallback);
-			if(stat != S_casApp_success) return stat;
-
-			if(docallback) {
-				// Start a pending write
+			gateAsyncW * pGateAsyncW = 0; 
+			if ( isPutNotify ) {
 #if DEBUG_GDD || DEBUG_SLIDER
-				fflush(stderr);
-				printf("pending_write\n");
-				fflush(stdout);
+			    fflush(stderr);
+			    printf("pending_write\n");
+			    fflush(stdout);
 #endif
-				pending_write = new gatePendingWrite(*this,ctx,dd);
-				if(!pending_write) return S_casApp_noMemory;
-				else return S_casApp_asyncCompletion;
-			} else {
-				return S_casApp_success;
+			    pGateAsyncW = new ( std :: nothrow )
+				    gateAsyncW (ctx,dd,true);
+			    if(!pGateAsyncW) return S_casApp_noMemory;
+			    pGateAsyncW->listAdd ( pendWio );
 			}
+			caStatus stat = pv->put(dd, pGateAsyncW);
+			if ( isPutNotify ) {
+			    if(stat != S_casApp_success) {
+				pGateAsyncW->listRemove ();
+				pGateAsyncW->postIOCompletion ( stat );
+			    }
+			    return S_casApp_asyncCompletion;
+			}
+			else {
+			    return stat;
+			}
+			// Start a pending write
 		}
 	}
 }
 
-caStatus gateVcData::putCB(int putStatus)
+void gateVcData::putCB(int putStatus, gateAsyncW & writeIO  )
 {
 	gateDebug2(10,"gateVcData::putCB() status=%d name=%s\n",status,name());
 
-	// If the pending_write is gone, do nothing
-	if(!pending_write) return putStatus;
-
+	caStatus stat = static_cast<caStatus>( -1);
 	if(putStatus == ECA_NORMAL)
-		pending_write->postIOCompletion(S_casApp_success);
-
+	    stat = S_casApp_success;
 	else if(putStatus == ECA_DISCONNCHID || putStatus == ECA_DISCONN)
-		// IOC disconnected has a meaningful code
-		pending_write->postIOCompletion(S_casApp_canceledAsyncIO);
-
-	else
-		// KE: There is no S_casApp code for failure, return -1 for now
-		//   (J. Hill suggestion)
-		pending_write->postIOCompletion((unsigned long)-1);
-
-	// Set the pending_write pointer to NULL indicating the pending
-	// write is finished. (The gatePendingWrite instantiation will be
-	// deleted by CAS)
-	pending_write=NULL;
-
-	return putStatus;
+	    stat = S_casApp_canceledAsyncIO;
+	writeIO.listRemove ();
+	writeIO.postIOCompletion ( stat );
+	// we will allow the wirteIO to remain in the pendWIO list,
+	// and limit the total number of simultaneous io operations,
+	// until a response is is dispatched to the client
 }
 
 aitEnum gateVcData::bestExternalType(void) const

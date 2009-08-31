@@ -49,26 +49,17 @@ gateAsyncR::~gateAsyncR(void)
 
 gateAsyncW::~gateAsyncW(void)
 {
-	gateDebug1(10,"~gateAsyncW() (dd at %p)\n",(void *)&dd);
-	// If it is in the wio queue, take it out
-	removeFromQueue();
-	// Unreference the dd
-	dd.unreference();
+	gateDebug0(10,"~gateAsyncW()\n");
+	listRemove ();
 }
 
-gatePendingWrite::~gatePendingWrite(void)
-{
-	gateDebug0(10,"~gatePendingWrite()\n");
-	dd.unreference();
-    owner.cancelPendingWrite();
-}
-
-void gateAsyncW::flush ( gatePvData & pv )
-{
-    pv.put(&dd,docallback);
-    if ( docallback ) {
-        postIOCompletion ( S_casApp_success );
+smartConstGDDPointer gateAsyncW::extractDD () 
+{ 
+    smartConstGDDPointer pDD;
+    if ( _pDD.valid () ) {
+        pDD.swap ( _pDD );
     }
+    return pDD;
 }
 
 /* **************************** Emacs Editing Sequences ***************** */
