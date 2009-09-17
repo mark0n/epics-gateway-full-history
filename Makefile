@@ -124,7 +124,7 @@ endif
 endif
 endif
 
-USR_LIBS_DEFAULT += ca cas asHost Com gdd
+USR_LIBS_DEFAULT += ca cas asHost gdd Com
 ca_DIR = $(EPICS_BASE_LIB)
 cas_DIR = $(EPICS_BASE_LIB)
 asHost_DIR = $(EPICS_BASE_LIB)
