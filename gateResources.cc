@@ -51,13 +51,13 @@ gateResources* global_resources;
 // should copy it to a safe place e.g. strcpy(savetime,timestamp());
 char *timeStamp(void)
 {
-	static char timeStampStr[16];
-	long now;
+	static char timeStampStr[20];
+	time_t now;
 	struct tm *tblock;
 	
 	time(&now);
 	tblock=localtime(&now);
-	strftime(timeStampStr,20,"%b %d %H:%M:%S",tblock);
+	strftime(timeStampStr,sizeof(timeStampStr),"%b %d %H:%M:%S",tblock);
 	
 	return timeStampStr;
 }
